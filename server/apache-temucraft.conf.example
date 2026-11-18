@@ -1,0 +1,41 @@
+# Apache config for the launcher's files: the same two checks as your website, an IP whitelist and a username and
+# password. Copy to /etc/apache2/conf-available/temucraft-files.conf (or into your site's <VirtualHost *:443>),
+# replace the paths and addresses, then: a2enconf temucraft-files && systemctl reload apache2
+#
+# Users: htpasswd -c /etc/apache2/temucraft.htpasswd ryan     (-c only the first time)
+#        htpasswd /etc/apache2/temucraft.htpasswd friendname
+# Keep the .htpasswd file outside the served folder.
+
+Alias /wow-files /var/www/wow-files
+
+<Directory /var/www/wow-files>
+    Options -Indexes
+    AllowOverride None
+
+    AuthType Basic
+    AuthName "Temucraft"
+    AuthBasicProvider file
+    AuthUserFile /etc/apache2/temucraft.htpasswd
+
+    # Both must pass: an address on the list, and a valid user
+    <RequireAll>
+        <RequireAny>
+            Require ip 203.0.113.10
+            Require ip 198.51.100.0/24
+        </RequireAny>
+        Require valid-user
+    </RequireAll>
+
+    # Never serve the hash cache or unfinished uploads
+    <FilesMatch "^\.|\.part$">
+        Require all denied
+    </FilesMatch>
+
+    # The launcher must always see the newest manifest
+    <Files "manifest.json">
+        Header set Cache-Control "no-store"
+    </Files>
+</Directory>
+
+# Serve it only over https (basic auth sends the password with every request). If this site has no certificate yet:
+# certbot --apache -d files.example.com

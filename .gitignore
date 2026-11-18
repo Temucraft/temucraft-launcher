@@ -1,0 +1,11 @@
+# The server address: copy launcher.env.example to launcher.env, never commit it
+launcher.env
+*.htpasswd
+
+bin/
+obj/
+publish/
+.vs/
+*.user
+upload.env
+__pycache__/

@@ -1,0 +1,4 @@
+[
+  { "name": "Questie", "description": "Shows quests on the map and minimap.", "repo": "OWNER/Questie-335", "branch": "master", "folders": ["Questie"], "required": false, "category": "Quests" },
+  { "name": "AtlasLoot", "description": "Shows the possible loot from the bosses.", "repo": "OWNER/AtlasLoot-335", "branch": "main", "folders": [], "required": false, "category": "Loot" }
+]
