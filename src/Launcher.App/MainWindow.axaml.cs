@@ -1668,8 +1668,17 @@ public partial class MainWindow : Window
                     TweakEdited();
                 };
             TextBlock description = new() { Text = t.Description, Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
-            Grid.SetColumn(description, 2);
-            row.Children.Add(description);
+            Control info = description;
+            if (t.Compare.Length > 0)
+            {
+                // how other WoW versions do it, under the description (for comparison only)
+                StackPanel both = new() { VerticalAlignment = VerticalAlignment.Center };
+                both.Children.Add(description);
+                both.Children.Add(new TextBlock { Text = t.Compare, FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = (IBrush?)this.FindResource("T.dimmer") });
+                info = both;
+            }
+            Grid.SetColumn(info, 2);
+            row.Children.Add(info);
             TweaksList.Children.Add(row);
             _tweakControls[t.CVar] = control;
         }

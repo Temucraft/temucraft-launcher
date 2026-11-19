@@ -100,7 +100,7 @@ public enum TweakKind { Toggle, Number }
 /// <see cref="On"/>/<see cref="Off"/> say otherwise ("" removes the line).</para></summary>
 public sealed record Tweak(string Section, string Name, string CVar, TweakKind Kind, string Default, string Recommended,
                            string Description, double Min = 0, double Max = 1, bool Highlighted = false,
-                           string File = "config", string? Requires = null, string On = "1", string Off = "0");
+                           string File = "config", string? Requires = null, string On = "1", string Off = "0", string Compare = "");
 
 public static class Tweaks
 {
@@ -124,10 +124,13 @@ public static class Tweaks
         new("Sound", "Background sounds", "Sound_EnableSoundWhenGameIsInBG", TweakKind.Toggle, "0", "1", "Keep playing game sounds while the game is minimized.", Highlighted: true),
         new("Sound", "Error speech", "Sound_EnableErrorSpeech", TweakKind.Toggle, "1", "0", "The character's \"I can't do that yet\" voice lines."),
         // Awesome WotLK's own settings (shown when that option is on)
+        // the game's own defaults; the other versions are only shown for comparison
         new("Awesome WotLK", "Nameplate distance", "nameplateDistance", TweakKind.Number, "41", "41", "How far away nameplates show, in yards. [Default: 41]", 10, 100,
-            Requires: "Awesome WotLK"),
+            Requires: "Awesome WotLK",
+            Compare: "Most in other versions: Retail 60 yd · Season of Discovery / Forever (1.16) 45 yd · TBC and Wrath Classic 41 yd · Classic Era 20 yd"),
         new("Awesome WotLK", "Field of view", "cameraFov", TweakKind.Number, "100", "100", "How wide the camera sees; high values look like a fisheye. [Default: 100] [1-200]", 1, 200,
-            Requires: "Awesome WotLK"),
+            Requires: "Awesome WotLK",
+            Compare: "Retail: 50 to 90, default 90 (in degrees, so not the same scale as here)"),
         // DXVK's settings, in dxvk.conf (shown when DXVK is on)
         new("DXVK", "Frame rate cap", "d3d9.maxFrameRate", TweakKind.Number, "0", "0", "A smoother frame rate cap than the game's own. [0 = no cap]", 0, 500,
             File: "dxvk", Requires: "DXVK"),
