@@ -106,6 +106,9 @@ public sealed class UserSettings
     /// <summary>The items the player agreed to send, and to which server; a longer list asks again.</summary>
     public List<string> CollectAgreed { get; set; } = [];
     public string CollectAgreedServer { get; set; } = "";
+    /// <summary>The server's note when the player agreed (a changed note asks again) and when they agreed.</summary>
+    public string CollectAgreedNote { get; set; } = "";
+    public DateTime? CollectAgreedAt { get; set; }
 
     // NaN/Infinity are allowed so an odd value can never stop the settings from saving
     static readonly JsonSerializerOptions JsonOptions = new()

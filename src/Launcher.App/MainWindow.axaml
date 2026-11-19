@@ -246,7 +246,7 @@
               </StackPanel>
               <TextBlock Name="LauncherVersionText" Classes="dim" Margin="0,10,0,0" />
 
-              <TextBlock Classes="section" Text="WHAT THIS SERVER COLLECTS" />
+              <TextBlock Classes="section" Text="WHAT THIS SERVER COLLECTS (THE LOGIN NOTICE)" />
               <SelectableTextBlock Name="PrivacyText" TextWrapping="Wrap" Foreground="#D8D2C4" FontSize="12" />
 
               <TextBlock Classes="section" Text="LOG" />

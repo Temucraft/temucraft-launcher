@@ -297,6 +297,7 @@ public partial class MainWindow : Window
 
     /// <summary>The player agreed to everything this server collects (at the login window); otherwise nothing is sent.</summary>
     bool Agreed => _server is not null && _settings.CollectAgreedServer == _server.ServerUrl.ToString()
+                   && _settings.CollectAgreedNote == _server.CollectNote
                    && _server.Collect.All(k => _settings.CollectAgreed.Contains(k, StringComparer.OrdinalIgnoreCase));
 
     /// <summary>The login window's notice: what every server gets, what a server may add, what this one adds and why.</summary>
@@ -369,8 +370,11 @@ public partial class MainWindow : Window
         {
             _settings.CollectAgreed = [.. _server.Collect];
             _settings.CollectAgreedServer = _server.ServerUrl.ToString();
+            _settings.CollectAgreedNote = _server.CollectNote;
+            _settings.CollectAgreedAt = DateTime.Now;
             Logger.Info($"Agreed to send: {(_server.Collect.Count == 0 ? "nothing" : string.Join(", ", _server.Collect))}", toWindow: false);
         }
+        ShowPrivacy();
         RememberBox.IsChecked = LoginRemember.IsChecked;
         LoginButton.IsEnabled = false;
         LoginError.Text = "Logging in…";
@@ -383,10 +387,18 @@ public partial class MainWindow : Window
     /// <summary>The Launcher page: what this server collects and the exact values sent from this PC.</summary>
     void ShowPrivacy()
     {
-        if (_server is null || _server.Collect.Count == 0) { PrivacyText.Text = "Nothing besides your login."; return; }
-        Dictionary<string, string> values = ClientInfo.Read(_server.Collect, _settings.InstallId);
-        PrivacyText.Text = string.Join("\n", _server.Collect.Select(k => $"{ClientInfo.Describe(k)}: {values.GetValueOrDefault(k, "(not available)")}"))
-                           + (Agreed ? "" : "\n\nNothing is sent until you log in and agree.");
+        // the same notice as the login window, then the exact values from this PC and when the player agreed
+        string text = CollectText();
+        if (_server is { Collect.Count: > 0 })
+        {
+            Dictionary<string, string> values = ClientInfo.Read(_server.Collect, _settings.InstallId);
+            text += "\n\nWhat this PC sends:\n" + string.Join("\n",
+                _server.Collect.Select(k => $"  {ClientInfo.Describe(k)}: {values.GetValueOrDefault(k, "(not available)")}"));
+        }
+        text += "\n\n" + (Agreed && _settings.CollectAgreedAt is DateTime when
+            ? $"You agreed on {when:yyyy-MM-dd HH:mm}. If the server changes what it collects or its note, you'll be asked again."
+            : "You haven't agreed yet: nothing is sent until you log in.");
+        PrivacyText.Text = text;
     }
 
     void OnLoginLater(object? sender, RoutedEventArgs e)
