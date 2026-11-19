@@ -8,6 +8,7 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
         manifest.json                 written by this script
         launcher/TemucraftLauncher.exe   the launcher, for its self-check (optional)
         patches/<file>                -> <WoW>/Data/<file>               always installed
+        client/<path>                 -> <WoW>/<path>                    always installed (patched Wow.exe, dlls...)
         locales/<locale>/<file...>    -> <WoW>/Data/<locale>/<file...>   for the locales a player picks
         addons/<Addon>/<file...>      -> <WoW>/Interface/AddOns/<Addon>/...  when addons are on
         options/<Group>/<Option>/<path inside the WoW folder>            cosmetic patches only (darker nights...), installed
@@ -88,6 +89,11 @@ def build(files_dir, realmlist, cache):
         for path in walk(patches):
             files.append(entry(files_dir, path, "Data/" + os.path.relpath(path, patches).replace(os.sep, "/"),
                                "patch", cache))
+
+    client = os.path.join(files_dir, "client")
+    if os.path.isdir(client):
+        for path in walk(client):
+            files.append(entry(files_dir, path, os.path.relpath(path, client).replace(os.sep, "/"), "patch", cache))
 
     locales = os.path.join(files_dir, "locales")
     if os.path.isdir(locales):
