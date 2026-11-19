@@ -11,18 +11,27 @@ Uploader: puts your release files and server builds on the VPS over SSH (SFTP), 
     python3 upload.py manifest                  # only rebuild manifest.json on the VPS
 
 Only new or changed files are sent (size and modified time are compared; a changed file is written to a temporary
-name and renamed when complete, so players never download half a file). --delete also removes files on the VPS that
+name and renamed when complete, so players never download half a file). A file cut off by a dropped connection or
+Ctrl+C carries on where it stopped the next time you run the same command (and is checked by SHA-256 against yours).
+The full client in base/ goes last, so the files every player needs arrive first. Files are sent with the system's
+own sftp (OpenSSH, built into Windows 10/11) when it's there: it is several times faster than paramiko over a long
+connection. USE_OPENSSH=0 in upload.env uses paramiko for everything. --delete also removes files on the VPS that
 are gone locally, except hidden files and, for `server`, *.conf, *.log and the logs/ and data/ folders.
 --dry-run shows what would happen. For `server`, PRE_SERVER_CMD / POST_SERVER_CMD run before and
 after (e.g. stop and start the worldserver service).
 """
 
 import argparse
+import hashlib
 import os
 import posixpath
 import shlex
+import shutil
+import subprocess
+import threading
 import stat
 import sys
+import time
 
 KEEP_REMOTE = {"manifest.json", ".manifest-cache.json", "make-manifest.py"}
 
@@ -120,13 +129,135 @@ def makedirs(sftp, folder, made):
     made.add(folder)
 
 
-def sync(client, local, remote, delete, dry, skip=(), server=False):
+CHUNK = 1 << 20
+
+
+def sha256_local(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(CHUNK), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def sha256_remote(client, path):
+    _, out, _ = client.exec_command(f"sha256sum {shlex.quote(path)}")
+    code = out.channel.recv_exit_status()
+    text = out.read().decode(errors="replace").split()
+    return text[0] if code == 0 and text else None
+
+
+def openssh_command(env):
+    """The system's own sftp (OpenSSH, built into Windows 10/11), which is several times faster than paramiko over a
+    long connection. None when it isn't installed or USE_OPENSSH=0."""
+    sftp = shutil.which("sftp")
+    if not sftp or env.get("USE_OPENSSH", "1") == "0":
+        return None
+    command = [sftp, "-b", "-", "-P", env.get("SSH_PORT", "22"), "-o", "BatchMode=yes"]
+    if env.get("SSH_KEY"):
+        command += ["-i", os.path.expanduser(env["SSH_KEY"])]
+    if env.get("TRUST_NEW_HOST") == "1":
+        command += ["-o", "StrictHostKeyChecking=accept-new"]
+    return command + [f"{env['SSH_USER']}@{env['SSH_HOST']}"]
+
+
+def sftp_quote(text):
+    return '"' + text.replace("\\", "/").replace('"', '\\"') + '"'
+
+
+def put_openssh(command, sftp, path, temp, size, start):
+    """Sends path to temp with OpenSSH's sftp (reput carries on from the remote file's size); shows progress by
+    asking the server how big temp is every few seconds."""
+    verb = "reput" if start else "put"
+    finished = threading.Event()
+
+    def progress():
+        began, first = time.monotonic(), start
+        while not finished.wait(3):
+            try:
+                done = sftp.stat(temp).st_size
+            except (IOError, OSError):
+                continue
+            speed = (done - first) / max(time.monotonic() - began, 0.001)
+            left = (size - done) / speed if speed > 0 else 0
+            print(f"\r    {done / 1048576:9.1f} / {size / 1048576:.1f} MB  {speed / 1048576:5.2f} MB/s"
+                  f"  {int(left // 3600)}h{int(left % 3600 // 60):02d}m left   ", end="", flush=True)
+
+    watcher = threading.Thread(target=progress, daemon=True)
+    watcher.start()
+    try:
+        result = subprocess.run(command, input=f"{verb} {sftp_quote(os.path.abspath(path))} {sftp_quote(temp)}\n",
+                                text=True, capture_output=True)
+    finally:
+        finished.set()
+        watcher.join()
+    print(f"\r    {size / 1048576:9.1f} / {size / 1048576:.1f} MB sent" + " " * 30 if result.returncode == 0 else "")
+    if result.returncode != 0:
+        sys.exit(f"sftp failed ({result.returncode}): {(result.stderr or result.stdout).strip()}\n"
+                 "Run the same command again to carry on from where it stopped.")
+    if sftp.stat(temp).st_size != size:
+        sys.exit(f"{temp} has the wrong size after the upload; run the same command again.")
+
+
+def put(client, sftp, path, target, size, already, openssh=None):
+    """Uploads path to target + ".upload", carrying on from `already` bytes left by a cut-off upload, then checks
+    the result. A resumed file is compared by SHA-256 with the local one; on a mismatch it is sent again whole."""
+    temp = target + ".upload"
+    for attempt in (1, 2):
+        start = already if 0 < already < size else 0
+        if start:
+            print(f"    resuming at {start / 1048576:.1f} MB")
+        if openssh:
+            if not start:
+                try:
+                    sftp.remove(temp)   # put would overwrite it anyway; this makes the progress start at 0
+                except IOError:
+                    pass
+            put_openssh(openssh, sftp, path, temp, size, start)
+            if not start:
+                return
+            local_sha, remote_sha = sha256_local(path), sha256_remote(client, temp)
+            if remote_sha is None or local_sha == remote_sha:
+                return
+            print(f"    the resumed copy doesn't match (sha256), sending it again whole")
+            already = 0
+            continue
+        began, last = time.monotonic(), 0.0
+        with open(path, "rb") as source, sftp.open(temp, "ab" if start else "wb") as out:
+            out.set_pipelined(True)
+            source.seek(start)
+            done = start
+            for block in iter(lambda: source.read(CHUNK), b""):
+                out.write(block)
+                done += len(block)
+                now = time.monotonic()
+                if now - last >= 2 or done == size:
+                    last = now
+                    speed = (done - start) / max(now - began, 0.001)
+                    left = (size - done) / speed if speed > 0 else 0
+                    print(f"\r    {done / 1048576:9.1f} / {size / 1048576:.1f} MB  {speed / 1048576:5.2f} MB/s"
+                          f"  {int(left // 3600)}h{int(left % 3600 // 60):02d}m left   ", end="", flush=True)
+        print()
+        if not start:
+            return
+        local_sha, remote_sha = sha256_local(path), sha256_remote(client, temp)
+        if remote_sha is None or local_sha == remote_sha:
+            return   # no sha256sum on the server: trust the resumed copy (the size already matches)
+        print(f"    the resumed copy doesn't match (sha256), sending it again whole")
+        already = 0
+
+
+def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None):
     sftp = client.open_sftp()
+    if openssh and not dry:
+        print("Sending with the system's sftp (OpenSSH).")
     have = remote_files(sftp, remote)
     made, sent, total = set(), 0, 0
     local_set = set()
     for root, dirs, files in os.walk(local):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        # base/ (the full client, only for new players) goes last, so the files every player needs arrive first
+        dirs[:] = sorted((d for d in dirs if not d.startswith(".")),
+                         key=lambda d: (root == local and d == "base", d))
         for name in files:
             if name.startswith(".") or name.endswith((".part", ".tmp")):
                 continue
@@ -145,7 +276,7 @@ def sync(client, local, remote, delete, dry, skip=(), server=False):
             if dry:
                 continue
             makedirs(sftp, posixpath.dirname(target), made)
-            sftp.put(path, target + ".upload")
+            put(client, sftp, path, target, st.st_size, (have.get(rel + ".upload") or (0, 0))[0], openssh)
             sftp.utime(target + ".upload", (int(st.st_atime), int(st.st_mtime)))
             sftp.posix_rename(target + ".upload", target)
     removed = 0
@@ -191,14 +322,16 @@ def main():
         if not args.folder or not os.path.isdir(args.folder):
             sys.exit("Give the local folder to upload.")
         if args.what == "files":
-            sync(client, args.folder, env["REMOTE_FILES_DIR"], args.delete, args.dry_run, skip={"manifest.json"})
+            sync(client, args.folder, env["REMOTE_FILES_DIR"], args.delete, args.dry_run, skip={"manifest.json"},
+                 openssh=openssh_command(env))
             manifest(client, env, args.dry_run)
         else:
             if not env.get("REMOTE_SERVER_DIR"):
                 sys.exit("upload.env has no REMOTE_SERVER_DIR.")
             if env.get("PRE_SERVER_CMD"):
                 run(client, env["PRE_SERVER_CMD"], args.dry_run)
-            sync(client, args.folder, env["REMOTE_SERVER_DIR"], args.delete, args.dry_run, server=True)
+            sync(client, args.folder, env["REMOTE_SERVER_DIR"], args.delete, args.dry_run, server=True,
+                 openssh=openssh_command(env))
             if env.get("POST_SERVER_CMD"):
                 run(client, env["POST_SERVER_CMD"], args.dry_run)
     finally:
