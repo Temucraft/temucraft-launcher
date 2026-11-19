@@ -845,7 +845,7 @@ public partial class MainWindow : Window
                 section = t.Section;
                 TweaksList.Children.Add(new TextBlock { Text = section.ToUpperInvariant(), Classes = { "section" } });
             }
-            Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,110,*"), Margin = new Thickness(0, 3) };
+            Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
             row.Children.Add(new TextBlock
             {
                 Text = t.Name, VerticalAlignment = VerticalAlignment.Center,
@@ -856,7 +856,8 @@ public partial class MainWindow : Window
                 ? new CheckBox()
                 : new NumericUpDown
                 {
-                    Width = 130, HorizontalAlignment = HorizontalAlignment.Left,
+                    Width = 132, Height = 32, MinHeight = 32, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(8, 0),
+                    VerticalContentAlignment = VerticalAlignment.Center,
                     Minimum = (decimal)t.Min, Maximum = (decimal)t.Max, ClipValueToMinMax = true,
                     Increment = t.Max - t.Min <= 4 ? 0.5m : 1m, FormatString = "0.###",
                     ParsingNumberStyle = System.Globalization.NumberStyles.Float,
@@ -885,9 +886,9 @@ public partial class MainWindow : Window
             TweaksList.Children.Add(new TextBlock { Text = "FROM THE SERVER", Classes = { "section" } });
             foreach (string cvar in extra)
             {
-                Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,110,*"), Margin = new Thickness(0, 3) };
+                Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
                 row.Children.Add(new TextBlock { Text = cvar, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) });
-                TextBox box = new() { Width = 90, HorizontalAlignment = HorizontalAlignment.Left };
+                TextBox box = new() { Width = 132, HorizontalAlignment = HorizontalAlignment.Left };
                 Grid.SetColumn(box, 1);
                 row.Children.Add(box);
                 TextBlock note = new() { Text = "A Config.wtf value the server sets.", Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
@@ -1255,25 +1256,58 @@ public partial class MainWindow : Window
             OptionsList.Children.Add(new TextBlock { Text = "The server offers no cosmetic patches (or the launcher hasn't connected yet).", Classes = { "dim" } });
         foreach (OptionGroup group in _manifest?.OptionGroups ?? [])
         {
-            StackPanel panel = new() { Spacing = 2 };
-            panel.Children.Add(new TextBlock { Text = group.Name, FontWeight = FontWeight.SemiBold });
-            if (group.Description.Length > 0) panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12 });
-            List<string> items = [.. (group.Optional ? new[] { "(none)" } : []), .. group.Options];
-            ComboBox box = new() { ItemsSource = items, MinWidth = 260, IsEnabled = !group.Enforce };
-            if (group.Enforce) ToolTip.SetTip(box, "Set by the server");
-            string? chosen = UpdatePlanner.ChosenOption(_manifest!, _settings.Options, group.Name);
-            box.SelectedItem = chosen ?? (group.Optional ? "(none)" : items.FirstOrDefault());
-            box.SelectionChanged += (_, _) =>
+            // a card per group, in a grid that fills the width
+            StackPanel panel = new() { Spacing = 6 };
+            Border card = new()
             {
-                string picked = box.SelectedItem as string ?? "";
-                _settings.Options[group.Name] = picked == "(none)" ? "" : picked;
+                Child = panel, Width = 300, MinHeight = 120, Margin = new Thickness(0, 0, 12, 12), Padding = new Thickness(14, 12),
+                Background = new SolidColorBrush(Color.Parse("#1AFFFFFF")), BorderBrush = new SolidColorBrush(Color.Parse("#3A3346")),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+            };
+            panel.Children.Add(new TextBlock { Text = group.Name, FontWeight = FontWeight.SemiBold, FontSize = 15 });
+            if (group.Description.Length > 0)
+                panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
+            string? chosen = UpdatePlanner.ChosenOption(_manifest!, _settings.Options, group.Name);
+
+            void Pick(string value, string shown)
+            {
+                _settings.Options[group.Name] = value;
                 SaveSettings();
                 _pendingFiles = Math.Max(_pendingFiles, 1);
                 ShowPlayState();
-                Status($"{group.Name}: {picked}. Press UPDATE to install it.");
-            };
-            panel.Children.Add(box);
-            OptionsList.Children.Add(panel);
+                Status($"{group.Name}: {shown}. Press UPDATE to install it.");
+            }
+
+            // on/off groups ("On"/"Off", or one option that may be left out) get a switch; real choices a dropdown
+            bool onOff = group.Options.SequenceEqual(["On", "Off"], StringComparer.OrdinalIgnoreCase);
+            bool single = group.Optional && group.Options.Count == 1;
+            Control control;
+            if (onOff || single)
+            {
+                string on = onOff ? group.Options[0] : group.Options[0], off = onOff ? group.Options[1] : "";
+                ToggleSwitch toggle = new()
+                {
+                    IsChecked = string.Equals(chosen, on, StringComparison.OrdinalIgnoreCase),
+                    OnContent = single ? on : "On", OffContent = "Off", IsEnabled = !group.Enforce,
+                };
+                toggle.IsCheckedChanged += (_, _) => Pick(toggle.IsChecked == true ? on : off, toggle.IsChecked == true ? "on" : "off");
+                control = toggle;
+            }
+            else
+            {
+                List<string> items = [.. (group.Optional ? new[] { "(none)" } : []), .. group.Options];
+                ComboBox box = new() { ItemsSource = items, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = !group.Enforce };
+                box.SelectedItem = chosen ?? (group.Optional ? "(none)" : items.FirstOrDefault());
+                box.SelectionChanged += (_, _) =>
+                {
+                    string picked = box.SelectedItem as string ?? "";
+                    Pick(picked == "(none)" ? "" : picked, picked);
+                };
+                control = box;
+            }
+            if (group.Enforce) ToolTip.SetTip(control, "Set by the server");
+            panel.Children.Add(control);
+            OptionsList.Children.Add(card);
         }
         RefreshUntracked();
     }

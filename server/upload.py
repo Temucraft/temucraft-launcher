@@ -100,6 +100,26 @@ def run(client, command, dry):
         sys.exit(f"remote command failed ({code}): {command}")
 
 
+def remote_files_fast(client, root):
+    """Every file under root with its size and time, from one `find` on the server (one round trip instead of one per
+    folder); None when the server's find can't do it, so the caller lists folder by folder instead."""
+    command = f"find {shlex.quote(root)} -type f -printf '%P\\0%s\\0%T@\\0' 2>/dev/null; echo"
+    _, out, _ = client.exec_command(command)
+    data = out.read()
+    if out.channel.recv_exit_status() != 0:
+        return None
+    parts = data.rstrip(b"\n").split(b"\0")
+    if len(parts) % 3 != 1:   # three fields per file and the empty tail
+        return None
+    found = {}
+    for i in range(0, len(parts) - 1, 3):
+        try:
+            found[parts[i].decode("utf-8", "surrogateescape")] = (int(parts[i + 1]), int(float(parts[i + 2])))
+        except ValueError:
+            return None
+    return found
+
+
 def remote_files(sftp, root):
     found = {}
 
@@ -255,7 +275,10 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
     if openssh and not dry:
         print("Sending big files with the system's sftp (OpenSSH), small ones over the open connection.")
     print(f"Listing what's already on the server in {remote}...", flush=True)
-    have = remote_files(sftp, remote)
+    have = remote_files_fast(client, remote)
+    if have is None:
+        print("  (the server's find can't list it in one go; listing folder by folder)", flush=True)
+        have = remote_files(sftp, remote)
     print(f"  {len(have)} file(s) there. Comparing with {local}...", flush=True)
     checked = 0
     made, sent, total = set(), 0, 0

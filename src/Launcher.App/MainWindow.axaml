@@ -62,6 +62,15 @@
       <Setter Property="Foreground" Value="#8FC24A" />
       <Setter Property="Padding" Value="4,2" />
     </Style>
+    <!-- compact number boxes: small spinner buttons that stay inside the box -->
+    <Style Selector="NumericUpDown /template/ ButtonSpinner">
+      <Setter Property="MinHeight" Value="32" />
+    </Style>
+    <Style Selector="NumericUpDown /template/ RepeatButton">
+      <Setter Property="MinWidth" Value="24" />
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
   </Window.Styles>
 
   <Panel>
@@ -144,7 +153,7 @@
                            ToolTip.Tip="Your own values: none of the presets" />
               </StackPanel>
               <TextBlock Classes="dim" TextWrapping="Wrap">
-                <Run Text="Highlighted" Foreground="#8FC24A" FontFamily="Consolas, Cascadia Mono, Menlo, DejaVu Sans Mono, monospace" />
+                <Run Text="Highlighted" Foreground="#8FC24A" FontWeight="SemiBold" />
                 <Run Text=" options are the launcher's recommended ones. Changes are written to WTF\Config.wtf when you press Save; close the game first." />
               </TextBlock>
             </StackPanel>
@@ -194,7 +203,7 @@
             <StackPanel>
               <TextBlock Classes="title" Text="OPTIONS" />
               <TextBlock Classes="dim" Text="Fixes and extras from the server, never gameplay. The fixes are on by default; turn off any you don't want. Changes are installed (or removed) at the next update." />
-              <StackPanel Name="OptionsList" Margin="0,8,0,0" Spacing="10" />
+              <WrapPanel Name="OptionsList" Margin="0,10,0,0" />
               <TextBlock Classes="section" Text="UNTRACKED PATCHES" />
               <TextBlock Classes="dim" Text="Patches in Data that neither the client nor the server hand out. They can break the game; removing moves them to the launcher's backup folder." />
               <StackPanel Name="UntrackedList" Margin="0,6,0,0" Spacing="4" />
