@@ -413,7 +413,7 @@ public partial class MainWindow : Window
                 $"{k.PadRight(width)}  {values.GetValueOrDefault(k, "(not available)").Replace(ClientInfo.AdapterSeparator, indent)}"));
         }
         PrivacyAgreed.Text = Agreed && _settings.CollectAgreedAt is DateTime when
-            ? $"You agreed on {when:yyyy-MM-dd HH:mm}. If the server changes what it collects or its note, you'll be asked again."
+            ? $"You agreed on {when:dd-MM-yyyy HH:mm:ss}. If the server changes what it collects or its note, you'll be asked again."
             : "You haven't agreed yet: nothing is sent until you log in.";
     }
 
