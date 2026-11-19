@@ -28,7 +28,8 @@ public static class Hashing
 /// </summary>
 public sealed class HashCache
 {
-    sealed record Entry(long Size, long ModifiedTicks, string Sha256);
+    // Path: the file's own spelling (the key is lower case); missing in caches written by older launchers
+    sealed record Entry(long Size, long ModifiedTicks, string Sha256, string? Path = null);
 
     readonly Dictionary<string, Entry> _entries;
     readonly string _file;
@@ -68,7 +69,7 @@ public sealed class HashCache
             return entry.Sha256;
 
         string sha = await Hashing.Sha256Async(path, progress, token);
-        _entries[key] = new Entry(info.Length, info.LastWriteTimeUtc.Ticks, sha);
+        _entries[key] = new Entry(info.Length, info.LastWriteTimeUtc.Ticks, sha, Path.GetFullPath(path));
         return sha;
     }
 
@@ -76,7 +77,20 @@ public sealed class HashCache
     public void Remember(string path, string sha256)
     {
         FileInfo info = new(path);
-        _entries[Path.GetFullPath(path).ToLowerInvariant()] = new Entry(info.Length, info.LastWriteTimeUtc.Ticks, sha256);
+        _entries[Path.GetFullPath(path).ToLowerInvariant()] = new Entry(info.Length, info.LastWriteTimeUtc.Ticks, sha256, Path.GetFullPath(path));
+    }
+
+    /// <summary>Files on disk this cache knows hold exactly this content (same hash and size, unchanged since).</summary>
+    public IEnumerable<string> FilesWith(string sha256, long size)
+    {
+        foreach ((string key, Entry entry) in _entries.ToList())
+        {
+            if (entry.Sha256 != sha256 || entry.Size != size) continue;
+            string path = entry.Path ?? key;
+            FileInfo info = new(path);
+            if (info.Exists && info.Length == size && info.LastWriteTimeUtc.Ticks == entry.ModifiedTicks)
+                yield return path;
+        }
     }
 }
 

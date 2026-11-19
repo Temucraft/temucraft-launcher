@@ -50,6 +50,11 @@ happened), so a problem a friend reports can be found afterwards; the log box un
 without the details. Crashes anywhere in the launcher are caught and logged too. The file is renamed to
 `launcher.1.log` (up to `.3`) when it passes 1 MB, so it never grows without end. Passwords are never logged.
 
+**Identical files are downloaded once.** Before downloading a file, the launcher looks for the same content already on
+your disk: a file it has already checked with the same hash (another path in the same update, a font under a second
+name), or the same-named file of another installed language (`lichking-locale-enUS.MPQ` for
+`lichking-locale-deDE.MPQ`). It copies that instead and checks the copy against the manifest's hash like a download.
+
 The bottom bar shows the client version (`client-version.txt`), whether an update is waiting (PLAY turns into
 UPDATE) and the untracked-files warning.
 

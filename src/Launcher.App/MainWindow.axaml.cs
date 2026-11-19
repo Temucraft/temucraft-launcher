@@ -371,7 +371,7 @@ public partial class MainWindow : Window
                 Log($"Removed {removed} (no longer on the server)");
             foreach (string removed in GameFolder.RemoveObsolete(folder, UpdatePlanner.Unchosen(manifest, choice)))
                 Log($"Removed {removed} (option not picked)");
-            await InstallAsync(client, outdated, token);
+            await InstallAsync(client, outdated, folder, token);
             foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, folder, token);
             GameFolder.WriteRealmlist(folder, manifest.Realmlist);
             Status("Everything up to date!");
@@ -385,26 +385,27 @@ public partial class MainWindow : Window
         PlayButton.Classes.Set("update", _pendingFiles > 0);
     }
 
-    async Task InstallAsync(ServerClient client, IReadOnlyList<PlannedFile> outdated, CancellationToken token)
+    async Task InstallAsync(ServerClient client, IReadOnlyList<PlannedFile> outdated, string? wowFolder, CancellationToken token)
     {
         HashCache cache = HashCache.Load(_cacheFile);
         try
         {
-            long total = outdated.Sum(p => p.File.Size), before = 0;
-            Log(outdated.Count == 0 ? "All server files are up to date" : $"{outdated.Count} file(s) to download, {total / 1048576.0:F1} MB");
-            foreach (PlannedFile planned in outdated)
-            {
-                long start = before;
-                UiProgress<(long Done, long Total)> progress = new(p =>
+            long total = outdated.Sum(p => p.File.Size);
+            Log(outdated.Count == 0 ? "All server files are up to date" : $"{outdated.Count} file(s) to install, {total / 1048576.0:F1} MB");
+            UpdateInstaller.Result result = await UpdateInstaller.InstallAsync(client, outdated, cache, wowFolder,
+                onFile: (planned, before, copy) => Dispatcher.UIThread.Post(() =>
                 {
-                    Progress.Value = total == 0 ? 1 : (double)(start + p.Done) / total;
+                    Progress.Value = total == 0 ? 1 : (double)before / total;
+                    StatusText.Text = copy ? $"Copying {planned.File.Path} (already on your disk)" : $"Downloading {planned.File.Path}";
+                }),
+                progress: (planned, before) => new UiProgress<(long Done, long Total)>(p =>
+                {
+                    Progress.Value = total == 0 ? 1 : (double)(before + p.Done) / total;
                     StatusText.Text = $"Downloading {planned.File.Path}  {p.Done / 1048576.0:F1} / {p.Total / 1048576.0:F1} MB";
-                });
-                await client.DownloadAsync(planned.File, planned.Target, progress, token);
-                cache.Remember(planned.Target, planned.File.Sha256);
-                before += planned.File.Size;
-                Log($"Installed {planned.File.Path}");
-            }
+                }),
+                token: token);
+            if (result.Copied > 0)
+                Log($"{result.Copied} file(s) ({result.BytesCopied / 1048576.0:F1} MB) copied from your own disk instead of downloaded");
         }
         finally
         {
@@ -446,7 +447,7 @@ public partial class MainWindow : Window
             IReadOnlyList<PlannedFile> outdated;
             try { outdated = await UpdatePlanner.OutdatedAsync(wanted, cache, new Progress<string>(Status), token); }
             finally { cache.Save(); }
-            await InstallAsync(client, outdated, token);
+            await InstallAsync(client, outdated, folder, token);
             Status("Game files installed. Press UPDATE to finish.");
         });
         if (done)

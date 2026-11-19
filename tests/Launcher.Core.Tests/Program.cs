@@ -36,6 +36,9 @@ List<(string Name, Func<Task> Body)> tests =
     ("The log writes details, rotates and tells the window", LoggerWritesAndRotates),
     ("CERT_SHA256 is read and checked", CertPinParsing),
     ("A pinned self-signed certificate is trusted, others are refused", CertPinOverTls),
+    ("The same file twice in an update is downloaded once and copied", SameFileDownloadedOnce),
+    ("A locale file another installed locale already has is copied, not downloaded", LocaleFileCopiedFromOtherLocale),
+    ("A copy source that changed is not used", ChangedSourceIsDownloaded),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -574,6 +577,66 @@ static Task CertPinParsing()
     return Task.CompletedTask;
 }
 
+static async Task SameFileDownloadedOnce()
+{
+    byte[] font = RandomNumberGenerator.GetBytes(200_000);
+    FakeServer server = new(new() { ["files/Fonts/ARIALN.ttf"] = font, ["files/Fonts/FRIZQT__.ttf"] = font, ["files/Fonts/skurri.ttf"] = font });
+    using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
+    string wow = TempDir();
+    List<PlannedFile> plan = new[] { "Fonts/ARIALN.ttf", "Fonts/FRIZQT__.ttf", "Fonts/skurri.ttf" }
+        .Select(p => new PlannedFile(File1(p, font), Path.Combine(wow, p.Replace('/', Path.DirectorySeparatorChar)))).ToList();
+    HashCache cache = HashCache.Load(Path.Combine(TempDir(), "cache.json"));
+    UpdateInstaller.Result result = await UpdateInstaller.InstallAsync(client, plan, cache, wow);
+    Assert(server.Requests.Count == 1, "downloads: " + string.Join(",", server.Requests));
+    Assert(result.Downloaded == 1 && result.Copied == 2, $"{result}");
+    Assert(plan.All(p => File.ReadAllBytes(p.Target).SequenceEqual(font)), "a copy is wrong");
+    Assert(plan.All(p => !File.Exists(p.Target + ".part")), "a .part left behind");
+}
+
+static async Task LocaleFileCopiedFromOtherLocale()
+{
+    byte[] data = RandomNumberGenerator.GetBytes(150_000);
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "Data", "enUS"));
+    File.WriteAllBytes(Path.Combine(wow, "Data", "enUS", "lichking-locale-enUS.MPQ"), data);   // from the base client
+    FakeServer server = new(new() { ["files/Data/deDE/lichking-locale-deDE.MPQ"] = data });
+    using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
+    ManifestFile file = File1("Data/deDE/lichking-locale-deDE.MPQ", data, FileCategory.Locale, "deDE");
+    string target = Path.Combine(wow, "Data", "deDE", "lichking-locale-deDE.MPQ");
+    UpdateInstaller.Result result = await UpdateInstaller.InstallAsync(client, [new PlannedFile(file, target)],
+        HashCache.Load(Path.Combine(TempDir(), "cache.json")), wow);
+    Assert(server.Requests.Count == 0 && result.Copied == 1, "downloaded instead of copied: " + string.Join(",", server.Requests));
+    Assert(File.ReadAllBytes(target).SequenceEqual(data), "copy wrong");
+
+    // a different file of the same name is not taken
+    byte[] other = RandomNumberGenerator.GetBytes(150_000);
+    FakeServer server2 = new(new() { ["files/Data/frFR/lichking-locale-frFR.MPQ"] = other });
+    using ServerClient client2 = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server2);
+    ManifestFile fr = File1("Data/frFR/lichking-locale-frFR.MPQ", other, FileCategory.Locale, "frFR");
+    string frTarget = Path.Combine(wow, "Data", "frFR", "lichking-locale-frFR.MPQ");
+    await UpdateInstaller.InstallAsync(client2, [new PlannedFile(fr, frTarget)], HashCache.Load(Path.Combine(TempDir(), "c2.json")), wow);
+    Assert(server2.Requests.Count == 1 && File.ReadAllBytes(frTarget).SequenceEqual(other), "a different file was copied");
+}
+
+static async Task ChangedSourceIsDownloaded()
+{
+    byte[] data = RandomNumberGenerator.GetBytes(100_000);
+    string wow = TempDir(), cacheFile = Path.Combine(TempDir(), "cache.json");
+    string source = Path.Combine(wow, "a.bin");
+    File.WriteAllBytes(source, data);
+    HashCache cache = HashCache.Load(cacheFile);
+    cache.Remember(source, Sha(data));
+    byte[] changed = data.ToArray(); changed[0] ^= 1;
+    File.WriteAllBytes(source, changed);
+    File.SetLastWriteTimeUtc(source, DateTime.UtcNow.AddMinutes(5));
+    FakeServer server = new(new() { ["files/b.bin"] = data });
+    using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
+    string target = Path.Combine(wow, "b.bin");
+    UpdateInstaller.Result result = await UpdateInstaller.InstallAsync(client, [new PlannedFile(File1("b.bin", data), target)], cache, wow);
+    Assert(result.Downloaded == 1 && result.Copied == 0, $"{result}");
+    Assert(File.ReadAllBytes(target).SequenceEqual(data), "wrong content installed");
+}
+
 /// <summary>A tiny https server on 127.0.0.1 with a made-up self-signed certificate, answering every request with "ok".</summary>
 static async Task CertPinOverTls()
 {
@@ -645,6 +708,7 @@ sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler
     public HttpStatusCode? ForceStatus { get; init; }
     public string? LastAuth { get; private set; }
     public long? LastRangeFrom { get; private set; }
+    public List<string> Requests { get; } = [];
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
     {
@@ -652,6 +716,7 @@ sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler
         if (ForceStatus is { } status)
             return Task.FromResult(new HttpResponseMessage(status));
         string path = request.RequestUri!.AbsolutePath.TrimStart('/');
+        lock (Requests) Requests.Add(path);
         if (path.StartsWith("wow%20files/"))
             path = path["wow%20files/".Length..];
         if (!Files.TryGetValue(path, out byte[]? data))
