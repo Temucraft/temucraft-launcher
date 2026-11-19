@@ -130,7 +130,7 @@ public static class Tweaks
             Compare: "Most in other versions: Retail 60 yd · Season of Discovery / Forever (1.16) 45 yd · TBC and Wrath Classic 41 yd · Classic Era 20 yd"),
         new("Awesome WotLK", "Field of view", "cameraFov", TweakKind.Number, "100", "100", "How wide the camera sees; high values look like a fisheye. [Default: 100] [1-200]", 1, 200,
             Requires: "Awesome WotLK",
-            Compare: "Retail: 50 to 90, default 90 (in degrees; up to 120 until Blizzard capped it at 90 after patch 9.2.5). Not the same scale as here."),
+            Compare: "Other versions, in degrees: Retail since 9.2.5: 50 to 90, default 90 (up to 120 until a June 2022 hotfix) · Retail before 9.2.5, Vanilla and TBC: about 90, fixed · WotLK: about 110, fixed. Here 100 (the default) keeps the game's own view."),
         // DXVK's settings, in dxvk.conf (shown when DXVK is on)
         new("DXVK", "Frame rate cap", "d3d9.maxFrameRate", TweakKind.Number, "0", "0", "A smoother frame rate cap than the game's own. [0 = no cap]", 0, 500,
             File: "dxvk", Requires: "DXVK"),
