@@ -699,8 +699,8 @@ static Task PolicyReadsEverything()
     File.WriteAllText(Path.Combine(game, "WTF", "Config.wtf"), "SET locale \"frFR\"\n");
     Assert(GameFolder.ClientLocale(game) == "frFR", "Config.wtf's locale");
     Assert(GameFolder.ClientLocale(TempDir()) is null, "a language for an empty folder");
-    Assert(GameFolder.LocaleName("deDE") == "German (Deutsch)" && GameFolder.LocaleName("enUS") == "English (United States)", "locale names");
-    Assert(GameFolder.LocaleName("deDE", t => t == "German" ? "Alemão" : t) == "Alemão (Deutsch)" && GameFolder.LocaleName("xxYY") == "xxYY", "translated / unknown");
+    Assert(GameFolder.LocaleName("deDE") == "German · Deutsch" && GameFolder.LocaleName("enUS") == "English (United States)", "locale names");
+    Assert(GameFolder.LocaleName("deDE", t => t == "German" ? "Alemão" : t) == "Alemão · Deutsch" && GameFolder.LocaleName("xxYY") == "xxYY", "translated / unknown");
     Assert(p.Setting("clearCache") is { Enforce: false, Bool: false }, "a bare value isn't a recommendation");
     Assert(p.Unknown.Contains("somethingNew") && p.Unknown.Contains("tweaks.SET weird"), "unknown names: " + string.Join(",", p.Unknown));
     Assert(p.Tweaks["FARCLIP"].CVarText == "1277" && p.Tweaks["gxWindow"].CVarText == "1" && p.Tweaks["cameraDistanceMaxFactor"].CVarText == "2.5",
@@ -799,14 +799,16 @@ static Task NewsDates()
     Assert(NewsItem.FormatDate("soon") == "soon", "a free-text date must stay as written");
     var items = NewsItem.Parse("""[{"date": "2026-11-19", "title": "c"}, {"date": "2026-11-19", "title": "b"}, {"date": "2026-11-19", "title": "a"}, {"date": "2026-11-18", "title": "z"}]""");
     var lines = NewsItem.DateLines(items);
-    Assert(lines[0] == "#3 · 19th of November 2026 (19/11/2026)" && lines[2] == "#1 · 19th of November 2026 (19/11/2026)", lines[0] + " / " + lines[2]);
-    Assert(lines[3] == "18th of November 2026 (18/11/2026)", "a single entry that day got a number: " + lines[3]);
+    Assert(lines[0] == "19th of November 2026 (19/11/2026)" && lines[1] == "" && lines[2] == "", "the date once per day: " + lines[0] + " / " + lines[1]);
+    Assert(lines[3] == "18th of November 2026 (18/11/2026)", "next day: " + lines[3]);
+    var numbers = NewsItem.DayNumbers(items);
+    Assert(numbers[0] == (1, 3) && numbers[2] == (3, 3) && numbers[3] == (0, 0), "numbers from the top; a day's only entry has none");
     return Task.CompletedTask;
 }
 
 static Task Translating()
 {
-    Dictionary<string, string> y = MiniYaml.Parse("# comment\n_name: \"Português\"\n\"Save\": \"Guardar\"\nPlain key: plain value # note\n\"Say \\\"hi\\\"\\n\": \"Diz \\\"olá\\\"\"\n\"Downloading {0}  {1} / {2} MB\": \"A transferir {0}  {1} / {2} MB\"\n\"Downloading {0}\": \"A transferir {0}\"\n\"{0}: {1}. Go\": \"{1} em {0}. Vai\"");
+    Dictionary<string, string> y = MiniYaml.Parse("# comment\n_name: \"Português\"\n\"Save\": \"Guardar\"\nPlain key: plain value # note\n\"Say \\\"hi\\\"\\n\": \"Diz \\\"olá\\\"\"\n\"Downloading {0}  {1} / {2} MB\": \"A transferir {0}  {1} / {2} MB\"\n\"Downloading {0}\": \"A transferir {0}\"\n\"{0}: {1}. Press it now\": \"{1} em {0}. Carrega agora\"");
     Assert(y["_name"] == "Português" && y["Save"] == "Guardar" && y["Plain key"] == "plain value", "parse: " + string.Join("|", y.Keys));
     Assert(y["Say \"hi\"\n"] == "Diz \"olá\"", "escapes");
     Translation.Language pt = Translation.FromYaml("ptPT", string.Join("\n", y.Select(kv => MiniYaml.Quote(kv.Key) + ": " + MiniYaml.Quote(kv.Value))));
@@ -817,7 +819,7 @@ static Task Translating()
         Assert(Translation.T("Save") == "Guardar" && Translation.T("Unknown words") == "Unknown words", "exact");
         Assert(Translation.T("Downloading patch-A.MPQ") == "A transferir patch-A.MPQ", "template: " + Translation.T("Downloading patch-A.MPQ"));
         Assert(Translation.T("Downloading a.MPQ  1.0 / 2.0 MB") == "A transferir a.MPQ  1.0 / 2.0 MB", "longest template first");
-        Assert(Translation.T("DXVK: on. Go") == "on em DXVK. Vai", "reordered: " + Translation.T("DXVK: on. Go"));
+        Assert(Translation.T("DXVK: on. Press it now") == "on em DXVK. Carrega agora", "reordered: " + Translation.T("DXVK: on. Press it now"));
     }
     finally { Translation.Use(null); }
     Assert(Translation.T("Save") == "Save", "back to English");
@@ -836,7 +838,7 @@ static Task Translating()
 static Task SpeedsAndSizes()
 {
     Assert(Words.Files(1) == "1 file" && Words.Files(188) == "188 files" && Words.Files(0) == "0 files", "plurals");
-    Assert(Words.Size(17029L * 1048576 + 314573) == "16.6 GB (17029.3 MB)", "GB: " + Words.Size(17029L * 1048576 + 314573));
+    Assert(Words.Size(17029L * 1048576 + 314573) == "16.6 GB", "GB: " + Words.Size(17029L * 1048576 + 314573));
     Assert(Words.Size(5 * 1048576) == "5.0 MB" && Words.Size(2000) == "2 KB", "MB/KB: " + Words.Size(2000));
     Assert(Words.ShortSize(3L * 1073741824) == "3.0 GB", "short");
     Assert(SpeedLimit.Format(5.6 * 1048576, false) == "5.6 MB/s" && SpeedLimit.Format(1_000_000, true) == "8.0 Mbit/s", "speeds: " + SpeedLimit.Format(1_000_000, true));

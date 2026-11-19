@@ -46,12 +46,12 @@ public static class GameFolder
             ["itIT"] = ("Italian", "Italiano"),
         };
 
-    /// <summary>"German (Deutsch)": the name in the launcher's language, then in its own, once when they're the same.</summary>
+    /// <summary>"German · Deutsch": the name in the launcher's language, then in its own, once when they're the same.</summary>
     public static string LocaleName(string locale, Func<string, string>? translate = null)
     {
         if (!LocaleNames.TryGetValue(locale, out (string English, string Native) n)) return locale;
         string shown = translate?.Invoke(n.English) ?? n.English;
-        return shown == n.Native ? shown : $"{shown} ({n.Native})";
+        return shown == n.Native ? shown : $"{shown} · {n.Native}";
     }
 
     /// <summary>The game's own language: Config.wtf's SET locale, else its only (or first) language folder; null

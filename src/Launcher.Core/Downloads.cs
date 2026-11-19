@@ -128,14 +128,8 @@ public static class Words
 
     static string Number(double value) => value.ToString("0.0", CultureInfo.InvariantCulture);
 
-    /// <summary>"512 KB", "312.4 MB", or "16.6 GB (17029.3 MB)" from 1 GB up.</summary>
-    public static string Size(long bytes)
-    {
-        double mb = bytes / 1048576.0;
-        if (bytes < 1048576) return $"{Math.Ceiling(bytes / 1024.0):0} KB";
-        if (mb < 1024) return $"{Number(mb)} MB";
-        return $"{Number(mb / 1024)} GB ({Number(mb)} MB)";
-    }
+    /// <summary>"512 KB", "312.4 MB" or "16.6 GB".</summary>
+    public static string Size(long bytes) => ShortSize(bytes);
 
     /// <summary>"312.4 MB" or "16.6 GB": for progress, where the MB in brackets would be too long.</summary>
     public static string ShortSize(long bytes)

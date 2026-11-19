@@ -137,6 +137,11 @@ public static class Translation
             if (Regex.IsMatch(key, @"\{\d\}"))
             {
                 // "Downloading {0}  {1} / {2} MB" → ^Downloading (.+?)  (.+?) / (.+?) MB$
+                // the template itself, for code that formats it ("{0} files" → "{0} Dateien")
+                _exact[key] = value;
+                // matching text that is already filled in only for templates with enough fixed words: "{0} files"
+                // would also catch "Install game files"
+                if (Regex.Replace(key, @"\{\d\}", "").Trim().Length < 8) continue;
                 string pattern = "^" + Regex.Replace(Regex.Escape(key), @"\\\{(\d)}", m => $"(?<a{m.Groups[1].Value}>.+?)") + "$";
                 _templates.Add((new Regex(pattern, RegexOptions.Singleline), value));
             }

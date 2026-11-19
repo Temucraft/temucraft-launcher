@@ -14,7 +14,8 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
         options/<Group>/<Option>/<path inside the WoW folder>            cosmetic patches only (darker nights...), installed
                                                                          when the player picks that option
                                       (e.g. options/Login screen/Classic/Data/patch-L.MPQ); options/<Group>/group.json
-                                      may hold {"description": "...", "optional": true, "order": ["Classic", ...]};
+                                      may hold {"description": "...", "optional": true, "order": ["Classic", ...],
+                                      "links": {"GitHub": "https://..."}};
                                       an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
         launcher-policy.json          (// comments allowed) the server's say over launcher settings: {"installAddons": {"value": true,
@@ -174,8 +175,12 @@ def build(files_dir, realmlist, cache):
                 for path in walk(odir):
                     files.append(entry(files_dir, path, os.path.relpath(path, odir).replace(os.sep, "/"), "option", cache,
                                        group=group, option=option))
+            # "links": {"GitHub": "https://...", "Website": "https://..."} (or "link": "https://..."): shown on the card
+            links = info.get("links") or ({"Page": info["link"]} if info.get("link") else {})
+            links = [{"name": str(n), "url": str(u)} for n, u in links.items() if str(u).startswith(("https://", "http://"))]
             groups.append({"name": group, "description": info.get("description", ""), "options": order,
-                           "optional": bool(info.get("optional", False)), "enforce": bool(info.get("enforce", False))})
+                           "optional": bool(info.get("optional", False)), "enforce": bool(info.get("enforce", False)),
+                           "links": links})
 
     manifest = {"version": 1, "realmlist": realmlist, "clientVersion": "", "optionGroups": groups,
                 "files": files, "obsolete": [], "policy": {}}

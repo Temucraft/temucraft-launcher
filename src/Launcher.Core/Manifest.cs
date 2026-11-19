@@ -86,6 +86,15 @@ public sealed class OptionGroup
     public bool Optional { get; set; }
     /// <summary>Set by the server: everyone gets the first option (or none when optional), whatever they picked.</summary>
     public bool Enforce { get; set; }
+    /// <summary>Links shown on the option's card (its GitHub page, website...); only http(s) ones are shown.</summary>
+    public List<OptionLink> Links { get; set; } = [];
+}
+
+public sealed class OptionLink
+{
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public bool IsWeb => Uri.TryCreate(Url, UriKind.Absolute, out Uri? u) && u.Scheme is "https" or "http";
 }
 
 public sealed class ManifestFile

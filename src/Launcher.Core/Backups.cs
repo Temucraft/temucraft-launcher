@@ -121,18 +121,33 @@ public sealed class NewsItem
     /// </summary>
     public static IReadOnlyList<string> DateLines(IReadOnlyList<NewsItem> items)
     {
-        Dictionary<string, int> perDay = items.GroupBy(i => i.Date.Trim()).ToDictionary(g => g.Key, g => g.Count());
-        Dictionary<string, int> seen = [];
+        // the date once per day, above that day's first (newest) entry
         List<string> lines = [];
+        string? last = null;
         foreach (NewsItem item in items)
         {
             string day = item.Date.Trim();
-            if (day.Length == 0) { lines.Add(""); continue; }
-            int count = perDay[day], before = seen.GetValueOrDefault(day);
-            seen[day] = before + 1;
-            lines.Add((count > 1 ? $"#{count - before} · " : "") + FormatDate(day));
+            lines.Add(day.Length > 0 && day != last ? FormatDate(day) : "");
+            if (day.Length > 0) last = day;
         }
         return lines;
+    }
+
+    /// <summary>Where each entry sits in its day, from the top: (1, 3), (2, 3)...; (0, 0) when it is the day's only one.</summary>
+    public static IReadOnlyList<(int Number, int Of)> DayNumbers(IReadOnlyList<NewsItem> items)
+    {
+        Dictionary<string, int> perDay = items.Where(i => i.Date.Trim().Length > 0).GroupBy(i => i.Date.Trim()).ToDictionary(g => g.Key, g => g.Count());
+        Dictionary<string, int> seen = [];
+        List<(int, int)> numbers = [];
+        foreach (NewsItem item in items)
+        {
+            string day = item.Date.Trim();
+            if (!perDay.TryGetValue(day, out int count) || count < 2) { numbers.Add((0, 0)); continue; }
+            int n = seen.GetValueOrDefault(day) + 1;
+            seen[day] = n;
+            numbers.Add((n, count));
+        }
+        return numbers;
     }
 }
 

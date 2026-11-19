@@ -250,16 +250,21 @@ public partial class MainWindow : Window
         foreach (string locale in available.Concat(chosen).Concat(locked.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             bool must = locked.TryGetValue(locale, out string? why);
+            // the code with its size next to it ("deDE  1.9 GB"); the code is kept in Tag
+            StackPanel label = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+            label.Children.Add(new TextBlock { Text = locale });
+            if (_manifest is { } sized && InstallSizes.Locale(sized, locale) is > 0 and var localeBytes)
+                label.Children.Add(new TextBlock { Text = Words.Size(localeBytes), Classes = { "dim" }, FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
             CheckBox box = new()
             {
-                Content = locale,
-                Margin = new Thickness(0, 0, 14, 0),
+                Content = label,
+                Tag = locale,
+                Margin = new Thickness(0, 0, 16, 4),
                 IsChecked = must || chosen.Contains(locale, StringComparer.OrdinalIgnoreCase),
                 IsEnabled = !must,
             };
             // hover: the language's name (in the launcher's language and its own), and why it's locked
-            string size = _manifest is { } m && InstallSizes.Locale(m, locale) is > 0 and var bytes ? "\n" + Words.Size(bytes) : "";
-            ToolTip.SetTip(box, GameFolder.LocaleName(locale) + size + (must ? "\n" + Translation.T(why!) : ""));
+            ToolTip.SetTip(box, GameFolder.LocaleName(locale) + (must ? "\n" + Translation.T(why!) : ""));
             LocalePanel.Children.Add(box);
         }
     }
@@ -276,7 +281,7 @@ public partial class MainWindow : Window
     }
 
     List<string> SelectedLocales() => LocalePanel.Children.OfType<CheckBox>()
-        .Where(box => box.IsChecked == true).Select(box => box.Content!.ToString()!).ToList();
+        .Where(box => box.IsChecked == true).Select(box => box.Tag as string ?? box.Content?.ToString() ?? "").Where(l => l.Length > 0).ToList();
 
     void SetBusy(bool busy)
     {
@@ -342,7 +347,7 @@ public partial class MainWindow : Window
     {
         if (GameFolder.LooksLikeClient(Folder)) return false;
         Status(Folder.Length == 0
-            ? "Pick your WoW folder under Settings, or an empty folder to install the game into."
+            ? "Pick your WoW folder under Game files, or an empty folder to install the game into."
             : "There's no game in your WoW folder yet: press INSTALL to download it there.");
         return true;
     }
@@ -592,7 +597,7 @@ public partial class MainWindow : Window
         SaveSettings();
         _pendingFiles = Math.Max(_pendingFiles, launcher.Keys.Any(k => k.StartsWith("options.") || k == "locales") ? 1 : 0);
         ShowPlayState();
-        Status($"{count} setting(s) imported. Press Save on the Tweaks page to write the game settings.");
+        Status($"{count} setting(s) imported. Press Save on the Game settings page to write the game settings.");
     }
 
     async void OnCopyValues(object? sender, RoutedEventArgs e)
@@ -614,7 +619,7 @@ public partial class MainWindow : Window
     void OnLoginLater(object? sender, RoutedEventArgs e)
     {
         LoginOverlay.IsVisible = false;
-        StatusText.Text = "Not logged in: you can play, but updates need your login (Settings, or press UPDATE).";
+        StatusText.Text = "Not logged in: you can play, but updates need your login (Launcher page, or press UPDATE).";
     }
 
     /// <summary>What to install, read from the window (call on the window's thread).</summary>
@@ -1129,21 +1134,43 @@ public partial class MainWindow : Window
             list.Children.Add(new TextBlock { Text = "Nothing yet.", Classes = { "dim" } });
         using IDisposable serverText = Look.Untranslated();   // the server's words stay as it wrote them
         IReadOnlyList<string> dates = NewsItem.DateLines(items);
+        IReadOnlyList<(int Number, int Of)> numbers = NewsItem.DayNumbers(items);
         for (int i = 0; i < count; i++)
         {
             NewsItem item = items[i];
             StackPanel card = new() { Spacing = 4 };
             if (dates[i].Length > 0) card.Children.Add(new TextBlock { Text = dates[i], Classes = { "dim" }, FontSize = 12 });
-            if (item.Title.Length > 0) card.Children.Add(new TextBlock { Text = item.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Classes = { "accent" }, TextWrapping = TextWrapping.Wrap });
+            if (item.Title.Length > 0)
+            {
+                // the title, then where it sits in its day ("1 of 3") when there are several that day
+                TextBlock title = new() { FontSize = 17, FontWeight = FontWeight.SemiBold, Classes = { "accent" }, TextWrapping = TextWrapping.Wrap };
+                title.Inlines!.Add(new Avalonia.Controls.Documents.Run(item.Title));
+                if (numbers[i].Of > 1)
+                    title.Inlines.Add(new Avalonia.Controls.Documents.Run("   " + string.Format(Translation.T("{0} of {1} that day"), numbers[i].Number, numbers[i].Of))
+                        { FontSize = 12, FontWeight = FontWeight.Normal, Foreground = (IBrush?)Application.Current!.FindResource("T.dim") });
+                card.Children.Add(title);
+            }
             // each line, with [Tags] and {+better}/{-worse} in colour; a line with details folds them under it
             StackPanel body = new() { Spacing = 1 };
             foreach ((string line, IReadOnlyList<string> details) in NewsItem.Lines(item.Text))
             {
-                if (details.Count == 0) { body.Children.Add(Rich(line)); continue; }
-                StackPanel inner = new() { Spacing = 1, Margin = new Thickness(18, 2, 0, 4) };
+                if (details.Count == 0)
+                {
+                    // a bullet line: the bullet in the same narrow column as the folding arrows, so the text lines up
+                    bool bullet = line.StartsWith("• ") || line.StartsWith("- ");
+                    if (!bullet) { body.Children.Add(Rich(line)); continue; }
+                    Grid plain = new() { ColumnDefinitions = new ColumnDefinitions("14,*") };
+                    plain.Children.Add(new TextBlock { Text = "•", Classes = { "text" }, HorizontalAlignment = HorizontalAlignment.Center });
+                    TextBlock rest = Rich(line[2..]);
+                    Grid.SetColumn(rest, 1);
+                    plain.Children.Add(rest);
+                    body.Children.Add(plain);
+                    continue;
+                }
+                StackPanel inner = new() { Spacing = 1, Margin = new Thickness(14, 2, 0, 4) };
                 foreach (string detail in details) inner.Children.Add(Rich("• " + detail, 13));
-                TextBlock arrow = new() { Text = "▸", Classes = { "accent" }, Width = 14, VerticalAlignment = VerticalAlignment.Top };
-                Grid head = new() { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand), Background = Brushes.Transparent };
+                TextBlock arrow = new() { Text = "▸", Classes = { "accent" }, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top };
+                Grid head = new() { ColumnDefinitions = new ColumnDefinitions("14,*"), Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand), Background = Brushes.Transparent };
                 head.Children.Add(arrow);
                 // the arrow takes the bullet's place
                 string headLine = line.StartsWith("• ") ? line[2..] : line.StartsWith("- ") ? line[2..] : line;
@@ -1212,7 +1239,7 @@ public partial class MainWindow : Window
                 // connected, but no game yet: the tabs are filled in; the game files come from Install game files…
                 Status(folder.Length > 0   // the value read before the job: the folder box only works on the window's thread
                     ? "Connected. There's no game in your WoW folder yet: press INSTALL to download it there."
-                    : "Connected. Pick your WoW folder under Settings, or an empty folder to install the game into.");
+                    : "Connected. Pick your WoW folder under Game files, or an empty folder to install the game into.");
                 await Dispatcher.UIThread.InvokeAsync(ShowPlayState);
                 await Dispatcher.UIThread.InvokeAsync(RefreshMods);
                 return;
@@ -1353,7 +1380,7 @@ public partial class MainWindow : Window
         if (_manifest is not { } manifest) return;
         if (!manifest.Files.Any(f => f.Category == FileCategory.Base))
         {
-            Status(Translation.T("This server doesn't hand out the game itself: pick your WoW 3.3.5a folder under Settings."));
+            Status(Translation.T("This server doesn't hand out the game itself: pick your WoW 3.3.5a folder under Game files."));
             return;
         }
         InstallFolderBox.Text = Folder.Length > 0 && !GameFolder.LooksLikeClient(Folder) ? Folder : DefaultInstallFolder();
@@ -2146,6 +2173,27 @@ public partial class MainWindow : Window
             }
             if (group.Enforce) ToolTip.SetTip(control, "Set by the server");
             panel.Children.Add(control);
+            // the server's links for this option (GitHub, website...), bottom right of the card
+            List<OptionLink> links = [.. group.Links.Where(l => l.IsWeb && l.Name.Length > 0)];
+            if (links.Count > 0)
+            {
+                StackPanel row = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
+                                         VerticalAlignment = VerticalAlignment.Bottom, Spacing = 2 };
+                foreach (OptionLink link in links)
+                {
+                    Button open;
+                    using (Look.Untranslated()) open = new Button { Content = link.Name, Classes = { "link" }, FontSize = 12 };
+                    ToolTip.SetTip(open, link.Url);
+                    open.Click += (_, _) => OpenUrl(link.Url);
+                    row.Children.Add(open);
+                }
+                Grid layout = new() { RowDefinitions = new RowDefinitions("*,Auto") };
+                card.Child = null;
+                layout.Children.Add(panel);
+                Grid.SetRow(row, 1);
+                layout.Children.Add(row);
+                card.Child = layout;
+            }
             OptionsList.Children.Add(card);
         }
         RefreshUntracked();

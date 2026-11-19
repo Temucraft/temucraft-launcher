@@ -107,12 +107,18 @@
           </StackPanel>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="24,0,0,0" VerticalAlignment="Center" Spacing="0">
-          <Button Name="NewsTab" Classes="tab selected" Content="NEWS" Click="OnTab" Tag="0" />
-          <Button Name="TweaksTab" Classes="tab" Content="TWEAKS" Click="OnTab" Tag="1" />
-          <Button Name="AddonsTab" Classes="tab" Content="ADDONS" Click="OnTab" Tag="2" />
-          <Button Name="ModsTab" Classes="tab" Content="OPTIONS" Click="OnTab" Tag="3" />
-          <Button Name="SettingsTab" Classes="tab" Content="SETTINGS" Click="OnTab" Tag="4" />
-          <Button Name="LauncherTab" Classes="tab" Content="LAUNCHER" Click="OnTab" Tag="5" />
+          <Button Name="NewsTab" Classes="tab selected" Content="NEWS" Click="OnTab" Tag="0"
+                  ToolTip.Tip="News and what changed" />
+          <Button Name="SettingsTab" Classes="tab" Content="GAME FILES" Click="OnTab" Tag="4"
+                  ToolTip.Tip="Where the game is, its languages, downloads, updates and backups" />
+          <Button Name="ModsTab" Classes="tab" Content="MODS" Click="OnTab" Tag="3"
+                  ToolTip.Tip="Fixes and extras for the game (DXVK, nicer water...), on or off" />
+          <Button Name="AddonsTab" Classes="tab" Content="ADDONS" Click="OnTab" Tag="2"
+                  ToolTip.Tip="Interface addons" />
+          <Button Name="TweaksTab" Classes="tab" Content="GAME SETTINGS" Click="OnTab" Tag="1"
+                  ToolTip.Tip="The game's own settings: view distance, frame rate, camera, sound" />
+          <Button Name="LauncherTab" Classes="tab" Content="LAUNCHER" Click="OnTab" Tag="5"
+                  ToolTip.Tip="The launcher itself: your login, language, look, window and privacy" />
         </StackPanel>
         <!-- right: the username, and the server's website links under it -->
         <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
@@ -172,6 +178,10 @@
         <!-- 1 tweaks -->
         <Border Name="TweaksPage" Classes="panel" IsVisible="False">
           <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+              <TextBlock Classes="title" Text="GAME SETTINGS" Margin="0,0,0,2" />
+              <TextBlock Classes="dim" Text="The game's own settings (WTF\Config.wtf), and those of DXVK and Awesome WotLK while they are on." />
+            </StackPanel>
             <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,10,0,0">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Content="Save" Click="OnSaveTweaks" />
@@ -194,7 +204,7 @@
               </TextBlock>
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Name="TweaksHint" Classes="dim" IsVisible="False" Margin="0,0,0,8"
-                       Text="These are read from your game's WTF\Config.wtf: pick your WoW folder under Settings, or install the game files there first." />
+                       Text="These are read from your game's WTF\Config.wtf: pick your WoW folder under Game files, or install the game files there first." />
             <ScrollViewer><StackPanel Name="TweaksList" /></ScrollViewer>
           </DockPanel>
         </Border>
@@ -237,7 +247,7 @@
         <Border Name="ModsPage" Classes="panel" IsVisible="False">
           <ScrollViewer>
             <StackPanel>
-              <TextBlock Classes="title" Text="OPTIONS" />
+              <TextBlock Classes="title" Text="MODS" />
               <TextBlock Classes="dim" Text="Fixes and extras from the server, never gameplay. The fixes are on by default; turn off any you don't want. Changes are installed (or removed) at the next update." />
               <WrapPanel Name="OptionsList" Margin="0,10,0,0" />
               <TextBlock Classes="section" Text="UNTRACKED PATCHES" />
@@ -251,17 +261,8 @@
         <Border Name="SettingsPage" Classes="panel" IsVisible="False">
           <ScrollViewer>
             <StackPanel>
-              <TextBlock Classes="title" Text="SETTINGS" />
-              <StackPanel Name="AccountSection">
-              <TextBlock Classes="section" Text="ACCOUNT (the login for the server's game files)" />
-              <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
-                <TextBox Name="UsernameBox" Watermark="Username" />
-                <TextBox Grid.Column="2" Name="PasswordBox" Watermark="Password" PasswordChar="•" />
-                <CheckBox Grid.Row="1" Name="RememberBox" Content="Remember password (Windows Credential Manager)" />
-                <Button Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" Content="Connect" Click="OnConnect" Margin="0,4,0,0" />
-              </Grid>
-              <TextBlock Classes="dim" Margin="0,4,0,0" Text="Your own login from the server's owner." />
-              </StackPanel>
+              <TextBlock Classes="title" Text="GAME FILES" Margin="0,0,0,2" />
+              <TextBlock Classes="dim" Text="Where the game is, which languages to install, downloads, updates and backups." />
 
               <TextBlock Classes="section" Text="WORLD OF WARCRAFT 3.3.5a FOLDER" />
               <Grid ColumnDefinitions="*,8,Auto,8,Auto">
@@ -271,33 +272,69 @@
               </Grid>
               <TextBlock Classes="dim" Margin="0,4,0,0" Text="No game yet? Press Install game files… and pick an empty folder: the whole client is downloaded there." />
 
-              <TextBlock Classes="section" Text="LANGUAGES" />
-              <TextBlock Classes="dim" Text="The game languages to install." />
-              <WrapPanel Name="LocalePanel" Margin="0,4,0,0" />
+              <Grid ColumnDefinitions="*,32,*">
+                <StackPanel>
+                  <TextBlock Classes="section" Text="LANGUAGES" />
+                  <TextBlock Classes="dim" Text="The game languages to install." />
+                  <WrapPanel Name="LocalePanel" Margin="0,4,0,0" />
 
-              <TextBlock Classes="section" Text="GAME" />
-              <CheckBox Name="AddonsBox" Content="Install the addons the server needs" IsChecked="True" />
-              <CheckBox Name="ClearCacheBox" Content="Clean the client's Cache (WDB) on each launch" IsChecked="True" />
+                  <TextBlock Classes="section" Text="GAME" />
+                  <CheckBox Name="AddonsBox" Content="Install the addons the server needs" IsChecked="True" />
+                  <CheckBox Name="ClearCacheBox" Content="Clean the client's Cache (WDB) on each launch" IsChecked="True" />
 
-              <TextBlock Classes="section" Text="BACKUPS" />
-              <TextBlock Classes="dim" Text="Your settings, macros, key bindings and addons (WTF and Interface\AddOns)." />
-              <CheckBox Name="BackupBox" Content="Back up before every update" IsChecked="True" />
-              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
-                <Button Content="Back up now" Click="OnBackupNow" />
-                <ComboBox Name="BackupList" MinWidth="360" ToolTip.Tip="Date format: DD-MM-YYYY HH:MM:SS" />
-                <Button Content="Restore" Click="OnRestoreBackup" />
-                <Button Content="Open folder" Click="OnOpenBackups" />
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
-                <Button Content="Export macros and key bindings…" Click="OnExportMacros" />
-                <Button Content="Import macros and key bindings…" Click="OnImportMacros" />
-              </StackPanel>
+                  <TextBlock Classes="section" Text="BACKUPS" />
+                  <TextBlock Classes="dim" Text="Your settings, macros, key bindings and addons (WTF and Interface\AddOns)." />
+                  <CheckBox Name="BackupBox" Content="Back up before every update" IsChecked="True" />
+                  <ComboBox Name="BackupList" HorizontalAlignment="Stretch" Margin="0,6,0,0" ToolTip.Tip="Date format: DD-MM-YYYY HH:MM:SS" />
+                  <WrapPanel Margin="0,6,0,0">
+                    <Button Content="Back up now" Click="OnBackupNow" Margin="0,0,8,6" />
+                    <Button Content="Restore" Click="OnRestoreBackup" Margin="0,0,8,6" />
+                    <Button Content="Open folder" Click="OnOpenBackups" Margin="0,0,8,6" />
+                  </WrapPanel>
+                  <WrapPanel>
+                    <Button Content="Export macros and key bindings…" Click="OnExportMacros" Margin="0,0,8,6" />
+                    <Button Content="Import macros and key bindings…" Click="OnImportMacros" Margin="0,0,8,6" />
+                  </WrapPanel>
 
-              <TextBlock Classes="section" Text="GAME FILES" />
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Verify game files" Click="OnVerify" />
-                <Button Name="UpdateButton" Content="Check for updates" Click="OnUpdate" />
-              </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Classes="section" Text="CHECK THE GAME FILES" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Verify game files" Click="OnVerify" />
+                    <Button Name="UpdateButton" Content="Check for updates" Click="OnUpdate" />
+                  </StackPanel>
+
+                  <TextBlock Classes="section" Text="DOWNLOADS" />
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <CheckBox Name="LimitBox" Content="Limit download speed" />
+                    <NumericUpDown Name="LimitNumber" Width="150" Height="32" MinHeight="32" Minimum="1" Maximum="10000000" Increment="100"
+                                   FormatString="0" ClipValueToMinMax="True" VerticalContentAlignment="Center" />
+                    <TextBlock Name="LimitUnit" Text="KB/s" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <TextBlock Name="ServerCapNote" Classes="dim" FontSize="12" IsVisible="False" />
+                  <CheckBox Name="BitsBox" Content="Show download speeds in bits per second" />
+                  <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+                    <Button Name="SpeedTestButton" Content="Test my speed" Click="OnSpeedTest"
+                            ToolTip.Tip="Downloads a little from the server for a few seconds to measure your speed" />
+                    <TextBlock Name="SpeedTestText" Classes="dim" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                    <Button Name="UseSuggestedButton" Content="Use the suggested limit" Click="OnUseSuggestedLimit" IsVisible="False" />
+                  </StackPanel>
+                  <Button Content="Clear download cache" Click="OnClearDownloadCache" Margin="0,8,0,0" />
+                  <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                             Text="Forgets which files were already checked and removes unfinished downloads. Can fix updates that keep failing." />
+
+                  <TextBlock Classes="section" Text="UPDATES" />
+                  <CheckBox Name="AutoUpdateBox"><TextBlock TextWrapping="Wrap" Text="Update by itself (when the launcher opens, and every 30 minutes while it is open)" /></CheckBox>
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <CheckBox Name="HoursBox" Content="Only between" />
+                    <ComboBox Name="FromBox" Width="90" />
+                    <TextBlock Text="and" VerticalAlignment="Center" />
+                    <ComboBox Name="ToBox" Width="90" />
+                    <TextBlock Name="HoursNote" Classes="dim" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <TextBlock Classes="dim" FontSize="12" Text="Automatic updates wait while the game is running." />
+                </StackPanel>
+              </Grid>
             </StackPanel>
           </ScrollViewer>
         </Border>
@@ -306,93 +343,79 @@
         <Border Name="LauncherPage" Classes="panel" IsVisible="False">
           <ScrollViewer>
             <StackPanel>
-              <TextBlock Classes="title" Text="LAUNCHER" />
-              <CheckBox Name="ReopenBox" Content="Bring the launcher back when WoW closes" IsChecked="True" />
-              <CheckBox Name="RememberWindowBox" Content="Remember position and size of the launcher window" />
-              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
-                <TextBlock VerticalAlignment="Center" Text="Launcher background:" />
-                <Button Content="Choose picture…" Click="OnPickBackground" />
-                <Button Content="Default" Click="OnDefaultBackground" />
-              </StackPanel>
-              <Grid ColumnDefinitions="Auto,12,240" RowDefinitions="Auto,Auto,Auto" Margin="0,10,0,0">
-                <TextBlock Text="Language:" VerticalAlignment="Center" />
-                <ComboBox Grid.Column="2" Name="LanguageBox" HorizontalAlignment="Stretch" SelectionChanged="OnLanguagePicked" />
-                <TextBlock Grid.Row="1" Text="Theme:" VerticalAlignment="Center" Margin="0,6,0,0" />
-                <ComboBox Grid.Row="1" Grid.Column="2" Name="ThemeBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" SelectionChanged="OnThemePicked" />
-                <TextBlock Grid.Row="2" Text="Mode:" VerticalAlignment="Center" Margin="0,6,0,0" />
-                <ComboBox Grid.Row="2" Grid.Column="2" Name="ModeBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" SelectionChanged="OnThemePicked" />
+              <TextBlock Classes="title" Text="LAUNCHER" Margin="0,0,0,2" />
+              <TextBlock Classes="dim" Text="The launcher itself: your login, language, look, window and privacy." />
+              <Grid ColumnDefinitions="*,32,*">
+                <StackPanel>
+                  <StackPanel Name="AccountSection">
+                  <TextBlock Classes="section" Text="ACCOUNT (the login for the server's game files)" />
+                  <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
+                    <TextBox Name="UsernameBox" Watermark="Username" />
+                    <TextBox Grid.Column="2" Name="PasswordBox" Watermark="Password" PasswordChar="•" />
+                    <CheckBox Grid.Row="1" Name="RememberBox" Content="Remember password (Windows Credential Manager)" />
+                    <Button Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" Content="Connect" Click="OnConnect" Margin="0,4,0,0" />
+                  </Grid>
+                  <TextBlock Classes="dim" Margin="0,4,0,0" Text="Your own login from the server's owner." />
+                  </StackPanel>
+
+                  <TextBlock Classes="section" Text="LOOK" />
+                  <CheckBox Name="ReopenBox" Content="Bring the launcher back when WoW closes" IsChecked="True" />
+                  <CheckBox Name="RememberWindowBox" Content="Remember position and size of the launcher window" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+                    <TextBlock VerticalAlignment="Center" Text="Launcher background:" />
+                    <Button Content="Choose picture…" Click="OnPickBackground" />
+                    <Button Content="Default" Click="OnDefaultBackground" />
+                  </StackPanel>
+                  <Grid ColumnDefinitions="Auto,12,*" RowDefinitions="Auto,Auto,Auto" Margin="0,10,0,0">
+                    <TextBlock Text="Language:" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="2" Name="LanguageBox" HorizontalAlignment="Stretch" SelectionChanged="OnLanguagePicked" />
+                    <TextBlock Grid.Row="1" Text="Theme:" VerticalAlignment="Center" Margin="0,6,0,0" />
+                    <ComboBox Grid.Row="1" Grid.Column="2" Name="ThemeBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" SelectionChanged="OnThemePicked" />
+                    <TextBlock Grid.Row="2" Text="Mode:" VerticalAlignment="Center" Margin="0,6,0,0" />
+                    <ComboBox Grid.Row="2" Grid.Column="2" Name="ModeBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" SelectionChanged="OnThemePicked" />
+                  </Grid>
+                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                    <Button Name="CopySettingsButton2" Content="Copy settings" Click="OnCopySettings"
+                            ToolTip.Tip="Your tweaks and launcher settings as text, to paste on another PC or send to a friend" />
+                    <Button Content="Import settings" Click="OnImportSettings"
+                            ToolTip.Tip="Fill in settings copied with Copy settings (from the clipboard)" />
+                  </StackPanel>
+                  <TextBlock Classes="section" Text="WINDOW" />
+                  <Grid ColumnDefinitions="Auto,12,*" RowDefinitions="Auto,Auto,Auto">
+                    <TextBlock Text="When the game starts:" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="2" Name="GameLaunchBox" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Row="1" Text="When closing the window (X):" VerticalAlignment="Center" Margin="0,6,0,0" />
+                    <ComboBox Grid.Row="1" Grid.Column="2" Name="CloseBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                    <TextBlock Grid.Row="2" Text="At start, show:" VerticalAlignment="Center" Margin="0,6,0,0" />
+                    <ComboBox Grid.Row="2" Grid.Column="2" Name="StartPageBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" />
+                  </Grid>
+                  <Button Content="Create a desktop shortcut" Click="OnDesktopShortcut" Margin="0,8,0,0"
+                          ToolTip.Tip="A shortcut to this launcher on your desktop" />
+
+                  <TextBlock Name="LanguageNote" Classes="dim" FontSize="12" Margin="0,4,0,0" IsVisible="False"
+                             Text="The new language shows fully after restarting the launcher." />
+                  <TextBlock Name="LauncherVersionText" Classes="dim" Margin="0,10,0,0" />
+
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Classes="section" Text="WHAT THIS SERVER COLLECTS (THE LOGIN NOTICE)" />
+                  <SelectableTextBlock Name="PrivacyText" TextWrapping="Wrap" Foreground="{DynamicResource T.textSoft}" FontSize="12" />
+                  <StackPanel Name="PrivacyValuesTitle" Orientation="Horizontal" Spacing="10" Margin="0,10,0,4">
+                    <TextBlock Text="What this PC sends:" Foreground="{DynamicResource T.textSoft}" FontSize="12" VerticalAlignment="Center" />
+                    <Button Name="CopyValuesButton" Content="Copy to clipboard" FontSize="12" Padding="8,2" Click="OnCopyValues" />
+                  </StackPanel>
+                  <Grid Name="PrivacyValuesBox" ColumnDefinitions="Auto,12,*" />
+                  <TextBlock Text="Date format: &quot;DD-MM-YYYY HH:MM:SS&quot;" Foreground="{DynamicResource T.dimmer}" FontSize="11" Margin="0,8,0,0" />
+                  <TextBlock Name="PrivacyAgreed" Foreground="{DynamicResource T.textSoft}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
+
+                  <TextBlock Classes="section" Text="LOG" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Open log file" Click="OnOpenLog" />
+                  </StackPanel>
+                  <TextBox Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="220" Margin="0,8,0,0"
+                           FontFamily="Consolas, Cascadia Mono, monospace" FontSize="12" MinHeight="220" />
+                </StackPanel>
               </Grid>
-              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-                <Button Name="CopySettingsButton2" Content="Copy settings" Click="OnCopySettings"
-                        ToolTip.Tip="Your tweaks and launcher settings as text, to paste on another PC or send to a friend" />
-                <Button Content="Import settings" Click="OnImportSettings"
-                        ToolTip.Tip="Fill in settings copied with Copy settings (from the clipboard)" />
-              </StackPanel>
-              <TextBlock Classes="section" Text="DOWNLOADS" />
-              <StackPanel Orientation="Horizontal" Spacing="10">
-                <CheckBox Name="LimitBox" Content="Limit download speed" />
-                <NumericUpDown Name="LimitNumber" Width="150" Height="32" MinHeight="32" Minimum="1" Maximum="10000000" Increment="100"
-                               FormatString="0" ClipValueToMinMax="True" VerticalContentAlignment="Center" />
-                <TextBlock Name="LimitUnit" Text="KB/s" VerticalAlignment="Center" />
-              </StackPanel>
-              <TextBlock Name="ServerCapNote" Classes="dim" FontSize="12" IsVisible="False" />
-              <CheckBox Name="BitsBox" Content="Show download speeds in bits per second" />
-              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
-                <Button Name="SpeedTestButton" Content="Test my speed" Click="OnSpeedTest"
-                        ToolTip.Tip="Downloads a little from the server for a few seconds to measure your speed" />
-                <TextBlock Name="SpeedTestText" Classes="dim" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="480" />
-                <Button Name="UseSuggestedButton" Content="Use the suggested limit" Click="OnUseSuggestedLimit" IsVisible="False" />
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,6,0,0">
-                <Button Content="Clear download cache" Click="OnClearDownloadCache" />
-                <TextBlock Classes="dim" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560"
-                           Text="Forgets which files were already checked and removes unfinished downloads. Can fix updates that keep failing." />
-              </StackPanel>
-
-              <TextBlock Classes="section" Text="UPDATES" />
-              <CheckBox Name="AutoUpdateBox" Content="Update by itself (when the launcher opens, and every 30 minutes while it is open)"
-                        />
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <CheckBox Name="HoursBox" Content="Only between" />
-                <ComboBox Name="FromBox" Width="90" />
-                <TextBlock Text="and" VerticalAlignment="Center" />
-                <ComboBox Name="ToBox" Width="90" />
-                <TextBlock Name="HoursNote" Classes="dim" FontSize="12" VerticalAlignment="Center" />
-              </StackPanel>
-              <TextBlock Classes="dim" FontSize="12" Text="Automatic updates wait while the game is running." />
-
-              <TextBlock Classes="section" Text="WINDOW" />
-              <Grid ColumnDefinitions="Auto,12,320" RowDefinitions="Auto,Auto,Auto">
-                <TextBlock Text="When the game starts:" VerticalAlignment="Center" />
-                <ComboBox Grid.Column="2" Name="GameLaunchBox" HorizontalAlignment="Stretch" />
-                <TextBlock Grid.Row="1" Text="When closing the window (X):" VerticalAlignment="Center" Margin="0,6,0,0" />
-                <ComboBox Grid.Row="1" Grid.Column="2" Name="CloseBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-                <TextBlock Grid.Row="2" Text="At start, show:" VerticalAlignment="Center" Margin="0,6,0,0" />
-                <ComboBox Grid.Row="2" Grid.Column="2" Name="StartPageBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" />
-              </Grid>
-              <Button Content="Create a desktop shortcut" Click="OnDesktopShortcut" Margin="0,8,0,0"
-                      ToolTip.Tip="A shortcut to this launcher on your desktop" />
-
-              <TextBlock Name="LanguageNote" Classes="dim" FontSize="12" Margin="0,4,0,0" IsVisible="False"
-                         Text="The new language shows fully after restarting the launcher." />
-              <TextBlock Name="LauncherVersionText" Classes="dim" Margin="0,10,0,0" />
-
-              <TextBlock Classes="section" Text="WHAT THIS SERVER COLLECTS (THE LOGIN NOTICE)" />
-              <SelectableTextBlock Name="PrivacyText" TextWrapping="Wrap" Foreground="{DynamicResource T.textSoft}" FontSize="12" />
-              <StackPanel Name="PrivacyValuesTitle" Orientation="Horizontal" Spacing="10" Margin="0,10,0,4">
-                <TextBlock Text="What this PC sends:" Foreground="{DynamicResource T.textSoft}" FontSize="12" VerticalAlignment="Center" />
-                <Button Name="CopyValuesButton" Content="Copy to clipboard" FontSize="12" Padding="8,2" Click="OnCopyValues" />
-              </StackPanel>
-              <Grid Name="PrivacyValuesBox" ColumnDefinitions="Auto,12,*" />
-              <TextBlock Text="Date format: &quot;DD-MM-YYYY HH:MM:SS&quot;" Foreground="{DynamicResource T.dimmer}" FontSize="11" Margin="0,8,0,0" />
-              <TextBlock Name="PrivacyAgreed" Foreground="{DynamicResource T.textSoft}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
-
-              <TextBlock Classes="section" Text="LOG" />
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Open log file" Click="OnOpenLog" />
-              </StackPanel>
-              <TextBox Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="220" Margin="0,8,0,0"
-                       FontFamily="Consolas, Cascadia Mono, monospace" FontSize="12" />
             </StackPanel>
           </ScrollViewer>
         </Border>
@@ -405,7 +428,7 @@
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Spacing="6">
             <TextBlock Classes="title" Text="INSTALL THE GAME" Margin="0" />
-            <TextBlock Classes="dim" FontSize="12" Text="Already have WoW 3.3.5a? Cancel and pick its folder under Settings instead." />
+            <TextBlock Classes="dim" FontSize="12" Text="Already have WoW 3.3.5a? Cancel and pick its folder under Game files instead." />
             <TextBlock Text="Install into:" Margin="0,6,0,0" />
             <Grid ColumnDefinitions="*,8,Auto">
               <TextBox Name="InstallFolderBox" />
