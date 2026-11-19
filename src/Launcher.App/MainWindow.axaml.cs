@@ -62,6 +62,7 @@ public partial class MainWindow : Window
         if (_settings.RememberPassword)
             PasswordBox.Text = CredentialStore.Load();
         RememberBox.IsEnabled = CredentialStore.IsSupported;
+        RememberBox.Content = CredentialStore.IsSupported ? $"Remember password ({CredentialStore.StoreName})" : "Remember password (no password store on this system)";
         WowFolderBox.Text = _settings.WowFolder;
         WowFolderBox.TextChanged += (_, _) => { ShowPlayState(); LoadTweaks(); };
         AddonsBox.IsChecked = _settings.InstallAddons;
@@ -300,37 +301,36 @@ public partial class MainWindow : Window
                    && _settings.CollectAgreedNote == _server.CollectNote
                    && _server.Collect.All(k => _settings.CollectAgreed.Contains(k, StringComparer.OrdinalIgnoreCase));
 
-    /// <summary>The login window's notice: what every server gets, what a server may add, what this one adds and why.</summary>
+    /// <summary>The login window's notice, short enough to fit beside the login: each item this server collects,
+    /// tagged (Default) or (Enabled in &lt;server&gt;), the owner's note, and that logging in is agreeing.</summary>
     string CollectText()
     {
-        static string Lower(string d) => char.ToLowerInvariant(d[0]) + d[1..];
+        static string Short(string key) => key switch
+        {
+            "launcherVersion" => "Launcher version", "os" => "Operating system, version and build",
+            "installId" => "A random ID for this install", "computerName" => "Computer name", "osUser" => "Operating system username",
+            "mac" => "MAC addresses", "localIp" => "Local IP addresses (IPv4 and IPv6)", "timezone" => "Time zone",
+            "language" => "System language", "hardware" => "Processor and memory", _ => ClientInfo.Describe(key),
+        };
         IReadOnlyList<string> collect = _server?.Collect ?? ClientInfo.Normalize(null);
+        string where = _server is { Name.Length: > 0 } ? "in " + _server.Name : "by this server";
         System.Text.StringBuilder text = new();
         if (collect.Count == 0)
-            text.AppendLine("This server collects nothing from your PC besides your login.");
+            text.Append("This server collects nothing from your PC besides your login.");
         else
         {
-            List<string> defaults = ClientInfo.Defaults.Where(collect.Contains).ToList();
-            if (defaults.Count > 0)
-                text.AppendLine("Every server gets: " + string.Join("; ", defaults.Select(k => Lower(ClientInfo.Describe(k)))) + ".");
-            text.AppendLine();
-            text.AppendLine("Depending on the server, the launcher may also send: "
-                            + string.Join("; ", ClientInfo.Optional.Select(i => Lower(i.Description))) + ".");
-            List<string> extra = collect.Where(k => !ClientInfo.Defaults.Contains(k)).ToList();
-            text.AppendLine();
-            if (extra.Count == 0)
-                text.AppendLine("This server collects nothing more.");
-            else
-            {
-                text.AppendLine("This server also collects:");
-                foreach (string key in extra) text.AppendLine("  • " + ClientInfo.Describe(key));
-            }
-            if (_server?.CollectNote.Length > 0) { text.AppendLine(); text.AppendLine(_server.CollectNote); }
+            text.Append("This server collects:");
+            foreach (string key in collect)
+                text.Append($"\n  • {Short(key)}  ({(ClientInfo.Defaults.Contains(key) ? "Default" : "Enabled " + where)})");
+            bool everything = ClientInfo.Optional.All(i => collect.Contains(i.Key));
+            text.Append(everything ? "\nOther servers may collect less: only the defaults, or nothing."
+                                   : "\nOther servers may also ask for: " + string.Join(", ",
+                                         ClientInfo.Optional.Where(i => !collect.Contains(i.Key)).Select(i => Short(i.Key).ToLowerInvariant())) + ".");
         }
-        text.AppendLine();
-        text.Append("Like any server, it also sees the public IP address (IPv4 or IPv6) you connect from, and it records whether it let you in (its answer code).");
+        if (_server?.CollectNote.Length > 0) text.Append("\n\n" + _server.CollectNote);
+        text.Append("\n\nAny server also sees your public IP address (IPv4 or IPv6) and records whether it let you in.");
         if (collect.Count > 0)
-            text.Append("\n\nBy logging in, you agree to all of the above being sent to this server with every request the launcher makes.");
+            text.Append(" By logging in, you agree to this being sent with every request the launcher makes; you can read it again on the Launcher page.");
         return text.ToString();
     }
 
@@ -346,6 +346,7 @@ public partial class MainWindow : Window
         LoginPass.Text = error is null ? PasswordBox.Text : "";
         LoginRemember.IsChecked = RememberBox.IsChecked;
         LoginRemember.IsEnabled = CredentialStore.IsSupported;
+        ToolTip.SetTip(LoginRemember, CredentialStore.IsSupported ? $"Saved in {CredentialStore.StoreName}, never in a file" : "This system has no password store the launcher can use");
         CollectNotice.Text = CollectText();
         LoginError.Text = error ?? "";
         LoginError.IsVisible = error is not null;

@@ -26,7 +26,8 @@ the repository or in the exe.
 - Addons: the server's addons go to `Interface\AddOns\` (can be turned off).
 - Self-check: compares itself with the launcher on the server and warns when it differs (outdated or changed).
 - Play: clears the client's `Cache` folder (optional) and starts `Wow.exe`.
-- The password can be saved in Windows Credential Manager; nothing secret is written to a file.
+- The password can be saved in the operating system's password store (Windows Credential Manager, also under Wine;
+  the macOS Keychain; on Linux the desktop keyring through `secret-tool`); nothing secret is written to a file.
 
 The window has six pages:
 
@@ -54,7 +55,8 @@ version, the operating system with version and build, a random ID for the instal
 system username, the MAC addresses, the local IP addresses, time zone, language and hardware. The launcher's version,
 the operating system (version and build) and the install ID are sent to every server unless `COLLECT=none`; the rest
 only when `COLLECT` in `launcher.env` lists it (`all` for everything). Every server also sees the public IP address. The login window shows what any server might collect, what this one collects
-and the owner's own words (`COLLECT_NOTE`) before anything is sent, and logging in is agreeing to it; if the list
+and the owner's own words (`COLLECT_NOTE`) before anything is sent, each item tagged "(Default)" or "(Enabled in
+<`SERVER_NAME`>)", and logging in is agreeing to it; if the list
 grows, the launcher asks again. The Launcher page shows the exact values sent from this PC. Each item goes in its
 own header (`X-Temucraft-<item>`, URL-encoded). On the server, `server/apache-launcher-clients.conf.example` logs every
 login (manifest.json) as a CSV line with the time, the public IP (IPv4 or IPv6), the login, whether it was let in and

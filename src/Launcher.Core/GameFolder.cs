@@ -63,19 +63,82 @@ public static class GameFolder
 }
 
 /// <summary>
-/// Saves the password in Windows Credential Manager (encrypted for the Windows user), never in a file. Other systems
-/// don't save it.
+/// Saves the password in the operating system's own password store, never in a file: Windows Credential Manager
+/// (also under Wine), the macOS Keychain, or on Linux the desktop's secret store (GNOME Keyring, KWallet...) through
+/// secret-tool. Where none is available, <see cref="IsSupported"/> is false and nothing is saved.
 /// </summary>
 public static class CredentialStore
 {
     const string Target = "TemucraftLauncher";
 
-    public static bool IsSupported => OperatingSystem.IsWindows();
+    public static bool IsSupported =>
+        OperatingSystem.IsWindows() || (OperatingSystem.IsMacOS() && File.Exists(MacTool)) || (OperatingSystem.IsLinux() && LinuxTool is not null);
+
+    /// <summary>Where the password goes on this system, for the window's wording.</summary>
+    public static string StoreName =>
+        OperatingSystem.IsWindows() ? "Windows Credential Manager" : OperatingSystem.IsMacOS() ? "the macOS Keychain" : "your system's keyring";
+
+    const string MacTool = "/usr/bin/security";
+
+    /// <summary>secret-tool on the PATH (Linux); tests may point LAUNCHER_SECRET_TOOL at a stand-in.</summary>
+    static string? LinuxTool => Environment.GetEnvironmentVariable("LAUNCHER_SECRET_TOOL") is { Length: > 0 } fake ? fake
+        : (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+            .Select(d => Path.Combine(d, "secret-tool")).FirstOrDefault(File.Exists);
 
     public static void Save(string username, string password)
     {
-        if (!IsSupported)
+        if (OperatingSystem.IsWindows()) { WindowsSave(username, password); return; }
+        if (OperatingSystem.IsMacOS() && File.Exists(MacTool))
+        {
+            // through security's own prompt (-i), so the password never shows in the list of running programs
+            if (Run(MacTool, ["-i"], $"add-generic-password -U -a {Quote(username)} -s {Target} -w {Quote(password)}\n").Code != 0)
+                throw new IOException("Couldn't save the password in the macOS Keychain.");
             return;
+        }
+        if (LinuxTool is { } tool && Run(tool, ["store", "--label=Temucraft Launcher", "service", Target, "user", username], password).Code != 0)
+            throw new IOException("Couldn't save the password in your system's keyring.");
+    }
+
+    public static string? Load()
+    {
+        if (OperatingSystem.IsWindows()) return WindowsLoad();
+        (int code, string output) = OperatingSystem.IsMacOS() && File.Exists(MacTool) ? Run(MacTool, ["find-generic-password", "-s", Target, "-w"], null)
+            : LinuxTool is { } tool ? Run(tool, ["lookup", "service", Target], null) : (1, "");
+        string password = output.TrimEnd('\r', '\n');
+        return code == 0 && password.Length > 0 ? password : null;
+    }
+
+    public static void Delete()
+    {
+        if (OperatingSystem.IsWindows()) { WindowsDelete(); return; }
+        if (OperatingSystem.IsMacOS() && File.Exists(MacTool)) Run(MacTool, ["delete-generic-password", "-s", Target], null);
+        else if (LinuxTool is { } tool) Run(tool, ["clear", "service", Target], null);
+    }
+
+    static string Quote(string text) => "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    static (int Code, string Output) Run(string file, string[] args, string? input)
+    {
+        try
+        {
+            ProcessStartInfo start = new(file) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            foreach (string a in args) start.ArgumentList.Add(a);
+            using Process process = Process.Start(start)!;
+            if (input is not null) process.StandardInput.Write(input);
+            process.StandardInput.Close();
+            string output = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(10_000)) { process.Kill(); return (1, ""); }
+            return (process.ExitCode, output);
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            Logger.Warning($"Couldn't run {file}", e);
+            return (1, "");
+        }
+    }
+
+    static void WindowsSave(string username, string password)
+    {
         byte[] secret = Encoding.Unicode.GetBytes(password);
         IntPtr blob = Marshal.AllocHGlobal(secret.Length);
         try
@@ -99,9 +162,9 @@ public static class CredentialStore
         }
     }
 
-    public static string? Load()
+    static string? WindowsLoad()
     {
-        if (!IsSupported || !Native.CredRead(Target, Native.CRED_TYPE_GENERIC, 0, out IntPtr pointer))
+        if (!Native.CredRead(Target, Native.CRED_TYPE_GENERIC, 0, out IntPtr pointer))
             return null;
         try
         {
@@ -115,11 +178,7 @@ public static class CredentialStore
         }
     }
 
-    public static void Delete()
-    {
-        if (IsSupported)
-            Native.CredDelete(Target, Native.CRED_TYPE_GENERIC, 0);
-    }
+    static void WindowsDelete() => Native.CredDelete(Target, Native.CRED_TYPE_GENERIC, 0);
 
     static class Native
     {

@@ -42,6 +42,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("The server's policy enforces settings and option groups", PolicyEnforces),
     ("The policy reads every kind of setting and tweak", PolicyReadsEverything),
     ("Only what the server lists is read and sent, one header each", ClientInfoSent),
+    ("Remember me works through the Linux keyring (secret-tool)", LinuxKeyring),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -718,6 +719,34 @@ static async Task ClientInfoSent()
     using (ServerClient client = new(settings, "u", "p", quiet, clientInfo: null))
         await client.GetTextAsync("news.json");
     Assert(!quiet.LastHeaders.Keys.Any(k => k.StartsWith(ClientInfo.HeaderPrefix)), "sent something without agreement");
+}
+
+static Task LinuxKeyring()
+{
+    if (!OperatingSystem.IsLinux())
+    {
+        Console.WriteLine("        (skipped: Linux only)");
+        return Task.CompletedTask;
+    }
+    // a stand-in for secret-tool that keeps the secret in a file, called the same way the real one is
+    string dir = TempDir(), store = Path.Combine(dir, "secret"), tool = Path.Combine(dir, "secret-tool");
+    File.WriteAllText(tool, $"#!/bin/sh\ncase \"$1\" in\n  store) cat > '{store}' ;;\n  lookup) [ -f '{store}' ] && cat '{store}' || exit 1 ;;\n  clear) rm -f '{store}' ;;\nesac\n");
+    File.SetUnixFileMode(tool, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    Environment.SetEnvironmentVariable("LAUNCHER_SECRET_TOOL", tool);
+    try
+    {
+        Assert(CredentialStore.IsSupported, "not supported with secret-tool present");
+        CredentialStore.Save("ryan", "pa ss\"wörd");
+        Assert(CredentialStore.Load() == "pa ss\"wörd", "loaded: " + CredentialStore.Load());
+        Assert(!File.ReadAllText(tool).Contains("wörd"), "the password went on the command line");
+        CredentialStore.Delete();
+        Assert(CredentialStore.Load() is null, "still there after Delete");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable("LAUNCHER_SECRET_TOOL", null);
+    }
+    return Task.CompletedTask;
 }
 
 /// <summary>A tiny https server on 127.0.0.1 with a made-up self-signed certificate, answering every request with "ok".</summary>

@@ -25,6 +25,9 @@ public sealed class ServerSettings
     /// (see <see cref="ClientInfo.Normalize"/>); empty only with COLLECT=none.</summary>
     public IReadOnlyList<string> Collect { get; init; } = [];
 
+    /// <summary>The server's name for the login window (SERVER_NAME), e.g. "Temucraft"; empty: "this server".</summary>
+    public string Name { get; init; } = "";
+
     /// <summary>The server owner's own words about why (COLLECT_NOTE), shown in the login window.</summary>
     public string CollectNote { get; init; } = "";
 
@@ -71,7 +74,8 @@ public sealed class ServerSettings
         }
         IReadOnlyList<string> collect = ClientInfo.Normalize(values.TryGetValue("COLLECT", out string? list) ? list.Split(',') : null);
         string note = values.TryGetValue("COLLECT_NOTE", out string? n) ? n.Replace("\\n", "\n") : "";
-        return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin, Collect = collect, CollectNote = note };
+        return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin, Collect = collect, CollectNote = note,
+            Name = values.TryGetValue("SERVER_NAME", out string? name) ? name : "" };
     }
 }
 
