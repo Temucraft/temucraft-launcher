@@ -15,7 +15,7 @@ name and renamed when complete, so players never download half a file). A file c
 Ctrl+C carries on where it stopped the next time you run the same command (and is checked by SHA-256 against yours).
 The full client in base/ goes last, so the files every player needs arrive first. Files are sent with the system's
 own sftp (OpenSSH, built into Windows 10/11) when it's there: it is several times faster than paramiko over a long
-connection. USE_OPENSSH=0 in upload.env uses paramiko for everything. --delete also removes files on the VPS that
+connection. Files under 16 MB go over the already open connection instead, since each OpenSSH run logs in again. USE_OPENSSH=0 in upload.env uses paramiko for everything. --delete also removes files on the VPS that
 are gone locally, except hidden files and, for `server`, *.conf, *.log and the logs/ and data/ folders.
 --dry-run shows what would happen. For `server`, PRE_SERVER_CMD / POST_SERVER_CMD run before and
 after (e.g. stop and start the worldserver service).
@@ -130,6 +130,7 @@ def makedirs(sftp, folder, made):
 
 
 CHUNK = 1 << 20
+OPENSSH_MIN_BYTES = 16 << 20
 
 
 def sha256_local(path):
@@ -207,7 +208,8 @@ def put(client, sftp, path, target, size, already, openssh=None):
         start = already if 0 < already < size else 0
         if start:
             print(f"    resuming at {start / 1048576:.1f} MB")
-        if openssh:
+        # each OpenSSH run logs in anew (a second or two), so small files go over the open paramiko connection
+        if openssh and size >= OPENSSH_MIN_BYTES:
             if not start:
                 try:
                     sftp.remove(temp)   # put would overwrite it anyway; this makes the progress start at 0
