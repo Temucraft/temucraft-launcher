@@ -55,7 +55,8 @@ def walk(folder):
     for root, dirs, files in os.walk(folder):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
         for name in sorted(files):
-            if not name.startswith(".") and not name.endswith(".part"):
+            # .part/.upload/.tmp are unfinished downloads or uploads (upload.py writes <file>.upload, then renames it)
+            if not name.startswith(".") and not name.endswith((".part", ".upload", ".tmp")):
                 yield os.path.join(root, name)
 
 

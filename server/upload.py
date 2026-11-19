@@ -12,17 +12,37 @@ Uploader: puts your release files and server builds on the VPS over SSH (SFTP), 
 
 Only new or changed files are sent (size and modified time are compared; a changed file is written to a temporary
 name and renamed when complete, so players never download half a file). --delete also removes files on the VPS that
-are gone locally. --dry-run shows what would happen. For `server`, PRE_SERVER_CMD / POST_SERVER_CMD run before and
+are gone locally, except hidden files and, for `server`, *.conf, *.log and the logs/ and data/ folders.
+--dry-run shows what would happen. For `server`, PRE_SERVER_CMD / POST_SERVER_CMD run before and
 after (e.g. stop and start the worldserver service).
 """
 
 import argparse
 import os
 import posixpath
+import shlex
 import stat
 import sys
 
 KEEP_REMOTE = {"manifest.json", ".manifest-cache.json", "make-manifest.py"}
+
+# `server --delete` never removes these: the live configs, logs, the client data the server reads, and anything hidden
+SERVER_KEEP_DIRS = {"logs", "log", "data", "etc/backup"}
+SERVER_KEEP_SUFFIXES = (".conf", ".log", ".pid")
+
+
+def protected(rel, server):
+    """True when --delete must leave a remote file alone."""
+    parts = rel.split("/")
+    if any(p.startswith(".") for p in parts) or posixpath.basename(rel) in KEEP_REMOTE or rel.endswith(".upload"):
+        return True   # hidden files (.htaccess...) are never uploaded, so they would always look "gone locally"
+    if server:
+        lowered = rel.lower()
+        if lowered.endswith(SERVER_KEEP_SUFFIXES):
+            return True
+        if any(lowered == d or lowered.startswith(d + "/") for d in SERVER_KEEP_DIRS):
+            return True
+    return False
 
 
 def load_env(path):
@@ -100,7 +120,7 @@ def makedirs(sftp, folder, made):
     made.add(folder)
 
 
-def sync(client, local, remote, delete, dry, skip=()):
+def sync(client, local, remote, delete, dry, skip=(), server=False):
     sftp = client.open_sftp()
     have = remote_files(sftp, remote)
     made, sent, total = set(), 0, 0
@@ -131,7 +151,9 @@ def sync(client, local, remote, delete, dry, skip=()):
     removed = 0
     if delete:
         for rel in sorted(set(have) - local_set):
-            if posixpath.basename(rel) in KEEP_REMOTE or rel.endswith(".upload"):
+            if protected(rel, server):
+                if server:
+                    print(f"  keep   {rel}")
                 continue
             print(f"  delete {rel}")
             removed += 1
@@ -146,9 +168,9 @@ def manifest(client, env, dry):
     if not files_dir:
         sys.exit("upload.env has no REMOTE_FILES_DIR.")
     tool = env.get("REMOTE_MANIFEST_TOOL", posixpath.join(files_dir, "..", "make-manifest.py"))
-    command = f"python3 '{tool}' '{files_dir}'"
+    command = f"python3 {shlex.quote(tool)} {shlex.quote(files_dir)}"
     if env.get("REALMLIST"):
-        command += f" --realmlist '{env['REALMLIST']}'"
+        command += f" --realmlist {shlex.quote(env['REALMLIST'])}"
     run(client, command, dry)
 
 
@@ -176,7 +198,7 @@ def main():
                 sys.exit("upload.env has no REMOTE_SERVER_DIR.")
             if env.get("PRE_SERVER_CMD"):
                 run(client, env["PRE_SERVER_CMD"], args.dry_run)
-            sync(client, args.folder, env["REMOTE_SERVER_DIR"], args.delete, args.dry_run)
+            sync(client, args.folder, env["REMOTE_SERVER_DIR"], args.delete, args.dry_run, server=True)
             if env.get("POST_SERVER_CMD"):
                 run(client, env["POST_SERVER_CMD"], args.dry_run)
     finally:

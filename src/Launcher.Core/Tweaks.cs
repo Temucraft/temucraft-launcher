@@ -43,7 +43,8 @@ public sealed class ConfigWtf
     public void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(File)!);
-        System.IO.File.WriteAllLines(File, _lines, Encoding.ASCII);
+        // UTF-8 without a byte order mark, like the client writes it (ASCII would turn accented realm or account names into ?)
+        System.IO.File.WriteAllLines(File, _lines, new UTF8Encoding(false));
     }
 }
 

@@ -26,6 +26,14 @@ List<(string Name, Func<Task> Body)> tests =
     ("addons.json refuses bad repositories and paths", CatalogRules),
     ("Untracked patches skip stock and server files", UntrackedPatches),
     ("Backups restore WTF; macros export and import", BackupsAndMacros),
+    ("Settings save and load with no window position (NaN crash)", SettingsSaveDefaults),
+    ("Config.wtf keeps accented names (UTF-8, no BOM)", ConfigWtfKeepsUtf8),
+    ("An empty file downloads", DownloadEmptyFile),
+    ("Manifest refuses urls that leave the files folder", ManifestRejectsRootUrls),
+    ("An addon in a sub folder downloads only its own files", AddonFromSubFolder),
+    ("An addon falls back to the zip when GitHub's API fails", AddonZipFallback),
+    ("README Markdown becomes plain text", MarkdownPlainText),
+    ("The log writes details, rotates and tells the window", LoggerWritesAndRotates),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -383,6 +391,176 @@ static async Task SampleManifest()
     Assert(manifest.Files.Any(f => f.Category == FileCategory.Locale && f.Locale is not null), "no locale files");
 }
 
+static Task SettingsSaveDefaults()
+{
+    string file = Path.Combine(TempDir(), "settings.json");
+    UserSettings settings = new();
+    settings.Save(file);   // threw ArgumentException before: the default window position was NaN
+    UserSettings back = UserSettings.Load(file);
+    Assert(back.WindowX is null && back.WindowY is null && back.WindowWidth == 980, "defaults lost");
+    Assert(!File.Exists(file + ".tmp"), "temporary file left behind");
+    settings.RememberWindow = true; settings.WindowX = 120; settings.WindowY = 80; settings.Save(file);
+    back = UserSettings.Load(file);
+    Assert(back.RememberWindow && back.WindowX == 120 && back.WindowY == 80, "position lost");
+    File.WriteAllText(file, """{"WindowX":"NaN","Username":"ryan"}""");
+    Assert(UserSettings.Load(file).Username == "ryan", "an old file with NaN didn't load");
+    File.WriteAllText(file, "{ broken");
+    Assert(UserSettings.Load(file).Username == "", "a broken file didn't fall back to the defaults");
+    return Task.CompletedTask;
+}
+
+static Task ConfigWtfKeepsUtf8()
+{
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "WTF"));
+    string file = Path.Combine(wow, "WTF", "Config.wtf");
+    File.WriteAllText(file, "SET realmName \"Temucraft Açores\"\nSET accountName \"JOÃO\"\n", new System.Text.UTF8Encoding(false));
+    ConfigWtf config = ConfigWtf.Load(wow);
+    config.Set("maxFPS", "144");
+    config.Save();
+    byte[] bytes = File.ReadAllBytes(file);
+    Assert(bytes[0] != 0xEF, "a byte order mark was written");
+    string text = File.ReadAllText(file);
+    Assert(text.Contains("Temucraft Açores") && text.Contains("JOÃO") && text.Contains("SET maxFPS \"144\""), text);
+    return Task.CompletedTask;
+}
+
+static async Task DownloadEmptyFile()
+{
+    FakeServer server = new(new() { ["files/Data/empty.txt"] = [] });
+    using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
+    string target = Path.Combine(TempDir(), "Data", "empty.txt");
+    await client.DownloadAsync(File1("Data/empty.txt", []), target);
+    Assert(File.Exists(target) && new FileInfo(target).Length == 0, "empty file not installed");
+}
+
+static Task ManifestRejectsRootUrls()
+{
+    foreach (string bad in new[] { "/patches/a.MPQ", "//evil.example/a", "patches\\a.MPQ", "https://evil.example/a", "c:/a" })
+    {
+        ManifestFile file = File1("Data/a.MPQ", [1]);
+        file.Url = bad;
+        Throws<InvalidDataException>(() => file.Validate(), "accepted url " + bad);
+    }
+    ManifestFile good = File1("Data/a.MPQ", [1]);
+    good.Url = "patches/My Patch #2.MPQ";
+    good.Validate();
+    return Task.CompletedTask;
+}
+
+static CatalogAddon JournalAddon() => new()
+{
+    Name = "Temucraft Journal", Repo = "Temucraft/mod-temucraft-journal", Branch = "master",
+    Path = "client/AddOns", Folders = ["TemucraftJournal"],
+};
+
+static async Task AddonFromSubFolder()
+{
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "Interface", "AddOns", ".Old.new"));   // a cut-off install
+    FakeGitHub github = new()
+    {
+        Responses =
+        {
+            ["https://api.github.com/repos/Temucraft/mod-temucraft-journal/commits/master"] = "abc1234def"u8.ToArray(),
+            ["https://api.github.com/repos/Temucraft/mod-temucraft-journal/git/trees/abc1234def?recursive=1"] = """
+                {"truncated": false, "tree": [
+                  {"path": "src/Journal.cpp", "type": "blob"},
+                  {"path": "client/AddOns", "type": "tree"},
+                  {"path": "client/AddOns/TemucraftJournal/TemucraftJournal.toc", "type": "blob"},
+                  {"path": "client/AddOns/TemucraftJournal/Journal Frame.lua", "type": "blob"},
+                  {"path": "client/AddOns/Other/Other.toc", "type": "blob"}
+                ]}
+                """u8.ToArray(),
+            ["https://raw.githubusercontent.com/Temucraft/mod-temucraft-journal/abc1234def/client/AddOns/TemucraftJournal/TemucraftJournal.toc"] = "## Title: Temucraft Journal"u8.ToArray(),
+            ["https://raw.githubusercontent.com/Temucraft/mod-temucraft-journal/abc1234def/client/AddOns/TemucraftJournal/Journal%20Frame.lua"] = "-- lua"u8.ToArray(),
+        },
+    };
+    using HttpClient http = new(github);
+    IReadOnlyList<string> installed = await AddonFolder.InstallAsync(http, wow, JournalAddon());
+    string addon = Path.Combine(wow, "Interface", "AddOns", "TemucraftJournal");
+    Assert(installed.SequenceEqual(["TemucraftJournal"]), "installed: " + string.Join(",", installed));
+    Assert(File.ReadAllText(Path.Combine(addon, "Journal Frame.lua")) == "-- lua", "lua not installed");
+    Assert(!Directory.Exists(Path.Combine(wow, "Interface", "AddOns", "Other")), "a folder not in the list was installed");
+    Assert(!github.Requested.Any(u => u.Contains("codeload") || u.Contains("Journal.cpp")), "downloaded more than the addon");
+    Assert(!Directory.Exists(Path.Combine(wow, "Interface", "AddOns", ".Old.new")), "the leftover staging folder stayed");
+    Assert(AddonFolder.Installed(wow, null).All(a => !a.Folder.StartsWith('.')), "a hidden folder is listed as an addon");
+}
+
+static async Task AddonZipFallback()
+{
+    string wow = TempDir();
+    using MemoryStream zipBytes = new();
+    using (System.IO.Compression.ZipArchive zip = new(zipBytes, System.IO.Compression.ZipArchiveMode.Create, true))
+    {
+        void Add(string name, string text)
+        {
+            using StreamWriter w = new(zip.CreateEntry(name).Open());
+            w.Write(text);
+        }
+        Add("mod-temucraft-journal-master/README.md", "readme");
+        Add("mod-temucraft-journal-master/client/AddOns/TemucraftJournal/TemucraftJournal.toc", "## Title: J");
+        Add("mod-temucraft-journal-master/client/AddOns/TemucraftJournal/Frames/Main.xml", "<Ui/>");
+    }
+    FakeGitHub github = new()
+    {
+        Responses = { ["https://codeload.github.com/Temucraft/mod-temucraft-journal/zip/refs/heads/master"] = zipBytes.ToArray() },
+    };   // the API calls get 403 (rate limit)
+    using HttpClient http = new(github);
+    await AddonFolder.InstallAsync(http, wow, JournalAddon());
+    Assert(File.ReadAllText(Path.Combine(wow, "Interface", "AddOns", "TemucraftJournal", "Frames", "Main.xml")) == "<Ui/>", "not installed from the zip");
+}
+
+static Task MarkdownPlainText()
+{
+    string text = Markdown.ToPlainText("""
+        # Temucraft Journal
+        [![build](https://x/badge.svg)](https://x)
+        A **dungeon** journal. See [the wiki](https://example.org/wiki) and `/journal`.
+        - Bosses
+        - <b>Loot</b>
+        ```
+        code stays
+        ```
+        """);
+    Assert(text.StartsWith("TEMUCRAFT JOURNAL"), text);
+    Assert(text.Contains("A dungeon journal. See the wiki (https://example.org/wiki) and /journal."), text);
+    Assert(text.Contains("• Bosses") && text.Contains("• Loot") && text.Contains("    code stays"), text);
+    Assert(!text.Contains("badge") && !text.Contains("**") && !text.Contains("```"), text);
+    return Task.CompletedTask;
+}
+
+static Task LoggerWritesAndRotates()
+{
+    string file = Path.Combine(TempDir(), "launcher.log");
+    List<LogEntry> shown = [];
+    void Show(LogEntry e) => shown.Add(e);
+    Logger.Written += Show;
+    long oldMax = Logger.MaxBytes;
+    try
+    {
+        Logger.Start(file);
+        Logger.Info("hello");
+        try { throw new InvalidOperationException("boom"); }
+        catch (Exception e) { Logger.Error("Update", e); }
+        string text = File.ReadAllText(file);
+        Assert(text.Contains("[INFO ] hello") && text.Contains("[ERROR] Update: boom"), text);
+        Assert(text.Contains("InvalidOperationException") && text.Contains("LoggerWritesAndRotates"), "no stack trace in the file");
+        Assert(shown.Any(e => e.Level == LogLevel.Error && e.Message == "Update: boom" && !e.Message.Contains("   at ")), "window line wrong");
+        Logger.MaxBytes = 200;
+        for (int i = 0; i < 20; i++) Logger.Info(new string('x', 50));
+        Assert(File.Exists(Path.ChangeExtension(file, ".1.log")), "no rotation");
+        Assert(!File.Exists(Path.ChangeExtension(file, ".4.log")), "kept too many old logs");
+        Assert(new FileInfo(file).Length < 400, "the log keeps growing");
+    }
+    finally
+    {
+        Logger.Written -= Show;
+        Logger.MaxBytes = oldMax;
+    }
+    return Task.CompletedTask;
+}
+
 /// <summary>Answers like Apache: files under the folder, Range requests with 206.</summary>
 sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler
 {
@@ -411,5 +589,21 @@ sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler
         if (from > 0)
             response.Content.Headers.ContentRange = new ContentRangeHeaderValue(from, data.Length - 1, data.Length);
         return Task.FromResult(response);
+    }
+}
+
+/// <summary>Answers like GitHub for the URLs it knows; anything else gets 403 (like the API's hourly limit).</summary>
+sealed class FakeGitHub : HttpMessageHandler
+{
+    public Dictionary<string, byte[]> Responses { get; } = [];
+    public List<string> Requested { get; } = [];
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+    {
+        string url = request.RequestUri!.AbsoluteUri;
+        Requested.Add(url);
+        return Task.FromResult(Responses.TryGetValue(url, out byte[]? body)
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) }
+            : new HttpResponseMessage(HttpStatusCode.Forbidden));
     }
 }

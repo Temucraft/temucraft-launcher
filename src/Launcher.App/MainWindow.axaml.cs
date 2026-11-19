@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
@@ -15,13 +16,13 @@ public partial class MainWindow : Window
 {
     readonly string _settingsFile = Path.Combine(UserSettings.DefaultFolder, "settings.json");
     readonly string _cacheFile = Path.Combine(UserSettings.DefaultFolder, "hash-cache.json");
-    readonly string _logFile = Path.Combine(UserSettings.DefaultFolder, "launcher.log");
     readonly UserSettings _settings;
     readonly ServerSettings? _server;
     static readonly HttpClient Web = NewWebClient();
     Manifest? _manifest;
     IReadOnlyList<CatalogAddon> _catalog = [];
-    readonly Dictionary<string, string> _latestCommits = new(StringComparer.OrdinalIgnoreCase);
+    // filled from background work and read by the window, so it has to be safe for both
+    readonly ConcurrentDictionary<string, string> _latestCommits = new(StringComparer.OrdinalIgnoreCase);
     CatalogAddon? _previewed;
     int _pendingFiles;
     CancellationTokenSource? _work;
@@ -31,13 +32,14 @@ public partial class MainWindow : Window
     static HttpClient NewWebClient()
     {
         HttpClient http = new() { Timeout = TimeSpan.FromMinutes(5) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("TemucraftLauncher/1.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(LauncherInfo.UserAgent);
         return http;
     }
 
     public MainWindow()
     {
         InitializeComponent();
+        Logger.Written += ShowLogLine;
         _settings = UserSettings.Load(_settingsFile);
 
         try
@@ -47,6 +49,7 @@ public partial class MainWindow : Window
         }
         catch (Exception e)
         {
+            Logger.Warning("No server settings", e);
             ServerText.Text = e.Message;
             UpdateButton.IsEnabled = ClientButton.IsEnabled = false;
         }
@@ -65,16 +68,19 @@ public partial class MainWindow : Window
         AccountText.Text = _settings.Username;
         ShowLocales(_settings.Locales);
         ApplyBackground();
-        if (_settings.RememberWindow && !double.IsNaN(_settings.WindowX))
+        if (_settings.RememberWindow && _settings.WindowX is double x && _settings.WindowY is double y
+            && double.IsFinite(x) && double.IsFinite(y) && _settings.WindowWidth > 100 && _settings.WindowHeight > 100)
         {
-            Position = new PixelPoint((int)_settings.WindowX, (int)_settings.WindowY);
+            Position = new PixelPoint((int)x, (int)y);
             Width = _settings.WindowWidth;
             Height = _settings.WindowHeight;
         }
         BuildTweaks();
         RefreshInstalledAddons();
         RefreshBackups();
-        Closing += (_, _) => SaveSettings();
+        // closing must never fail: anything that goes wrong while saving is logged and the window still closes
+        Closing += (_, _) => { SaveSettings(); _work?.Cancel(); };
+        Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
         {
             // with a remembered login, look for updates right away (nothing is downloaded until Update)
@@ -86,22 +92,51 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------------------------------- basics
-    void Log(string line)
+    static void Log(string line) => Logger.Info(line);
+
+    const int LogBoxLines = 400;
+    readonly Queue<string> _logLines = new();
+
+    /// <summary>Shows a log line in the Settings page's log box (the last <see cref="LogBoxLines"/> lines).</summary>
+    void ShowLogLine(LogEntry entry)
     {
-        string text = $"[{DateTime.Now:HH:mm:ss}] {line}";
-        try { Directory.CreateDirectory(UserSettings.DefaultFolder); File.AppendAllText(_logFile, text + Environment.NewLine); } catch (IOException) { }
+        string text = $"[{entry.Time:HH:mm:ss}] " + (entry.Level >= LogLevel.Warning ? entry.Level.ToString().ToUpperInvariant() + ": " : "") + entry.Message;
         Dispatcher.UIThread.Post(() =>
         {
-            LogBox.Text += text + Environment.NewLine;
-            LogBox.CaretIndex = LogBox.Text?.Length ?? 0;
+            _logLines.Enqueue(text);
+            while (_logLines.Count > LogBoxLines) _logLines.Dequeue();
+            LogBox.Text = string.Join(Environment.NewLine, _logLines) + Environment.NewLine;
+            LogBox.CaretIndex = LogBox.Text.Length;
         });
+    }
+
+    /// <summary>Progress reported from background work, run on the window's thread (controls only work there).</summary>
+    sealed class UiProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => Dispatcher.UIThread.Post(() => report(value));
     }
 
     void Status(string text) => Dispatcher.UIThread.Post(() => StatusText.Text = text);
 
     string Folder => WowFolderBox.Text?.Trim() ?? "";
 
-    void SaveSettings()
+    /// <summary>Saves the settings and the password; never throws (a failure is logged and shown).</summary>
+    bool SaveSettings()
+    {
+        try
+        {
+            SaveSettingsOrThrow();
+            return true;
+        }
+        catch (Exception e)
+        {
+            Logger.Error("Couldn't save the settings", e);
+            StatusText.Text = $"Couldn't save the settings: {e.Message}";
+            return false;
+        }
+    }
+
+    void SaveSettingsOrThrow()
     {
         _settings.Username = UsernameBox.Text?.Trim() ?? "";
         _settings.RememberPassword = RememberBox.IsChecked == true;
@@ -121,7 +156,7 @@ public partial class MainWindow : Window
         AccountText.Text = _settings.Username;
 
         if (_settings.RememberPassword && !string.IsNullOrEmpty(PasswordBox.Text))
-            CredentialStore.Save(_settings.Username, PasswordBox.Text);
+            CredentialStore.Save(_settings.Username, PasswordBox.Text);   // throws if Windows refuses: caught above
         else if (!_settings.RememberPassword)
             CredentialStore.Delete();
     }
@@ -173,22 +208,37 @@ public partial class MainWindow : Window
     void SetBusy(bool busy)
     {
         UpdateButton.IsEnabled = ClientButton.IsEnabled = !busy && _server is not null;
-        PlayButton.IsEnabled = !busy;
+        PlayButton.IsEnabled = PreviewInstall.IsEnabled = !busy;
         CancelButton.IsVisible = busy;
         if (!busy) Progress.Value = 0;
     }
 
+    bool Busy => _work is not null;
+
+    /// <summary>
+    /// Runs one job in the background (only one at a time). The work must not touch any control: read what it needs
+    /// before calling this, and report back with Status, Log, <see cref="UiProgress{T}"/> or Dispatcher.UIThread.
+    /// </summary>
     async Task<bool> RunAsync(string what, Func<CancellationToken, Task> work)
     {
+        if (Busy)
+        {
+            Status($"Wait for {_job} to finish (or press Cancel).");
+            return false;
+        }
         SaveSettings();
         SetBusy(true);
-        _work = new CancellationTokenSource();
+        CancellationTokenSource cts = new();
+        _work = cts;
+        _job = what;
+        Logger.Info($"{what}: started", toWindow: false);
         try
         {
-            await Task.Run(() => work(_work.Token));
+            await Task.Run(() => work(cts.Token));
+            Logger.Info($"{what}: done", toWindow: false);
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             Status("Cancelled.");
             Log($"{what}: cancelled");
@@ -196,16 +246,19 @@ public partial class MainWindow : Window
         catch (Exception e)
         {
             Status(e.Message);
-            Log($"{what}: {e.Message}");
+            Logger.Error(what, e);
         }
         finally
         {
-            SetBusy(false);
-            _work.Dispose();
             _work = null;
+            _job = "";
+            cts.Dispose();
+            SetBusy(false);
         }
         return false;
     }
+
+    string _job = "";
 
     bool NeedFolder()
     {
@@ -214,10 +267,12 @@ public partial class MainWindow : Window
         return true;
     }
 
+    /// <summary>A server connection with the login typed in the window (call on the window's thread).</summary>
     ServerClient NewClient() => new(_server!, UsernameBox.Text?.Trim() ?? "", PasswordBox.Text ?? "");
 
-    InstallChoice Choice(List<string> locales) =>
-        new(Folder, locales, AddonsBox.IsChecked == true, Options: _settings.Options);
+    /// <summary>What to install, read from the window (call on the window's thread).</summary>
+    InstallChoice Choice() =>
+        new(Folder, SelectedLocales(), AddonsBox.IsChecked == true, Options: new Dictionary<string, string>(_settings.Options));
 
     // ------------------------------------------------------------------------------------------- server data
     async Task<Manifest> FetchManifestAsync(ServerClient client, CancellationToken token)
@@ -271,10 +326,9 @@ public partial class MainWindow : Window
         }
     }
 
-    async Task<IReadOnlyList<PlannedFile>> PlanAsync(Manifest manifest, CancellationToken token)
+    async Task<IReadOnlyList<PlannedFile>> PlanAsync(Manifest manifest, InstallChoice choice, CancellationToken token)
     {
-        List<string> locales = await Dispatcher.UIThread.InvokeAsync(SelectedLocales);
-        IReadOnlyList<PlannedFile> wanted = UpdatePlanner.Wanted(manifest, Choice(locales));
+        IReadOnlyList<PlannedFile> wanted = UpdatePlanner.Wanted(manifest, choice);
         HashCache cache = HashCache.Load(_cacheFile);
         try { return await UpdatePlanner.OutdatedAsync(wanted, cache, new Progress<string>(Status), token); }
         finally { cache.Save(); }
@@ -283,46 +337,47 @@ public partial class MainWindow : Window
     /// <summary>Reads the manifest and either only reports what is out of date or installs it.</summary>
     async Task CheckAsync(bool download)
     {
-        if (NeedFolder() || _server is null) return;
+        if (NeedFolder() || _server is null || Busy) return;
+        // everything the work needs from the window, read here on the window's thread
+        InstallChoice choice = Choice();
+        string folder = choice.WowFolder;
+        ServerClient client = NewClient();
         await RunAsync(download ? "Update" : "Check", async token =>
         {
-            using ServerClient client = NewClient();
+            using ServerClient _ = client;
             Manifest manifest = await FetchManifestAsync(client, token);
-            IReadOnlyList<PlannedFile> outdated = await PlanAsync(manifest, token);
-            List<CatalogAddon> required = _catalog.Where(a => a.Required && AddonsWanted()).ToList();
+            IReadOnlyList<PlannedFile> outdated = await PlanAsync(manifest, choice, token);
+            List<CatalogAddon> required = _catalog.Where(a => a.Required && choice.Addons).ToList();
             await RefreshCommitsAsync(required, token);
-            List<CatalogAddon> addonUpdates = required.Where(NeedsInstall).ToList();
+            List<CatalogAddon> addonUpdates = required.Where(a => NeedsInstall(a, folder)).ToList();
+            Logger.Info($"{outdated.Count} file(s) and {addonUpdates.Count} required addon(s) out of date", toWindow: false);
 
             if (!download)
             {
                 long size = outdated.Sum(p => p.File.Size);
-                _pendingFiles = outdated.Count + addonUpdates.Count;
-                Status(_pendingFiles == 0 ? "Everything up to date!"
-                    : $"Update available! {_pendingFiles} file(s), {size / 1048576.0:F1} MB to download.");
-                await Dispatcher.UIThread.InvokeAsync(ShowPlayState);
+                int pending = outdated.Count + addonUpdates.Count;
+                Status(pending == 0 ? "Everything up to date!"
+                    : $"Update available! {pending} file(s), {size / 1048576.0:F1} MB to download.");
+                await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = pending; ShowPlayState(); });
                 return;
             }
 
             if (_settings.BackupBeforeUpdate && (outdated.Count > 0 || addonUpdates.Count > 0))
             {
                 Status("Backing up your settings and addons…");
-                Log($"Backup: {Path.GetFileName(Backups.Create(Folder, "before-update", keep: _settings.BackupsToKeep))}");
+                Log($"Backup: {Path.GetFileName(Backups.Create(folder, "before-update", keep: _settings.BackupsToKeep))}");
             }
-            foreach (string removed in GameFolder.RemoveObsolete(Folder, manifest.Obsolete))
+            foreach (string removed in GameFolder.RemoveObsolete(folder, manifest.Obsolete))
                 Log($"Removed {removed} (no longer on the server)");
-            List<string> locales = await Dispatcher.UIThread.InvokeAsync(SelectedLocales);
-            foreach (string removed in GameFolder.RemoveObsolete(Folder, UpdatePlanner.Unchosen(manifest, Choice(locales))))
+            foreach (string removed in GameFolder.RemoveObsolete(folder, UpdatePlanner.Unchosen(manifest, choice)))
                 Log($"Removed {removed} (option not picked)");
             await InstallAsync(client, outdated, token);
-            foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, token);
-            GameFolder.WriteRealmlist(Folder, manifest.Realmlist);
-            _pendingFiles = 0;
+            foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, folder, token);
+            GameFolder.WriteRealmlist(folder, manifest.Realmlist);
             Status("Everything up to date!");
-            await Dispatcher.UIThread.InvokeAsync(() => { ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
+            await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
         });
     }
-
-    bool AddonsWanted() => Dispatcher.UIThread.CheckAccess() ? AddonsBox.IsChecked == true : _settings.InstallAddons;
 
     void ShowPlayState()
     {
@@ -340,7 +395,7 @@ public partial class MainWindow : Window
             foreach (PlannedFile planned in outdated)
             {
                 long start = before;
-                Progress<(long Done, long Total)> progress = new(p =>
+                UiProgress<(long Done, long Total)> progress = new(p =>
                 {
                     Progress.Value = total == 0 ? 1 : (double)(start + p.Done) / total;
                     StatusText.Text = $"Downloading {planned.File.Path}  {p.Done / 1048576.0:F1} / {p.Total / 1048576.0:F1} MB";
@@ -361,8 +416,10 @@ public partial class MainWindow : Window
 
     async void OnVerify(object? sender, RoutedEventArgs e)
     {
+        if (Busy) { Status($"Wait for {_job} to finish (or press Cancel)."); return; }
         // forget every remembered hash so each file is read again
-        if (File.Exists(_cacheFile)) File.Delete(_cacheFile);
+        try { if (File.Exists(_cacheFile)) File.Delete(_cacheFile); }
+        catch (IOException error) { Logger.Warning("Couldn't clear the hash cache", error); }
         Log("Verify: re-checking every file");
         await CheckAsync(download: true);
     }
@@ -374,11 +431,12 @@ public partial class MainWindow : Window
             Title = "Folder for the game files",
         });
         string? folder = picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
-        if (folder is null) return;
+        if (folder is null || Busy) return;
 
+        ServerClient client = NewClient();
         bool done = await RunAsync("Game files", async token =>
         {
-            using ServerClient client = NewClient();
+            using ServerClient _ = client;
             Manifest manifest = await FetchManifestAsync(client, token);
             if (!manifest.Files.Any(f => f.Category == FileCategory.Base))
                 throw new InvalidOperationException("Nothing to install.");
@@ -421,12 +479,13 @@ public partial class MainWindow : Window
                 await game.WaitForExitAsync();
                 Show();
                 Activate();
-                Log("The game closed");
+                Log($"The game closed (exit code {game.ExitCode})");
             }
         }
         catch (Exception error)
         {
             Status(error.Message);
+            Logger.Error("Couldn't start the game", error);
         }
     }
 
@@ -499,7 +558,7 @@ public partial class MainWindow : Window
         foreach (Tweak t in Tweaks.All)
             SetTweak(t, config.Get(t.CVar) ?? t.Default);
         try { if (_laaBox is not null) _laaBox.IsChecked = LargeAddressAware.IsEnabled(GameFolder.ExePath(Folder)); }
-        catch (Exception e) { Log($"Large Address Aware: {e.Message}"); }
+        catch (Exception e) { Logger.Warning("Large Address Aware", e); }
     }
 
     void SetTweak(Tweak t, string value)
@@ -536,6 +595,7 @@ public partial class MainWindow : Window
         }
         catch (Exception error)
         {
+            Logger.Error("Saving tweaks", error);
             Status($"Couldn't save the tweaks: {error.Message} (is the game running?)");
         }
     }
@@ -583,7 +643,7 @@ public partial class MainWindow : Window
                     Log($"Removed addon {addon.Folder} (moved to {moved})");
                     RefreshInstalledAddons();
                 }
-                catch (Exception error) { Status(error.Message); }
+                catch (Exception error) { Status(error.Message); Logger.Error($"Removing {addon.Folder}", error); }
             };
             Grid.SetColumn(remove, 3);
             row.Children.Add(remove);
@@ -591,14 +651,15 @@ public partial class MainWindow : Window
         }
     }
 
-    bool IsInstalled(CatalogAddon addon) =>
-        GameFolder.LooksLikeClient(Folder) && (addon.Folders.Count > 0
-            ? addon.Folders.All(f => Directory.Exists(Path.Combine(AddonFolder.Path(Folder), f)))
+    // These take the WoW folder as a value so background work can use them (the folder box only works on the window's thread)
+    bool IsInstalled(CatalogAddon addon, string folder) =>
+        GameFolder.LooksLikeClient(folder) && (addon.Folders.Count > 0
+            ? addon.Folders.All(f => Directory.Exists(Path.Combine(AddonFolder.Path(folder), f)))
             : _settings.AddonCommits.ContainsKey(addon.Name));
 
-    bool NeedsInstall(CatalogAddon addon) =>
-        !IsInstalled(addon) || (_latestCommits.TryGetValue(addon.Name, out string? latest)
-                                && (!_settings.AddonCommits.TryGetValue(addon.Name, out string? have) || have != latest));
+    bool NeedsInstall(CatalogAddon addon, string folder) =>
+        !IsInstalled(addon, folder) || (_latestCommits.TryGetValue(addon.Name, out string? latest)
+                                        && (!_settings.AddonCommits.TryGetValue(addon.Name, out string? have) || have != latest));
 
     void RefreshCatalog()
     {
@@ -616,9 +677,14 @@ public partial class MainWindow : Window
             TextBlock description = new() { Text = addon.Description, Classes = { "dim" }, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
             Grid.SetColumn(description, 1);
             row.Children.Add(description);
-            bool installed = IsInstalled(addon), update = installed && NeedsInstall(addon);
+            string folder = Folder;
+            bool installed = IsInstalled(addon, folder), update = installed && NeedsInstall(addon, folder);
             Button action = new() { Content = !installed ? "Install" : update ? "Update" : "Installed", FontSize = 12, IsEnabled = !installed || update };
-            action.Click += async (_, _) => await RunAsync($"Addon {addon.Name}", token => InstallCatalogAsync(addon, token));
+            action.Click += async (_, _) =>
+            {
+                string target = Folder;
+                await RunAsync($"Addon {addon.Name}", token => InstallCatalogAsync(addon, target, token));
+            };
             Grid.SetColumn(action, 2);
             row.Children.Add(action);
             row.PointerPressed += async (_, _) => await PreviewAsync(addon);
@@ -631,13 +697,13 @@ public partial class MainWindow : Window
         _previewed = addon;
         PreviewTitle.Text = addon.Name.ToUpperInvariant();
         PreviewInstall.IsVisible = PreviewOpen.IsVisible = true;
-        PreviewInstall.Content = IsInstalled(addon) ? "Reinstall" : "Install";
+        PreviewInstall.Content = IsInstalled(addon, Folder) ? "Reinstall" : "Install";
         PreviewText.Text = $"{addon.Description}\n\n{addon.Url}\n\nLoading the page…";
         try
         {
             string readme = await AddonFolder.ReadmeAsync(Web, addon);
             if (_previewed == addon)
-                PreviewText.Text = $"{addon.Description}\n\n{(readme.Length > 0 ? readme : "This repository has no README.")}";
+                PreviewText.Text = $"{addon.Description}\n\n{(readme.Length > 0 ? Markdown.ToPlainText(readme) : "This repository has no README.")}";
         }
         catch (Exception error)
         {
@@ -647,7 +713,9 @@ public partial class MainWindow : Window
 
     async void OnPreviewInstall(object? sender, RoutedEventArgs e)
     {
-        if (_previewed is { } addon) await RunAsync($"Addon {addon.Name}", token => InstallCatalogAsync(addon, token));
+        if (_previewed is not { } addon) return;
+        string folder = Folder;
+        await RunAsync($"Addon {addon.Name}", token => InstallCatalogAsync(addon, folder, token));
     }
 
     void OnPreviewOpen(object? sender, RoutedEventArgs e)
@@ -664,28 +732,35 @@ public partial class MainWindow : Window
                 if (await AddonFolder.LatestCommitAsync(Web, addon, token) is { Length: > 0 } sha)
                     _latestCommits[addon.Name] = sha;
             }
-            catch (HttpRequestException error) { Log($"{addon.Name}: {error.Message}"); }
+            catch (HttpRequestException error) { Logger.Warning($"{addon.Name}: couldn't check GitHub for updates", error); }
         }
     }
 
-    async Task InstallCatalogAsync(CatalogAddon addon, CancellationToken token)
+    /// <summary>Installs a catalog addon (runs in the background: takes the WoW folder as a value).</summary>
+    async Task InstallCatalogAsync(CatalogAddon addon, string folder, CancellationToken token)
     {
-        if (!GameFolder.LooksLikeClient(Folder)) throw new InvalidOperationException("Pick your WoW folder first.");
-        IReadOnlyList<string> folders = await AddonFolder.InstallAsync(Web, Folder, addon, new Progress<string>(Status), token);
+        if (!GameFolder.LooksLikeClient(folder)) throw new InvalidOperationException("Pick your WoW folder first.");
+        IReadOnlyList<string> folders = await AddonFolder.InstallAsync(Web, folder, addon, new UiProgress<string>(text => StatusText.Text = text), token);
         if (!_latestCommits.ContainsKey(addon.Name)) await RefreshCommitsAsync([addon], token);
-        _settings.AddonCommits[addon.Name] = _latestCommits.GetValueOrDefault(addon.Name, "installed");
-        _settings.Save(_settingsFile);
+        string commit = _latestCommits.GetValueOrDefault(addon.Name, "installed");
         Log($"Installed {addon.Name}: {string.Join(", ", folders)}");
         Status($"{addon.Name} installed.");
-        await Dispatcher.UIThread.InvokeAsync(() => { RefreshInstalledAddons(); RefreshCatalog(); });
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            _settings.AddonCommits[addon.Name] = commit;
+            SaveSettings();
+            RefreshInstalledAddons();
+            RefreshCatalog();
+        });
     }
 
     async void OnCheckAddonUpdates(object? sender, RoutedEventArgs e)
     {
+        string folder = Folder;
         await RunAsync("Addon updates", async token =>
         {
-            await RefreshCommitsAsync(_catalog.Where(IsInstalled), token);
-            int updates = _catalog.Count(a => IsInstalled(a) && NeedsInstall(a));
+            await RefreshCommitsAsync(_catalog.Where(a => IsInstalled(a, folder)), token);
+            int updates = _catalog.Count(a => IsInstalled(a, folder) && NeedsInstall(a, folder));
             Status(updates == 0 ? "All addons are up to date." : $"{updates} addon update(s) available.");
             await Dispatcher.UIThread.InvokeAsync(RefreshCatalog);
         });
@@ -693,11 +768,12 @@ public partial class MainWindow : Window
 
     async void OnUpdateAllAddons(object? sender, RoutedEventArgs e)
     {
+        string folder = Folder;
         await RunAsync("Addon updates", async token =>
         {
-            await RefreshCommitsAsync(_catalog.Where(IsInstalled), token);
-            foreach (CatalogAddon addon in _catalog.Where(a => IsInstalled(a) && NeedsInstall(a)).ToList())
-                await InstallCatalogAsync(addon, token);
+            await RefreshCommitsAsync(_catalog.Where(a => IsInstalled(a, folder)), token);
+            foreach (CatalogAddon addon in _catalog.Where(a => IsInstalled(a, folder) && NeedsInstall(a, folder)).ToList())
+                await InstallCatalogAsync(addon, folder, token);
             Status("Addons up to date.");
         });
     }
@@ -726,7 +802,7 @@ public partial class MainWindow : Window
             {
                 string picked = box.SelectedItem as string ?? "";
                 _settings.Options[group.Name] = picked == "(none)" ? "" : picked;
-                _settings.Save(_settingsFile);
+                SaveSettings();
                 _pendingFiles = Math.Max(_pendingFiles, 1);
                 ShowPlayState();
                 Status($"{group.Name}: {picked}. Press UPDATE to install it.");
@@ -751,7 +827,7 @@ public partial class MainWindow : Window
             remove.Click += (_, _) =>
             {
                 try { Untracked.Remove(Folder, file); Log($"Moved untracked {file} to the backup folder"); RefreshUntracked(); RefreshUntrackedButton(); }
-                catch (Exception error) { Status(error.Message); }
+                catch (Exception error) { Status(error.Message); Logger.Error($"Moving {file}", error); }
             };
             Grid.SetColumn(remove, 1);
             row.Children.Add(remove);
@@ -779,7 +855,7 @@ public partial class MainWindow : Window
         if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
         {
             _settings.Background = path;
-            _settings.Save(_settingsFile);
+            SaveSettings();
             ApplyBackground();
         }
     }
@@ -787,7 +863,7 @@ public partial class MainWindow : Window
     void OnDefaultBackground(object? sender, RoutedEventArgs e)
     {
         _settings.Background = "";
-        _settings.Save(_settingsFile);
+        SaveSettings();
         ApplyBackground();
     }
 
@@ -841,7 +917,7 @@ public partial class MainWindow : Window
         });
         if (file?.TryGetLocalPath() is not { } path) return;
         try { Status($"Exported {Backups.ExportMacros(Folder, path)} file(s)."); }
-        catch (Exception error) { Status(error.Message); }
+        catch (Exception error) { Status(error.Message); Logger.Error("Exporting macros", error); }
     }
 
     async void OnImportMacros(object? sender, RoutedEventArgs e)
@@ -854,12 +930,12 @@ public partial class MainWindow : Window
         });
         if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
         try { Status($"Imported {Backups.ImportMacros(Folder, path)} file(s). Close the game first if it was running."); RefreshBackups(); }
-        catch (Exception error) { Status(error.Message); }
+        catch (Exception error) { Status(error.Message); Logger.Error("Importing macros", error); }
     }
 
     void OnOpenLog(object? sender, RoutedEventArgs e)
     {
-        if (File.Exists(_logFile)) OpenUrl(_logFile);
+        if (Logger.File is { } log && File.Exists(log)) OpenUrl(log);
         else OpenFolder(UserSettings.DefaultFolder);
     }
 }

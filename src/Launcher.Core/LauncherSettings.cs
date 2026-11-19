@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Launcher.Core;
 
@@ -65,8 +66,9 @@ public sealed class UserSettings
     public Dictionary<string, string> Options { get; set; } = [];
     public bool ReopenAfterGame { get; set; } = true;
     public bool RememberWindow { get; set; }
-    public double WindowX { get; set; } = double.NaN;
-    public double WindowY { get; set; } = double.NaN;
+    /// <summary>The remembered window position; null until "Remember window position" has saved one.</summary>
+    public double? WindowX { get; set; }
+    public double? WindowY { get; set; }
     public double WindowWidth { get; set; } = 980;
     public double WindowHeight { get; set; } = 640;
     /// <summary>Background picture of the launcher ("" = the default).</summary>
@@ -76,7 +78,12 @@ public sealed class UserSettings
     /// <summary>Installed catalog addons and the commit they were installed from (to offer updates).</summary>
     public Dictionary<string, string> AddonCommits { get; set; } = [];
 
-    static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    // NaN/Infinity are allowed so an odd value can never stop the settings from saving
+    static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
 
     public static string DefaultFolder =>
         System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TemucraftLauncher");
@@ -86,11 +93,12 @@ public sealed class UserSettings
         try
         {
             return File.Exists(file)
-                ? JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(file)) ?? new UserSettings()
+                ? JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(file), JsonOptions) ?? new UserSettings()
                 : new UserSettings();
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
+            Logger.Warning("Couldn't read the settings; using the defaults", e);
             return new UserSettings();
         }
     }
@@ -98,6 +106,8 @@ public sealed class UserSettings
     public void Save(string file)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, JsonSerializer.Serialize(this, JsonOptions));
+        // written to a temporary file first, so a crash mid-write never leaves half a settings file
+        File.WriteAllText(file + ".tmp", JsonSerializer.Serialize(this, JsonOptions));
+        File.Move(file + ".tmp", file, overwrite: true);
     }
 }

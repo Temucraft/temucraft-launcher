@@ -103,7 +103,7 @@ public sealed class ManifestFile
         PathRules.CheckRelative(Path);
         if (string.IsNullOrWhiteSpace(Url))
             throw new InvalidDataException($"{Path}: no url.");
-        if (Url.Contains("..", StringComparison.Ordinal) || Uri.TryCreate(Url, UriKind.Absolute, out _))
+        if (Url.Contains("..", StringComparison.Ordinal) || Url.StartsWith('/') || Url.Contains('\\') || Url.Contains(':'))
             throw new InvalidDataException($"{Path}: the url must stay inside the server folder.");
         if (Sha256.Length != 64 || !Sha256.All(Uri.IsHexDigit))
             throw new InvalidDataException($"{Path}: bad sha256.");

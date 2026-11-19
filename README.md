@@ -31,13 +31,24 @@ The window has five pages:
   Aware (Wow.exe may use 4 GB; the original is kept as `Wow.exe.bak`).
 - **Addons**: the server's addon list (`addons.json`: GitHub repositories) with a preview of each one's README,
   install, update (by the branch's newest commit) and "needed" addons that are installed and kept up to date with the
-  game; your installed addons (from their .toc) with remove (moved to the backup folder, never deleted).
+  game; your installed addons (from their .toc) with remove (moved to the backup folder, never deleted). An addon that
+  lives in a sub folder of a bigger repository sets `"path"` (e.g. `"path": "client/AddOns"`): only its own files are
+  downloaded, through GitHub's file list, instead of the whole repository (the zip is the fallback when GitHub's API
+  can't be used).
 - **Mods**: cosmetic patches only (`options/<Group>/<Option>/...`: darker nights, login screens, model packs...), one
   pick per group; everything the game needs goes in `patches/` and is always installed;
   untracked patches in Data that neither the client nor the server hand out, with remove.
 - **Settings**: account, game folder, locales, reopen the launcher after WoW closes, remember the
   window, launcher background picture, backups (WTF and AddOns zipped before each update and on request, restore),
   macros and key bindings export/import, verify game files, the log.
+
+## The log
+
+Everything the launcher does goes to `%AppData%\TemucraftLauncher\launcher.log` (Settings > Open log): each line has
+the time and a level (INFO, WARN, ERROR). Errors are written with their full details (the exception and where it
+happened), so a problem a friend reports can be found afterwards; the log box under Settings shows the same lines
+without the details. Crashes anywhere in the launcher are caught and logged too. The file is renamed to
+`launcher.1.log` (up to `.3`) when it passes 1 MB, so it never grows without end. Passwords are never logged.
 
 The bottom bar shows the client version (`client-version.txt`), whether an update is waiting (PLAY turns into
 UPDATE) and the untracked-files warning.
@@ -80,8 +91,10 @@ python3 server/upload.py server "D:\AzerothCore build"      # worldserver, auths
 python3 server/upload.py manifest                            # only rebuild manifest.json
 ```
 
-Only new or changed files are sent, each under a temporary name until it is complete; `--delete` removes what's
-gone locally, `--dry-run` shows the plan.
+Only new or changed files are sent, each under a temporary name until it is complete (`make-manifest.py` skips
+unfinished `.upload` files); `--delete` removes what's gone locally, `--dry-run` shows the plan. `--delete` never
+removes hidden files (`.htaccess`...), and for `server` it also keeps `*.conf`, `*.log`, `*.pid` and the `logs/` and
+`data/` folders, so a build folder without your live configs or map data can't wipe them.
 
 ## Building the launcher
 
@@ -96,7 +109,8 @@ With the .NET 10 SDK, run `publish.bat` on Windows or `./publish.sh` on Linux (y
 
 `dotnet run --project tests/Launcher.Core.Tests` checks the manifest rules (no paths outside the WoW folder, no
 outside URLs), `launcher.env` parsing, update planning, the hash cache, verified and resumed downloads, and login
-errors, against a fake server. With `LAUNCHER_SAMPLE_MANIFEST=<path to manifest.json>` it also reads a manifest made by
+errors, against a fake server; saving the settings, Config.wtf keeping accented names, addons from a repository's
+sub folder (and the zip fallback), README previews and the log. With `LAUNCHER_SAMPLE_MANIFEST=<path to manifest.json>` it also reads a manifest made by
 `make-manifest.py`.
 
 ## Layout

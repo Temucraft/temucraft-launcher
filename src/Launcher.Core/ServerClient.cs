@@ -23,7 +23,7 @@ public sealed class ServerClient : IDisposable
         _http.Timeout = Timeout.InfiniteTimeSpan; // downloads take as long as they take; reads time out below
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
             Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}")));
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TemucraftLauncher/1.0");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd(LauncherInfo.UserAgent);
     }
 
     public async Task<Manifest> GetManifestAsync(CancellationToken token = default)
@@ -32,6 +32,7 @@ public sealed class ServerClient : IDisposable
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         using HttpResponseMessage response = await _http.GetAsync(new Uri(_base, "manifest.json"), timeout.Token);
         ThrowForStatus(response);
+        Logger.Debug($"manifest.json: {(int)response.StatusCode}");
         return Manifest.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
     }
 
@@ -79,7 +80,9 @@ public sealed class ServerClient : IDisposable
             have = 0;
         }
 
-        if (have < file.Size)
+        if (file.Size == 0 && have == 0)
+            File.Create(part).Dispose();   // an empty file: nothing to download, but the checks below need the .part
+        else if (have < file.Size)
         {
             using HttpRequestMessage request = new(HttpMethod.Get, FileUri(file));
             if (have > 0)
@@ -107,6 +110,7 @@ public sealed class ServerClient : IDisposable
         if (sha != file.Sha256)
         {
             File.Delete(part);
+            Logger.Warning($"{file.Path}: checksum mismatch (got {sha}, expected {file.Sha256}); the download was deleted");
             throw new InvalidDataException($"{file.Path} didn't download correctly (checksum mismatch). Try again.");
         }
         File.Move(part, target, overwrite: true);
