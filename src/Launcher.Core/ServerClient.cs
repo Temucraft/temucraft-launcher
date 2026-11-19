@@ -1,5 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Launcher.Core;
@@ -15,11 +19,21 @@ public sealed class ServerClient : IDisposable
 {
     readonly HttpClient _http;
     readonly Uri _base;
+    readonly bool _pinned;
+
+    static HttpMessageHandler NewHandler(string? pin) => new SocketsHttpHandler
+    {
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            RemoteCertificateValidationCallback = (_, certificate, _, errors) => CertificatePin.Accept(certificate, errors, pin),
+        },
+    };
 
     public ServerClient(ServerSettings settings, string username, string password, HttpMessageHandler? handler = null)
     {
         _base = settings.ServerUrl;
-        _http = handler is null ? new HttpClient() : new HttpClient(handler);
+        _pinned = settings.CertificateSha256 is not null;
+        _http = new HttpClient(handler ?? NewHandler(settings.CertificateSha256));
         _http.Timeout = Timeout.InfiniteTimeSpan; // downloads take as long as they take; reads time out below
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
             Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}")));
@@ -30,7 +44,8 @@ public sealed class ServerClient : IDisposable
     {
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        using HttpResponseMessage response = await _http.GetAsync(new Uri(_base, "manifest.json"), timeout.Token);
+        using HttpResponseMessage response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(_base, "manifest.json")),
+            HttpCompletionOption.ResponseContentRead, timeout.Token);
         ThrowForStatus(response);
         Logger.Debug($"manifest.json: {(int)response.StatusCode}");
         return Manifest.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
@@ -41,7 +56,8 @@ public sealed class ServerClient : IDisposable
     {
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        using HttpResponseMessage response = await _http.GetAsync(new Uri(_base, relative), timeout.Token);
+        using HttpResponseMessage response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(_base, relative)),
+            HttpCompletionOption.ResponseContentRead, timeout.Token);
         if (response.StatusCode == HttpStatusCode.NotFound)
             return null;
         ThrowForStatus(response);
@@ -51,6 +67,22 @@ public sealed class ServerClient : IDisposable
     /// <summary>The file's address, with each part of its path escaped (names may hold spaces or '#').</summary>
     public Uri FileUri(ManifestFile file) =>
         new(_base, string.Join('/', file.Url.Split('/').Select(Uri.EscapeDataString)));
+
+    /// <summary>Sends a request; a refused certificate becomes a message the player can act on.</summary>
+    async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, HttpCompletionOption completion, CancellationToken token)
+    {
+        try
+        {
+            return await _http.SendAsync(request, completion, token);
+        }
+        catch (HttpRequestException e) when (e.InnerException is AuthenticationException)
+        {
+            Logger.Warning($"The server's certificate was refused ({request.RequestUri?.Authority})", e);
+            throw new HttpRequestException(_pinned
+                ? "The server's certificate doesn't match CERT_SHA256 in launcher.env. Get the current launcher.env from the server's owner."
+                : "The server's certificate isn't trusted. If it's self-signed, put its SHA-256 fingerprint in launcher.env as CERT_SHA256.", e);
+        }
+    }
 
     static void ThrowForStatus(HttpResponseMessage response)
     {
@@ -87,7 +119,7 @@ public sealed class ServerClient : IDisposable
             using HttpRequestMessage request = new(HttpMethod.Get, FileUri(file));
             if (have > 0)
                 request.Headers.Range = new RangeHeaderValue(have, null);
-            using HttpResponseMessage response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+            using HttpResponseMessage response = await SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             ThrowForStatus(response);
             // A server that ignores the range sends the whole file again
             if (have > 0 && response.StatusCode != HttpStatusCode.PartialContent)
@@ -132,4 +164,19 @@ public sealed class ServerClient : IDisposable
     }
 
     public void Dispose() => _http.Dispose();
+}
+
+/// <summary>Accepts a server certificate: the pinned one when a fingerprint is set, otherwise only a normally trusted one.</summary>
+public static class CertificatePin
+{
+    public static bool Accept(X509Certificate? certificate, SslPolicyErrors errors, string? pinnedSha256)
+    {
+        if (pinnedSha256 is null)
+            return errors == SslPolicyErrors.None;
+        // pinned: exactly this certificate, whether or not Windows trusts it (self-signed, an IP address as its name...)
+        return certificate is not null && Fingerprint(certificate) == pinnedSha256;
+    }
+
+    public static string Fingerprint(X509Certificate certificate) =>
+        Convert.ToHexString(SHA256.HashData(certificate.GetRawCertData()));
 }

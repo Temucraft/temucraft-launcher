@@ -15,6 +15,12 @@ public sealed class ServerSettings
     /// <summary>Only for testing on a LAN: plain http sends the password unencrypted.</summary>
     public bool AllowHttp { get; init; }
 
+    /// <summary>
+    /// SHA-256 fingerprint of the server's certificate (64 hex digits, colons allowed). When set, the launcher trusts
+    /// that one certificate and nothing else, so a self-signed certificate works and a different one is refused.
+    /// </summary>
+    public string? CertificateSha256 { get; init; }
+
     public static ServerSettings Load(string envFile)
     {
         if (!File.Exists(envFile))
@@ -49,7 +55,14 @@ public sealed class ServerSettings
         if (uri.Scheme == "http" && !allowHttp)
             throw new InvalidDataException(
                 "SERVER_URL uses http, which sends your password unencrypted. Use https (or ALLOW_HTTP=1 on a LAN).");
-        return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp };
+        string? pin = null;
+        if (values.TryGetValue("CERT_SHA256", out string? rawPin) && rawPin.Length > 0)
+        {
+            pin = new string(rawPin.Where(c => c is not (':' or ' ' or '-')).ToArray()).ToUpperInvariant();
+            if (pin.Length != 64 || !pin.All(Uri.IsHexDigit))
+                throw new InvalidDataException("CERT_SHA256 must be the certificate's SHA-256 fingerprint (64 hex digits).");
+        }
+        return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin };
     }
 }
 

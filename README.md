@@ -66,7 +66,8 @@ UPDATE) and the untracked-files warning.
        launcher/TemucraftLauncher.exe    -> for the self-check
    ```
 
-2. Copy `server/apache-temucraft.conf.example` into your Apache config, set your whitelisted addresses and the path,
+2. Copy `server/apache-temucraft.conf.example` into your Apache config (a self-signed certificate is fine: put its
+   SHA-256 fingerprint in `launcher.env` as `CERT_SHA256`, and the launcher trusts exactly that certificate), set your whitelisted addresses and the path,
    create the users with `htpasswd`, and reload Apache. Use https.
 3. Optional files next to the manifest: `client-version.txt`, `news.json`, `changelog.json`, `addons.json` and the
    `options/` folder for **cosmetic** patches and switchable fixes (an option group with an `On` folder and `"order": ["On", "Off"]` in its `group.json` is on by

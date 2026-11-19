@@ -34,6 +34,8 @@ List<(string Name, Func<Task> Body)> tests =
     ("An addon falls back to the zip when GitHub's API fails", AddonZipFallback),
     ("README Markdown becomes plain text", MarkdownPlainText),
     ("The log writes details, rotates and tells the window", LoggerWritesAndRotates),
+    ("CERT_SHA256 is read and checked", CertPinParsing),
+    ("A pinned self-signed certificate is trusted, others are refused", CertPinOverTls),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -559,6 +561,81 @@ static Task LoggerWritesAndRotates()
         Logger.MaxBytes = oldMax;
     }
     return Task.CompletedTask;
+}
+
+static Task CertPinParsing()
+{
+    string pin = string.Join(':', Enumerable.Range(0, 32).Select(i => (i * 7 % 256).ToString("x2")));
+    ServerSettings s = ServerSettings.Parse(["SERVER_URL=https://203.0.113.5:8443/", "CERT_SHA256=" + pin]);
+    Assert(s.CertificateSha256 == pin.Replace(":", "").ToUpperInvariant(), "fingerprint not normalised: " + s.CertificateSha256);
+    Assert(ServerSettings.Parse(["SERVER_URL=https://203.0.113.5/"]).CertificateSha256 is null, "a pin out of nowhere");
+    Throws<InvalidDataException>(() => ServerSettings.Parse(["SERVER_URL=https://x/", "CERT_SHA256=12:34"]), "a short fingerprint accepted");
+    Throws<InvalidDataException>(() => ServerSettings.Parse(["SERVER_URL=https://x/", "CERT_SHA256=" + new string('z', 64)]), "non-hex accepted");
+    return Task.CompletedTask;
+}
+
+/// <summary>A tiny https server on 127.0.0.1 with a made-up self-signed certificate, answering every request with "ok".</summary>
+static async Task CertPinOverTls()
+{
+    using System.Security.Cryptography.ECDsa key = System.Security.Cryptography.ECDsa.Create();
+    System.Security.Cryptography.X509Certificates.CertificateRequest req = new("CN=launcher-test", key, HashAlgorithmName.SHA256);
+    using System.Security.Cryptography.X509Certificates.X509Certificate2 made = req.CreateSelfSigned(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddDays(1));
+    using System.Security.Cryptography.X509Certificates.X509Certificate2 cert =
+        System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(made.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pfx), null);
+    System.Net.Sockets.TcpListener listener = new(IPAddress.Loopback, 0);
+    listener.Start();
+    int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+    using CancellationTokenSource stop = new();
+    Task server = Task.Run(async () =>
+    {
+        while (!stop.IsCancellationRequested)
+        {
+            System.Net.Sockets.TcpClient tcp;
+            try { tcp = await listener.AcceptTcpClientAsync(stop.Token); } catch (OperationCanceledException) { return; }
+            _ = Task.Run(async () =>
+            {
+                using (tcp)
+                using (System.Net.Security.SslStream ssl = new(tcp.GetStream()))
+                {
+                    try
+                    {
+                        await ssl.AuthenticateAsServerAsync(cert);
+                        byte[] buffer = new byte[4096];
+                        await ssl.ReadAsync(buffer);
+                        await ssl.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"u8.ToArray());
+                    }
+                    catch (Exception) { }   // the refused handshakes end here
+                }
+            });
+        }
+    });
+    try
+    {
+        string url = $"SERVER_URL=https://127.0.0.1:{port}/";
+        string right = CertificatePin.Fingerprint(cert);
+        using (ServerClient pinned = new(ServerSettings.Parse([url, "CERT_SHA256=" + right]), "u", "p"))
+            Assert(await pinned.GetTextAsync("news.json") == "ok", "the pinned certificate wasn't trusted");
+
+        string wrong = new string('A', 64);
+        using (ServerClient other = new(ServerSettings.Parse([url, "CERT_SHA256=" + wrong]), "u", "p"))
+        {
+            string? message = null;
+            try { await other.GetTextAsync("news.json"); } catch (HttpRequestException e) { message = e.Message; }
+            Assert(message?.Contains("doesn't match CERT_SHA256") == true, "a different certificate wasn't refused: " + message);
+        }
+        using (ServerClient unpinned = new(ServerSettings.Parse([url]), "u", "p"))
+        {
+            string? message = null;
+            try { await unpinned.GetTextAsync("news.json"); } catch (HttpRequestException e) { message = e.Message; }
+            Assert(message?.Contains("isn't trusted") == true, "a self-signed certificate was trusted without a pin: " + message);
+        }
+    }
+    finally
+    {
+        stop.Cancel();
+        listener.Stop();
+        await server;
+    }
 }
 
 /// <summary>Answers like Apache: files under the folder, Range requests with 206.</summary>
