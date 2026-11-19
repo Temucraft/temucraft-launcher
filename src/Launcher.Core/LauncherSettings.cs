@@ -39,6 +39,10 @@ public sealed class ServerSettings
     /// <summary>The server's name for the login window (SERVER_NAME), e.g. "Temucraft"; empty: "this server".</summary>
     public string Name { get; init; } = "";
 
+    /// <summary>The launcher's language (LANGUAGE): "auto" (the computer's language, the default), or one of the
+    /// game's languages: enUS, deDE, frFR, esES, esMX, ruRU, koKR, zhCN, zhTW. The player can still pick another one.</summary>
+    public string Language { get; init; } = "auto";
+
     /// <summary>The server owner's own words about why (COLLECT_NOTE), shown in the login window.</summary>
     public string CollectNote { get; init; } = "";
 
@@ -103,6 +107,7 @@ public sealed class ServerSettings
         return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin, Collect = collect, CollectNote = note,
             Name = values.TryGetValue("SERVER_NAME", out string? name) ? name : "",
             Nav = values.TryGetValue("NAV", out string? nav) ? ParseNav(nav) : [],
+            Language = values.TryGetValue("LANGUAGE", out string? language) && language.Length > 0 ? language : "auto",
             NavShowUrl = !values.TryGetValue("NAV_SHOW_URL", out string? showUrl) || showUrl is not ("0" or "false" or "no"),
             ShowIp = !values.TryGetValue("SHOW_IP", out string? ip) || ip is not ("0" or "false" or "no"),
             ShowUsername = !values.TryGetValue("SHOW_USERNAME", out string? user) || user is not ("0" or "false" or "no") };
@@ -141,6 +146,13 @@ public sealed class UserSettings
     public double WindowHeight { get; set; } = 640;
     /// <summary>Background picture of the launcher ("" = the default).</summary>
     public string Background { get; set; } = "";
+    /// <summary>The launcher's language ("" = launcher.env's LANGUAGE, "auto" = the computer's).</summary>
+    public string Language { get; set; } = "";
+    /// <summary>The player's theme and mode ("" = the server's default).</summary>
+    public string Theme { get; set; } = "";
+    public string ThemeMode { get; set; } = "";
+    /// <summary>The server's last say over the look, so the next start looks right straight away.</summary>
+    public Themes.ServerLook ServerLook { get; set; } = new();
     public bool BackupBeforeUpdate { get; set; } = true;
     /// <summary>The Tweaks page's preset: "server", "recommended", "default" or "custom" ("" = not chosen yet).</summary>
     public string TweakPreset { get; set; } = "";

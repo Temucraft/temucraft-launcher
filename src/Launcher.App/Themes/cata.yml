@@ -1,0 +1,11 @@
+# Cataclysm: molten orange.
+name: Cataclysm
+order: 4
+accent: "#E8622C"
+section: "#E8622C"
+dark.background: "#110C0A"
+dark.panel: "#CC19120F"
+dark.border: "#4C2616"
+dark.field: "#140E0C"
+light.accent: "#8F3C1B"
+light.section: "#8F3C1B"

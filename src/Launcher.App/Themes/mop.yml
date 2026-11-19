@@ -1,0 +1,11 @@
+# Mists of Pandaria: jade.
+name: Mists of Pandaria
+order: 5
+accent: "#2FB37B"
+section: "#2FB37B"
+dark.background: "#0B100E"
+dark.panel: "#CC111815"
+dark.border: "#183E2E"
+dark.field: "#0D1310"
+light.accent: "#1D6E4C"
+light.section: "#1D6E4C"

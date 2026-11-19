@@ -1,0 +1,11 @@
+# Shadowlands: afterlife silver.
+name: Shadowlands
+order: 9
+accent: "#9FB6D8"
+section: "#9FB6D8"
+dark.background: "#0D0E12"
+dark.panel: "#CC13151A"
+dark.border: "#363D49"
+dark.field: "#0F1014"
+light.accent: "#627085"
+light.section: "#627085"

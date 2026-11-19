@@ -1,0 +1,11 @@
+# Vanilla: old gold.
+name: Vanilla
+order: 1
+accent: "#D2A64B"
+section: "#D2A64B"
+dark.background: "#100E0A"
+dark.panel: "#CC18150F"
+dark.border: "#46391E"
+dark.field: "#13100C"
+light.accent: "#82662E"
+light.section: "#82662E"

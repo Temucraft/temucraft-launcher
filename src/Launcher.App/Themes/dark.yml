@@ -1,0 +1,23 @@
+# Dark mode: every colour the launcher uses. Themes (temucraft.yml, wotlk.yml...) change some of them.
+# Colours are "#RRGGBB" or "#AARRGGBB" (AA = how solid: FF solid, 00 see-through).
+name: Dark
+background: "#0E0B14"
+panel: "#CC120E1A"
+overlay: "#F20E0B14"
+shade: "#66000000"
+accent: "#F2C14E"
+section: "#E0894A"
+text: "#E8E2D0"
+textSoft: "#D8D2C4"
+dim: "#9A93A8"
+dimmer: "#7A7486"
+good: "#8FC24A"
+bad: "#FF7A6A"
+border: "#3A3346"
+card: "#1AFFFFFF"
+cardStrong: "#22FFFFFF"
+field: "#1A1622"
+play: "#3E7A1E"
+playText: "#E8F5C8"
+update: "#B5501E"
+warning: "#5A3A00"

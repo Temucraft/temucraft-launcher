@@ -1,0 +1,11 @@
+# Midnight: void purple.
+name: Midnight
+order: 12
+accent: "#8A5CF0"
+section: "#8A5CF0"
+dark.background: "#0D0A13"
+dark.panel: "#CC130F1C"
+dark.border: "#302251"
+dark.field: "#0F0C16"
+light.accent: "#553994"
+light.section: "#553994"

@@ -46,6 +46,9 @@ List<(string Name, Func<Task> Body)> tests =
     ("Only real MACs and useful local addresses are reported", ClientInfoFilters),
     ("News dates read as 18th of November 2026 (18/11/2026), numbered per day", NewsDates),
     ("Website links and the header switches are read from launcher.env", NavAndHeader),
+    ("DXVK settings go to dxvk.conf, the rest to Config.wtf", DxvkTweaks),
+    ("Text files are read and the launcher's words translated", Translating),
+    ("Themes mix a mode and a theme; the server can enforce them", ThemeMixing),
     ("Changelog tags are found and coloured", NewsTags),
     ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
 ];
@@ -796,6 +799,78 @@ static Task NewsDates()
     var lines = NewsItem.DateLines(items);
     Assert(lines[0] == "#3 · 19th of November 2026 (19/11/2026)" && lines[2] == "#1 · 19th of November 2026 (19/11/2026)", lines[0] + " / " + lines[2]);
     Assert(lines[3] == "18th of November 2026 (18/11/2026)", "a single entry that day got a number: " + lines[3]);
+    return Task.CompletedTask;
+}
+
+static Task Translating()
+{
+    Dictionary<string, string> y = MiniYaml.Parse("# comment\n_name: \"Português\"\n\"Save\": \"Guardar\"\nPlain key: plain value # note\n\"Say \\\"hi\\\"\\n\": \"Diz \\\"olá\\\"\"\n\"Downloading {0}  {1} / {2} MB\": \"A transferir {0}  {1} / {2} MB\"\n\"Downloading {0}\": \"A transferir {0}\"\n\"{0}: {1}. Go\": \"{1} em {0}. Vai\"");
+    Assert(y["_name"] == "Português" && y["Save"] == "Guardar" && y["Plain key"] == "plain value", "parse: " + string.Join("|", y.Keys));
+    Assert(y["Say \"hi\"\n"] == "Diz \"olá\"", "escapes");
+    Translation.Language pt = Translation.FromYaml("ptPT", string.Join("\n", y.Select(kv => MiniYaml.Quote(kv.Key) + ": " + MiniYaml.Quote(kv.Value))));
+    Assert(pt.Name == "Português" && !pt.Lines.ContainsKey("_name"), "name");
+    Translation.Use(pt);
+    try
+    {
+        Assert(Translation.T("Save") == "Guardar" && Translation.T("Unknown words") == "Unknown words", "exact");
+        Assert(Translation.T("Downloading patch-A.MPQ") == "A transferir patch-A.MPQ", "template: " + Translation.T("Downloading patch-A.MPQ"));
+        Assert(Translation.T("Downloading a.MPQ  1.0 / 2.0 MB") == "A transferir a.MPQ  1.0 / 2.0 MB", "longest template first");
+        Assert(Translation.T("DXVK: on. Go") == "on em DXVK. Vai", "reordered: " + Translation.T("DXVK: on. Go"));
+    }
+    finally { Translation.Use(null); }
+    Assert(Translation.T("Save") == "Save", "back to English");
+    System.Globalization.CultureInfo deAT = new("de-AT"), ptPT = new("pt-PT"), zhTW = new("zh-TW"), zhCN = new("zh-CN");
+    string[] have = ["deDE", "frFR", "esES", "esMX", "zhCN", "zhTW"];
+    Assert(Translation.Pick("", "auto", deAT, have) == "deDE", "auto from the computer (de-AT finds deDE)");
+    Assert(Translation.Pick("", "", zhTW, have) == "zhTW" && Translation.Pick("", "", zhCN, have) == "zhCN", "Chinese");
+    Assert(Translation.Pick("", "auto", new System.Globalization.CultureInfo("es-MX"), have) == "esMX", "es-MX");
+    Assert(Translation.Pick("", "enUS", deAT, have) == "enUS", "launcher.env says English");
+    Assert(Translation.Pick("frFR", "enUS", deAT, have) == "frFR", "the player's pick wins");
+    Assert(Translation.Pick("", "de", ptPT, have) == "deDE", "short code");
+    Assert(Translation.Pick("", "", ptPT, have) == "enUS", "a language the game doesn't have: English");
+    return Task.CompletedTask;
+}
+
+static Task ThemeMixing()
+{
+    Themes.Theme dark = Themes.FromYaml("dark", "accent: \"#F2C14E\"\nbackground: \"#0E0B14\"\ntext: \"#E8E2D0\"");
+    Themes.Theme light = Themes.FromYaml("light", "background: \"#ECEEF1\"\ntext: \"#23262B\"");
+    Themes.Theme wotlk = Themes.FromYaml("wotlk", "name: Wrath of the Lich King\norder: 3\naccent: \"#3BA7E3\"\nlight.accent: \"#24678C\"\ndark.background: \"#0E0F11\"\nbogus: \"#123456\"\ntext.x: red");
+    Assert(wotlk.Name == "Wrath of the Lich King" && wotlk.Order == 3, "name and order");
+    Dictionary<string, string> d = Themes.Resolve(dark, wotlk, "dark", dark);
+    Assert(d["accent"] == "#3BA7E3" && d["background"] == "#0E0F11" && d["text"] == "#E8E2D0" && !d.ContainsKey("bogus"), "dark: " + string.Join(",", d));
+    Dictionary<string, string> l = Themes.Resolve(light, wotlk, "light", dark);
+    Assert(l["accent"] == "#24678C" && l["background"] == "#ECEEF1" && l["text"] == "#23262B", "light: " + string.Join(",", l));
+    string[] have = ["temucraft", "wotlk"];
+    Assert(Themes.Pick("", "", new(), have) == ("dark", "temucraft"), "nothing chosen");
+    Assert(Themes.Pick("", "", new("wotlk", false, "light", false), have) == ("light", "wotlk"), "the server's default");
+    Assert(Themes.Pick("dark", "temucraft", new("wotlk", false, "light", false), have) == ("dark", "temucraft"), "the player's pick");
+    Assert(Themes.Pick("dark", "temucraft", new("wotlk", true, "light", false), have) == ("dark", "wotlk"), "the server enforces its theme");
+    Assert(Themes.Pick("", "nope", new("missing", false), have) == ("dark", "temucraft"), "unknown themes are skipped");
+    return Task.CompletedTask;
+}
+
+static Task DxvkTweaks()
+{
+    string dir = Directory.CreateTempSubdirectory().FullName;
+    File.WriteAllLines(Path.Combine(dir, "dxvk.conf"), ["# mine", "d3d9.maxFrameRate = 60", "dxvk.hud = fps"]);
+    DxvkConf conf = DxvkConf.Load(dir);
+    Assert(conf.Get("d3d9.maxFrameRate") == "60" && conf.Get("dxvk.hud") == "fps", "read");
+    conf.Set("d3d9.samplerAnisotropy", "16");
+    conf.Set("dxvk.hud", "");
+    conf.Save();
+    string[] lines = File.ReadAllLines(Path.Combine(dir, "dxvk.conf"));
+    Assert(lines.SequenceEqual(["# mine", "d3d9.maxFrameRate = 60", "d3d9.samplerAnisotropy = 16"]), string.Join("|", lines));
+    Assert(Tweaks.FileOf("d3d9.samplerAnisotropy") == "dxvk" && Tweaks.FileOf("farclip") == "config" && Tweaks.FileOf("whatever") == "config", "files");
+    LauncherPolicy policy = LauncherPolicy.From(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(
+        """{"tweaks": {"d3d9.samplerAnisotropy": {"value": 8, "enforce": true}, "farclip": {"value": 1277, "enforce": true}}}""")!);
+    ConfigWtf config = ConfigWtf.Load(dir);
+    Assert(policy.ApplyEnforcedTweaks(config) == 1 && config.Get("d3d9.samplerAnisotropy") is null, "config gets only its own");
+    Assert(policy.ApplyEnforcedTweaks(conf, "dxvk") == 1 && conf.Get("d3d9.samplerAnisotropy") == "8", "dxvk gets its own");
+    // no dxvk.conf and nothing to write: no empty file appears
+    string empty = Directory.CreateTempSubdirectory().FullName;
+    DxvkConf.Load(empty).Save();
+    Assert(!File.Exists(Path.Combine(empty, "dxvk.conf")), "no empty file");
     return Task.CompletedTask;
 }
 

@@ -1,0 +1,11 @@
+# Legion: fel.
+name: Legion
+order: 7
+accent: "#8FD82B"
+section: "#8FD82B"
+dark.background: "#0C0F09"
+dark.panel: "#CC12160E"
+dark.border: "#314615"
+dark.field: "#0E110B"
+light.accent: "#58851A"
+light.section: "#58851A"

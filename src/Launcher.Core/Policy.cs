@@ -42,14 +42,16 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// <item>backupsToKeep: a number</item>
 /// <item>defaultLocale: the server's default language (its base client's), always installed; enUS when not set</item>
 /// <item>requiredLocales: extra languages everyone gets (players may add more)</item>
-/// <item>tweaks: any Config.wtf value by its CVar name, the Tweaks page's or any other, e.g. "farclip"</item>
+/// <item>tweaks: any Config.wtf value by its CVar name, the Tweaks page's or any other, e.g. "farclip"; DXVK's
+/// settings (d3d9.samplerAnisotropy...) go to dxvk.conf</item>
+/// <item>theme: the launcher's theme ("temucraft", "wotlk"...) and themeMode: "dark" or "light"</item>
 /// </list>
 /// Names the launcher doesn't know are kept in <see cref="Unknown"/> (and logged), never an error.
 /// </summary>
 public sealed class LauncherPolicy
 {
     public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware"];
-    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog"];
+    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog", "theme", "themeMode"];
 
     /// <summary>How the News or Changelog panel shows (the "news" / "changelog" entries); shown, 20 then 20 more, by default.</summary>
     public FeedRule News { get; private set; } = FeedRule.Default;
@@ -108,11 +110,14 @@ public sealed class LauncherPolicy
     public IEnumerable<KeyValuePair<string, PolicyRule>> EnforcedTweaks => Tweaks.Where(t => t.Value.Enforce);
 
     /// <summary>Writes the enforced tweaks into Config.wtf; returns how many changed.</summary>
-    public int ApplyEnforcedTweaks(ConfigWtf config)
+    public int ApplyEnforcedTweaks(ConfigWtf config) => ApplyEnforcedTweaks(config, "config");
+
+    /// <summary>Writes the enforced settings that live in <paramref name="file"/> ("config" or "dxvk").</summary>
+    public int ApplyEnforcedTweaks(ITweakFile target, string file)
     {
         int changed = 0;
         foreach ((string cvar, PolicyRule rule) in EnforcedTweaks)
-            if (config.Get(cvar) != rule.CVarText) { config.Set(cvar, rule.CVarText); changed++; }
+            if (Launcher.Core.Tweaks.FileOf(cvar) == file && target.Get(cvar) != rule.CVarText) { target.Set(cvar, rule.CVarText); changed++; }
         return changed;
     }
 }

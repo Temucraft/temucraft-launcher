@@ -1,0 +1,11 @@
+# Dragonflight: dragon crimson.
+name: Dragonflight
+order: 10
+accent: "#D64A5A"
+section: "#D64A5A"
+dark.background: "#100B12"
+dark.panel: "#CC18101A"
+dark.border: "#471E2A"
+dark.field: "#130C14"
+light.accent: "#842D37"
+light.section: "#842D37"

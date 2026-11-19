@@ -1,0 +1,11 @@
+# Warlords of Draenor: iron and rust.
+name: Warlords of Draenor
+order: 6
+accent: "#B5763E"
+section: "#B5763E"
+dark.background: "#100D0A"
+dark.panel: "#CC17130F"
+dark.border: "#3E2B1A"
+dark.field: "#120F0C"
+light.accent: "#704926"
+light.section: "#704926"

@@ -1,0 +1,11 @@
+# The Burning Crusade: fel green.
+name: The Burning Crusade
+order: 2
+accent: "#4CC23A"
+section: "#4CC23A"
+dark.background: "#0E100C"
+dark.panel: "#CC141712"
+dark.border: "#22411C"
+dark.field: "#10120E"
+light.accent: "#40A431"
+light.section: "#40A431"

@@ -1,18 +1,58 @@
+// What the server decides for the launcher. Comments like this one are fine: make-manifest.py removes them.
+// Each setting has a "value" (what the launcher starts with) and "enforce":
+//   enforce false = the player can change it in the launcher
+//   enforce true  = the server's value is always used and the player's switch is greyed out
+// Leave a setting out to let the launcher use its own default.
 {
-  "installAddons":      { "value": true,  "enforce": false },
-  "clearCache":         { "value": true,  "enforce": false },
-  "reopenAfterGame":    { "value": true,  "enforce": false },
-  "rememberWindow":     { "value": false, "enforce": false },
-  "backupBeforeUpdate": { "value": true,  "enforce": false },
-  "backupsToKeep":      { "value": 10,    "enforce": false },
-  "largeAddressAware":  { "value": true,  "enforce": false },
-  "defaultLocale":      { "value": "enUS" },
-  "requiredLocales":    { "value": [] },
-  "news":               { "show": true, "entries": 20, "more": 20 },
-  "changelog":          { "show": true, "entries": 20, "more": 20 },
+  // Install and update the addons that come with the server (Interface/AddOns)
+  "installAddons": { "value": true, "enforce": false },
+
+  // Empty the game's Cache folder before starting WoW (fixes old item and quest text after updates)
+  "clearCache": { "value": true, "enforce": false },
+
+  // Open the launcher again when WoW closes
+  "reopenAfterGame": { "value": true, "enforce": false },
+
+  // Remember where the launcher window was and how big it was
+  "rememberWindow": { "value": false, "enforce": false },
+
+  // Back up the player's settings and addons (WTF, Interface) before every update
+  "backupBeforeUpdate": { "value": true, "enforce": false },
+
+  // How many of those backups to keep; the oldest are deleted first
+  "backupsToKeep": { "value": 10, "enforce": false },
+
+  // Let Wow.exe use up to 4 GB of memory instead of 2 GB (fewer "out of memory" crashes with HD models)
+  "largeAddressAware": { "value": true, "enforce": false },
+
+  // Game settings (CVars) written into WTF/Config.wtf. These fill the "Server recommended" preset on the Tweaks page.
+  // Any CVar name works, even ones the launcher has no description for.
   "tweaks": {
-    "farclip":           { "value": 1277, "enforce": false },
-    "maxFPS":            { "value": 144,  "enforce": false },
-    "cameraDistanceMax": { "value": 50,   "enforce": false }
-  }
+    // How far the land is drawn (game default 777, 1277 is the most)
+    "farclip": { "value": 1277, "enforce": false },
+    // Frame rate limit (0 = no limit)
+    "maxFPS": { "value": 144, "enforce": false },
+    // How far the camera can zoom out (50 is the most the game allows)
+    "cameraDistanceMax": { "value": 50, "enforce": false }
+    // DXVK's settings go to dxvk.conf and only show while DXVK is on, for example:
+    // "d3d9.samplerAnisotropy": { "value": 16, "enforce": false }   (sharper textures far away, 0 to 16)
+    // "dxvk.hud": { "value": "fps", "enforce": false }               (frame rate in the corner)
+    // Awesome WotLK's: "nameplateDistance" (yards, game default 41) and "cameraFov" (1 to 200, default 100)
+  },
+
+  // The game language picked for new players (enUS if left out). It is always installed and can't be unticked.
+  // "requiredLocales": { "value": ["deDE"] } would also install other languages for everyone.
+  "defaultLocale": { "value": "enUS" },
+
+  // News page: show it or not, how many posts to show at first, and how many more each "Load more" adds.
+  // -1 means all of them (and "Load all" instead of "Load more").
+  "news": { "show": true, "entries": 20, "more": 20 },
+
+  // Changelog page: same as news
+  "changelog": { "show": true, "entries": 20, "more": 20 },
+
+  // The launcher's look. theme: temucraft, vanilla, tbc, wotlk, cata, mop, wod, legion, bfa, shadowlands,
+  // dragonflight, tww or midnight. themeMode: dark or light. With enforce false the player can pick another one.
+  "theme": { "value": "temucraft", "enforce": false },
+  "themeMode": { "value": "dark", "enforce": false }
 }

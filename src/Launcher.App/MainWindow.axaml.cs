@@ -14,7 +14,8 @@ namespace Launcher.App;
 
 public partial class MainWindow : Window
 {
-    readonly string _settingsFile = Path.Combine(UserSettings.DefaultFolder, "settings.json");
+    public static readonly string SettingsFile = Path.Combine(UserSettings.DefaultFolder, "settings.json");
+    readonly string _settingsFile = SettingsFile;
     readonly string _cacheFile = Path.Combine(UserSettings.DefaultFolder, "hash-cache.json");
     readonly string _feedFile = Path.Combine(UserSettings.DefaultFolder, "news-cache.json");
     readonly UserSettings _settings;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
     int _pendingFiles;
     CancellationTokenSource? _work;
     readonly Dictionary<string, Control> _tweakControls = new(StringComparer.OrdinalIgnoreCase);
+    readonly List<(string Group, Control Row)> _gatedTweakRows = [];   // rows shown only while an option (DXVK...) is on
     CheckBox? _laaBox;
     LauncherPolicy _policy = new();   // the server's rules, from the last manifest
     readonly List<string> _serverTweaks = [];   // Config.wtf values the server sets that the Tweaks list doesn't have
@@ -99,14 +101,9 @@ public partial class MainWindow : Window
             Width = _settings.WindowWidth;
             Height = _settings.WindowHeight;
         }
-        // the changelog's tag colours, as a legend under its title
-        TagLegend.Inlines ??= [];
-        foreach ((string tag, string color) in NewsItem.Tags)
-        {
-            TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run($"[{tag}]") { Foreground = new SolidColorBrush(Color.Parse(color)), FontWeight = FontWeight.SemiBold });
-            TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run("  "));
-        }
+        ShowTagLegend();
         ShowFeeds(FeedCache.Load(_feedFile));   // the last news and changelog, until the server sends new ones
+        FillLookBoxes();
         BuildTweaks();
         RefreshInstalledAddons();
         RefreshBackups();
@@ -344,32 +341,32 @@ public partial class MainWindow : Window
     /// tagged (Default) or (Enabled in &lt;server&gt;), the owner's note, and that logging in is agreeing.</summary>
     string CollectText()
     {
-        static string Short(string key) => key switch
+        static string Short(string key) => Translation.T(key switch
         {
             "launcherVersion" => "Launcher version", "os" => "Operating system, version and build",
             "installId" => "A random ID for this install", "computerName" => "Computer name", "osUser" => "Operating system username",
             "mac" => "MAC addresses", "localIp" => "Local IP addresses (IPv4 and IPv6)", "timezone" => "Time zone",
             "language" => "System language", "hardware" => "Processor and memory", _ => ClientInfo.Describe(key),
-        };
+        });
         IReadOnlyList<string> collect = _server?.Collect ?? ClientInfo.Normalize(null);
-        string where = _server is { Name.Length: > 0 } ? "in " + _server.Name : "by this server";
+        string enabled = _server is { Name.Length: > 0 } ? string.Format(Translation.T("Enabled in {0}"), _server.Name) : Translation.T("Enabled by this server");
         System.Text.StringBuilder text = new();
         if (collect.Count == 0)
-            text.Append("This server collects nothing from your PC besides your login.");
+            text.Append(Translation.T("This server collects nothing from your PC besides your login."));
         else
         {
-            text.Append("This server collects:");
+            text.Append(Translation.T("This server collects:"));
             foreach (string key in collect)
-                text.Append($"\n  • {Short(key)}  ({(ClientInfo.Defaults.Contains(key) ? "Default" : "Enabled " + where)})");
+                text.Append($"\n  • {Short(key)}  ({(ClientInfo.Defaults.Contains(key) ? Translation.T("Default") : enabled)})");
             bool everything = ClientInfo.Optional.All(i => collect.Contains(i.Key));
-            text.Append(everything ? "\nOther servers may collect less: only the defaults, or nothing."
-                                   : "\nOther servers may also ask for: " + string.Join(", ",
-                                         ClientInfo.Optional.Where(i => !collect.Contains(i.Key)).Select(i => Short(i.Key).ToLowerInvariant())) + ".");
+            text.Append("\n" + (everything ? Translation.T("Other servers may collect less: only the defaults, or nothing.")
+                                   : Translation.T("Other servers may also ask for:") + " " + string.Join(", ",
+                                         ClientInfo.Optional.Where(i => !collect.Contains(i.Key)).Select(i => Short(i.Key).ToLower())) + "."));
         }
         if (_server?.CollectNote.Length > 0) text.Append("\n\n" + _server.CollectNote);
-        text.Append("\n\nAny server also sees your public IP address (IPv4 or IPv6) and records whether it let you in.");
+        text.Append("\n\n" + Translation.T("Any server also sees your public IP address (IPv4 or IPv6) and records whether it let you in."));
         if (collect.Count > 0)
-            text.Append(" By logging in, you agree to this being sent with every request the launcher makes; you can read it again on the Launcher page.");
+            text.Append(" " + Translation.T("By logging in, you agree to this being sent with every request the launcher makes; you can read it again on the Launcher page."));
         return text.ToString();
     }
 
@@ -441,20 +438,20 @@ public partial class MainWindow : Window
             foreach (string key in _server.Collect)
             {
                 PrivacyValuesBox.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-                TextBlock title = new() { Text = ClientInfo.Title(key), Foreground = new SolidColorBrush(Color.Parse("#D8D2C4")), FontSize = 12,
+                TextBlock title = new() { Text = ClientInfo.Title(key), Classes = { "soft" }, FontSize = 12,
                                           VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 5, 0, 0) };
                 Grid.SetRow(title, row);
                 PrivacyValuesBox.Children.Add(title);
                 Border code = new()
                 {
-                    Background = new SolidColorBrush(Color.Parse("#1A1622")), BorderBrush = new SolidColorBrush(Color.Parse("#3A3346")),
+                    Classes = { "field" },
                     BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(7, 3), Margin = new Thickness(0, 2),
                     HorizontalAlignment = HorizontalAlignment.Left,
                     Child = new SelectableTextBlock
                     {
                         Text = values.GetValueOrDefault(key, "(not available)").Replace(ClientInfo.AdapterSeparator, "\n"),
                         FontFamily = new FontFamily("Consolas, Cascadia Mono, Menlo, DejaVu Sans Mono, monospace"), FontSize = 12,
-                        Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")), TextWrapping = TextWrapping.Wrap,
+                        Classes = { "text" }, TextWrapping = TextWrapping.Wrap,
                     },
                 };
                 Grid.SetRow(code, row);
@@ -515,6 +512,7 @@ public partial class MainWindow : Window
             ShowLocales(manifest.Locales);
             ClientButton.IsVisible = manifest.Files.Any(f => f.Category == FileCategory.Base);
             RefreshMods();
+            ShowGatedTweaks();
             VersionText.Text = manifest.ClientVersion.Length > 0 ? $"Version: {manifest.ClientVersion}" : "";
             WarningBanner.IsVisible = !launcherOk;
             WarningText.Text = launcherOk ? "" :
@@ -543,6 +541,16 @@ public partial class MainWindow : Window
             ("rememberWindow", RememberWindowBox), ("backupBeforeUpdate", BackupBox),
         ];
         _policy = manifest.Rules;
+        // the server's default theme (or the one it enforces), kept for the next start
+        Themes.ServerLook look = Themes.ServerLook.From(_policy);
+        if (look != _settings.ServerLook)
+        {
+            _settings.ServerLook = look;
+            SaveSettings();
+            Look.UseTheme(_settings);
+            ShowTagLegend();
+            FillLookBoxes();
+        }
         foreach ((string key, CheckBox box) in settings)
         {
             bool? enforced = _policy.EnforcedBool(key);
@@ -560,14 +568,80 @@ public partial class MainWindow : Window
 
     PolicyRule? TweakRule(string cvar) => _policy.Tweaks.GetValueOrDefault(cvar);
 
+    /// <summary>The changelog's tag colours, as a legend under its title (the server's tag names, untranslated).</summary>
+    void ShowTagLegend()
+    {
+        TagLegend.Inlines ??= [];
+        TagLegend.Inlines.Clear();
+        using IDisposable serverText = Look.Untranslated();
+        foreach ((string tag, string color) in NewsItem.Tags)
+        {
+            TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run($"[{tag}]") { Foreground = new SolidColorBrush(Look.Readable(color)), FontWeight = FontWeight.SemiBold });
+            TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run("  "));
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------- language and theme
+    sealed record LookChoice(string Value, string Text) { public override string ToString() => Text; }
+    bool _fillingLook;
+
+    /// <summary>The Language, Theme and Mode boxes on the Launcher page (greyed out when the server enforces its look).</summary>
+    void FillLookBoxes()
+    {
+        _fillingLook = true;
+        try
+        {
+            List<LookChoice> languages = [new("", Translation.T("Automatic (the computer's language)")),
+                                      .. Look.Languages.Select(l => new LookChoice(l.Code, $"{l.Name} ({l.Code})"))];
+            LanguageBox.ItemsSource = languages;
+            string pickedLanguage = _settings.Language is { Length: > 0 } own ? own : _server?.Language is { Length: > 0 } env && env != "auto" ? env : "";
+            // a set language shows as the one in use (LANGUAGE=en shows English); auto shows Automatic
+            LanguageBox.SelectedItem = pickedLanguage is "" or "auto" ? languages[0]
+                : languages.FirstOrDefault(c => c.Value.Equals(Translation.Code, StringComparison.OrdinalIgnoreCase)) ?? languages[0];
+
+            List<LookChoice> themes = [.. Look.ThemeList.Select(t => new LookChoice(t.Id, t.Name))];
+            ThemeBox.ItemsSource = themes;
+            ThemeBox.SelectedItem = themes.FirstOrDefault(c => c.Value == Look.Theme);
+            List<LookChoice> modes = [new("dark", Translation.T("Dark")), new("light", Translation.T("Light"))];
+            ModeBox.ItemsSource = modes;
+            ModeBox.SelectedItem = modes.FirstOrDefault(c => c.Value == Look.Mode);
+            Themes.ServerLook server = _settings.ServerLook ?? new();
+            ThemeBox.IsEnabled = !server.ThemeEnforced;
+            ModeBox.IsEnabled = !server.ModeEnforced;
+            ToolTip.SetTip(ThemeBox, server.ThemeEnforced ? Translation.T("Set by the server") : null);
+            ToolTip.SetTip(ModeBox, server.ModeEnforced ? Translation.T("Set by the server") : null);
+        }
+        finally { _fillingLook = false; }
+    }
+
+    void OnLanguagePicked(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_fillingLook || LanguageBox.SelectedItem is not LookChoice choice) return;
+        _settings.Language = choice.Value.Length > 0 ? choice.Value : "auto";
+        SaveSettings();
+        Look.UseLanguage(_settings.Language, _server?.Language);
+        LanguageNote.IsVisible = true;
+    }
+
+    void OnThemePicked(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_fillingLook) return;
+        if (ThemeBox.SelectedItem is LookChoice theme) _settings.Theme = theme.Value;
+        if (ModeBox.SelectedItem is LookChoice mode) _settings.ThemeMode = mode.Value;
+        SaveSettings();
+        Look.UseTheme(_settings);
+        ShowTagLegend();
+        ShowFeeds(FeedCache.Load(_feedFile));   // the coloured parts of the news follow the mode
+    }
+
     /// <summary>A line of news text with its [Tags] and {+better}/{-worse} parts in colour.</summary>
     static TextBlock Rich(string line, double size = 14)
     {
-        TextBlock block = new() { TextWrapping = TextWrapping.Wrap, FontSize = size, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) };
+        TextBlock block = new() { TextWrapping = TextWrapping.Wrap, FontSize = size, Classes = { "text" } };
         block.Inlines ??= [];
         foreach ((string part, string? color) in NewsItem.Segments(line))
             block.Inlines.Add(color is null ? new Avalonia.Controls.Documents.Run(part)
-                : new Avalonia.Controls.Documents.Run(part) { Foreground = new SolidColorBrush(Color.Parse(color)), FontWeight = FontWeight.SemiBold });
+                : new Avalonia.Controls.Documents.Run(part) { Foreground = new SolidColorBrush(Look.Readable(color)), FontWeight = FontWeight.SemiBold });
         return block;
     }
 
@@ -596,13 +670,14 @@ public partial class MainWindow : Window
         list.Children.Clear();
         if (items.Count == 0)
             list.Children.Add(new TextBlock { Text = "Nothing yet.", Classes = { "dim" } });
+        using IDisposable serverText = Look.Untranslated();   // the server's words stay as it wrote them
         IReadOnlyList<string> dates = NewsItem.DateLines(items);
         for (int i = 0; i < count; i++)
         {
             NewsItem item = items[i];
             StackPanel card = new() { Spacing = 4 };
             if (dates[i].Length > 0) card.Children.Add(new TextBlock { Text = dates[i], Classes = { "dim" }, FontSize = 12 });
-            if (item.Title.Length > 0) card.Children.Add(new TextBlock { Text = item.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#F2C14E")), TextWrapping = TextWrapping.Wrap });
+            if (item.Title.Length > 0) card.Children.Add(new TextBlock { Text = item.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Classes = { "accent" }, TextWrapping = TextWrapping.Wrap });
             // each line, with [Tags] and {+better}/{-worse} in colour; a line with details folds them under it
             StackPanel body = new() { Spacing = 1 };
             foreach ((string line, IReadOnlyList<string> details) in NewsItem.Lines(item.Text))
@@ -610,14 +685,16 @@ public partial class MainWindow : Window
                 if (details.Count == 0) { body.Children.Add(Rich(line)); continue; }
                 StackPanel inner = new() { Spacing = 1, Margin = new Thickness(18, 2, 0, 4) };
                 foreach (string detail in details) inner.Children.Add(Rich("• " + detail, 13));
-                TextBlock arrow = new() { Text = "▸", Foreground = new SolidColorBrush(Color.Parse("#F2C14E")), Width = 14, VerticalAlignment = VerticalAlignment.Top };
+                TextBlock arrow = new() { Text = "▸", Classes = { "accent" }, Width = 14, VerticalAlignment = VerticalAlignment.Top };
                 Grid head = new() { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand), Background = Brushes.Transparent };
                 head.Children.Add(arrow);
-                TextBlock text = Rich(line + $"  ({details.Count})");
+                // the arrow takes the bullet's place
+                string headLine = line.StartsWith("• ") ? line[2..] : line.StartsWith("- ") ? line[2..] : line;
+                TextBlock text = Rich(headLine + $"  ({details.Count})");
                 Grid.SetColumn(text, 1);
                 head.Children.Add(text);
                 inner.IsVisible = false;
-                ToolTip.SetTip(head, "Click to show or hide the details");
+                ToolTip.SetTip(head, Translation.T("Click to show or hide the details"));
                 head.PointerPressed += (_, _) => { inner.IsVisible = !inner.IsVisible; arrow.Text = inner.IsVisible ? "▾" : "▸"; };
                 body.Children.Add(head);
                 body.Children.Add(inner);
@@ -625,7 +702,7 @@ public partial class MainWindow : Window
             card.Children.Add(body);
             if (Uri.TryCreate(item.Link, UriKind.Absolute, out Uri? link) && link.Scheme is "https" or "http")
             {
-                Button open = new() { Content = "Read more", Classes = { "link" } };
+                Button open = new() { Content = Translation.T("Read more"), Classes = { "link" } };
                 open.Click += (_, _) => OpenUrl(link.ToString());
                 card.Children.Add(open);
             }
@@ -633,7 +710,7 @@ public partial class MainWindow : Window
         }
         if (rule.MoreLabel(items.Count - count) is { } label)
         {
-            Button more = new() { Content = label, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
+            Button more = new() { Content = Translation.T(label), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
             more.Click += (_, _) => ShowNews(list, items, rule, rule.NextCount(count, items.Count));
             list.Children.Add(more);
         }
@@ -725,6 +802,9 @@ public partial class MainWindow : Window
             ConfigWtf config = ConfigWtf.Load(folder);
             int changed = _policy.ApplyEnforcedTweaks(config);
             if (changed > 0) { config.Save(); Log($"{changed} game setting(s) set by the server written to WTF\\Config.wtf"); }
+            DxvkConf dxvk = DxvkConf.Load(folder);
+            int dxvkChanged = _policy.ApplyEnforcedTweaks(dxvk, "dxvk");
+            if (dxvkChanged > 0) { dxvk.Save(); Log($"{dxvkChanged} DXVK setting(s) set by the server written to dxvk.conf"); }
             if (_policy.EnforcedBool("largeAddressAware") is bool laa && File.Exists(GameFolder.ExePath(folder))
                 && LargeAddressAware.IsEnabled(GameFolder.ExePath(folder)) != laa)
             {
@@ -920,19 +1000,23 @@ public partial class MainWindow : Window
     {
         TweaksList.Children.Clear();
         _tweakControls.Clear();
+        _gatedTweakRows.Clear();
         string? section = null;
         foreach (Tweak t in Tweaks.All)
         {
             if (t.Section != section)
             {
                 section = t.Section;
-                TweaksList.Children.Add(new TextBlock { Text = section.ToUpperInvariant(), Classes = { "section" } });
+                TextBlock header = new() { Text = section.ToUpperInvariant(), Classes = { "section" } };
+                TweaksList.Children.Add(header);
+                if (t.Requires is not null) _gatedTweakRows.Add((t.Requires, header));
             }
             Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
+            if (t.Requires is not null) _gatedTweakRows.Add((t.Requires, row));
             row.Children.Add(new TextBlock
             {
                 Text = t.Name, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = new SolidColorBrush(Color.Parse(t.Highlighted ? "#8FC24A" : "#E8E2D0")),
+                Classes = { t.Highlighted ? "good" : "text" },
             });
             // numbers: a number box that only takes numbers and keeps them in the setting's range
             Control control = t.Kind == TweakKind.Toggle
@@ -970,7 +1054,7 @@ public partial class MainWindow : Window
             foreach (string cvar in extra)
             {
                 Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
-                row.Children.Add(new TextBlock { Text = cvar, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) });
+                row.Children.Add(new TextBlock { Text = cvar, VerticalAlignment = VerticalAlignment.Center, Classes = { "text" } });
                 TextBox box = new() { Width = 132, HorizontalAlignment = HorizontalAlignment.Left };
                 Grid.SetColumn(box, 1);
                 row.Children.Add(box);
@@ -985,17 +1069,45 @@ public partial class MainWindow : Window
         TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
         _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
+        ShowGatedTweaks();
         LoadTweaks();
     }
+
+    /// <summary>Whether an Options group (DXVK, Awesome WotLK...) is on. Before the launcher has talked to the server
+    /// it goes by the player's last pick, and shows the settings when it can't tell.</summary>
+    bool OptionOn(string group)
+    {
+        string? chosen = _manifest is not null
+            ? UpdatePlanner.ChosenOption(_manifest, _settings.Options, group)
+            : _settings.Options.TryGetValue(group, out string? picked) ? picked : "On";
+        return !string.IsNullOrEmpty(chosen) && !chosen.Equals("Off", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Settings of an option (DXVK's, Awesome WotLK's) only show while that option is on.</summary>
+    void ShowGatedTweaks()
+    {
+        foreach ((string group, Control row) in _gatedTweakRows) row.IsVisible = OptionOn(group);
+    }
+
+    static Tweak? TweakOf(string cvar) => Tweaks.All.FirstOrDefault(t => t.CVar.Equals(cvar, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A box's value as it goes in the file ("1"/"0", or the toggle's own On/Off values).</summary>
+    static string? BoxValue(Tweak t, Control? control) => control switch
+    {
+        CheckBox box => box.IsChecked == true ? t.On : t.Off,
+        NumericUpDown { Value: decimal v } => Tweaks.Format(Math.Clamp((double)v, t.Min, t.Max)),
+        _ => null,   // an empty number box leaves the game's own value alone
+    };
 
     void LoadTweaks()
     {
         TweaksHint.IsVisible = !GameFolder.LooksLikeClient(Folder);
         if (TweaksHint.IsVisible) return;
         ConfigWtf config = ConfigWtf.Load(Folder);
+        DxvkConf dxvk = DxvkConf.Load(Folder);
         _fillingTweaks = true;
         foreach (Tweak t in Tweaks.All)
-            SetTweak(t.CVar, config.Get(t.CVar) ?? t.Default);
+            SetTweak(t.CVar, (t.File == "dxvk" ? dxvk.Get(t.CVar) : config.Get(t.CVar)) ?? t.Default);
         _fillingTweaks = false;
         foreach (string cvar in _serverTweaks)
             SetTweak(cvar, config.Get(cvar) ?? TweakRule(cvar)?.CVarText ?? "");
@@ -1003,7 +1115,7 @@ public partial class MainWindow : Window
         catch (Exception e) { Logger.Warning("Large Address Aware", e); }
         // a fresh game (none of these set yet) starts on the server's recommendation, or the defaults; a game with its
         // own settings keeps them and shows whichever preset they match
-        bool fresh = Tweaks.All.All(t => config.Get(t.CVar) is null);
+        bool fresh = Tweaks.All.Where(t => t.File == "config" && t.Requires is null).All(t => config.Get(t.CVar) is null);
         if (fresh && !_settings.TweakPresetChosen) FillPreset(_policy.Tweaks.Count > 0 ? "server" : "default");
         LockEnforcedTweaks();
         MarkPreset(MatchingPreset());
@@ -1037,13 +1149,7 @@ public partial class MainWindow : Window
     /// <summary>The preset the boxes match (server first), or "custom".</summary>
     string MatchingPreset()
     {
-        string Current(Tweak t) => _tweakControls.GetValueOrDefault(t.CVar) switch
-        {
-            CheckBox box => box.IsChecked == true ? "1" : "0",
-            NumericUpDown { Value: decimal v } => Tweaks.Format((double)v),
-            TextBox text => text.Text?.Trim() ?? "",
-            _ => "",
-        };
+        string Current(Tweak t) => BoxValue(t, _tweakControls.GetValueOrDefault(t.CVar)) ?? "";
         bool Same(string a, string b) => a == b || (double.TryParse(a, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double x)
             && double.TryParse(b, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double y) && x == y);
         foreach (string preset in _policy.Tweaks.Count > 0 ? new[] { "server", "recommended", "default" } : ["recommended", "default"])
@@ -1102,7 +1208,7 @@ public partial class MainWindow : Window
     {
         switch (_tweakControls.GetValueOrDefault(cvar))
         {
-            case CheckBox box: box.IsChecked = value == "1"; break;
+            case CheckBox box: box.IsChecked = value == (TweakOf(cvar)?.On ?? "1"); break;
             case NumericUpDown number:
                 number.Value = decimal.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out decimal v)
                     ? Math.Clamp(v, number.Minimum, number.Maximum) : null;
@@ -1117,15 +1223,13 @@ public partial class MainWindow : Window
         try
         {
             ConfigWtf config = ConfigWtf.Load(Folder);
+            DxvkConf dxvk = DxvkConf.Load(Folder);
             foreach (Tweak t in Tweaks.All)
             {
-                string? value = _tweakControls[t.CVar] switch
-                {
-                    CheckBox box => box.IsChecked == true ? "1" : "0",
-                    NumericUpDown { Value: decimal number } => Tweaks.Format(Math.Clamp((double)number, t.Min, t.Max)),
-                    _ => null,   // an empty number box leaves the game's own value alone
-                };
-                if (value is not null) config.Set(t.CVar, value);
+                if (t.Requires is not null && !OptionOn(t.Requires)) continue;   // DXVK off: leave dxvk.conf alone
+                string? value = BoxValue(t, _tweakControls[t.CVar]);
+                if (value is null) continue;
+                if (t.File == "dxvk") dxvk.Set(t.CVar, value); else config.Set(t.CVar, value);
             }
             foreach (string cvar in _serverTweaks)
                 if (_tweakControls[cvar] is TextBox { Text: { Length: > 0 } text })
@@ -1134,11 +1238,13 @@ public partial class MainWindow : Window
                     if (clean.Length > 0) config.Set(cvar, clean);
                 }
             _policy.ApplyEnforcedTweaks(config);   // enforced values win, whatever the boxes say
+            _policy.ApplyEnforcedTweaks(dxvk, "dxvk");
             config.Save();
+            dxvk.Save();
             if (_laaBox is not null) LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true);
             LoadTweaks();
             Status("Tweaks saved.");
-            Log("Tweaks saved to WTF\\Config.wtf");
+            Log("Tweaks saved to WTF\\Config.wtf" + (OptionOn("DXVK") ? " and dxvk.conf" : ""));
         }
         catch (Exception error)
         {
@@ -1176,7 +1282,7 @@ public partial class MainWindow : Window
             TextBlock version = new()
             {
                 Text = addon.FromServer ? "server" : addon.Version.Length > 0 ? addon.Version : "not versioned",
-                Foreground = new SolidColorBrush(Color.Parse(addon.FromServer ? "#8FC24A" : "#F2C14E")),
+                Classes = { addon.FromServer ? "good" : "accent" },
                 Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 12,
             };
             Grid.SetColumn(version, 2);
@@ -1184,7 +1290,7 @@ public partial class MainWindow : Window
             Button remove = new() { Content = "Remove", FontSize = 12, IsEnabled = !addon.FromServer };
             remove.Click += (_, _) =>
             {
-                if ((string?)remove.Content != "Sure?") { remove.Content = "Sure?"; return; }
+                if (remove.Tag is not true) { remove.Tag = true; remove.Content = "Sure?"; return; }
                 try
                 {
                     string moved = AddonFolder.Remove(Folder, addon.Folder, Backups.Folder);
@@ -1220,7 +1326,7 @@ public partial class MainWindow : Window
             row.Children.Add(new TextBlock
             {
                 Text = addon.Name + (addon.Required ? "  (needed)" : ""), FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = new SolidColorBrush(Color.Parse(addon.Required ? "#8FC24A" : "#E8E2D0")),
+                Classes = { addon.Required ? "good" : "text" },
             });
             TextBlock description = new() { Text = addon.Description, Classes = { "dim" }, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
             Grid.SetColumn(description, 1);
@@ -1344,18 +1450,22 @@ public partial class MainWindow : Window
             Border card = new()
             {
                 Child = panel, Width = 300, MinHeight = 120, Margin = new Thickness(0, 0, 12, 12), Padding = new Thickness(14, 12),
-                Background = new SolidColorBrush(Color.Parse("#1AFFFFFF")), BorderBrush = new SolidColorBrush(Color.Parse("#3A3346")),
+                Classes = { "card" },
                 BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
             };
-            panel.Children.Add(new TextBlock { Text = group.Name, FontWeight = FontWeight.SemiBold, FontSize = 15 });
-            if (group.Description.Length > 0)
-                panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
+            using (Look.Untranslated())   // the server's names and descriptions stay as it wrote them
+            {
+                panel.Children.Add(new TextBlock { Text = group.Name, FontWeight = FontWeight.SemiBold, FontSize = 15 });
+                if (group.Description.Length > 0)
+                    panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
+            }
             string? chosen = UpdatePlanner.ChosenOption(_manifest!, _settings.Options, group.Name);
 
             void Pick(string value, string shown)
             {
                 _settings.Options[group.Name] = value;
                 SaveSettings();
+                ShowGatedTweaks();
                 _pendingFiles = Math.Max(_pendingFiles, 1);
                 ShowPlayState();
                 Status($"{group.Name}: {shown}. Press UPDATE to install it.");
@@ -1404,7 +1514,7 @@ public partial class MainWindow : Window
         foreach (string file in files)
         {
             Grid row = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            row.Children.Add(new TextBlock { Text = file, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.Parse("#F2C14E")) });
+            row.Children.Add(new TextBlock { Text = file, VerticalAlignment = VerticalAlignment.Center, Classes = { "accent" } });
             Button remove = new() { Content = "Remove", FontSize = 12 };
             remove.Click += (_, _) =>
             {

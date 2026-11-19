@@ -1,0 +1,11 @@
+# The War Within: earthen amber.
+name: The War Within
+order: 11
+accent: "#E0A640"
+section: "#E0A640"
+dark.background: "#100E09"
+dark.panel: "#CC17140E"
+dark.border: "#49381A"
+dark.field: "#12100B"
+light.accent: "#8A6627"
+light.section: "#8A6627"

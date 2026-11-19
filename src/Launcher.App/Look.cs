@@ -1,0 +1,177 @@
+using System.Globalization;
+using System.Reflection;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Media;
+using Avalonia.Styling;
+using Launcher.Core;
+
+namespace Launcher.App;
+
+/// <summary>
+/// The launcher's language and theme. Both come from small YAML files built into the launcher ("lang/pt.yml",
+/// "themes/wotlk.yml"); a "lang" or "themes" folder next to the launcher adds files or replaces built-in ones.
+/// </summary>
+public static class Look
+{
+    // ------------------------------------------------------------------------------------------ files
+    static string Folder(string name) => Path.Combine(AppContext.BaseDirectory, name);
+
+    /// <summary>The built-in files of a folder ("lang", "themes"), then the ones next to the launcher (which win).</summary>
+    static Dictionary<string, string> Files(string folder)
+    {
+        Dictionary<string, string> files = new(StringComparer.OrdinalIgnoreCase);
+        Assembly assembly = typeof(Look).Assembly;
+        foreach (string name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase)))
+        {
+            using Stream stream = assembly.GetManifestResourceStream(name)!;
+            using StreamReader reader = new(stream);
+            files[Path.GetFileNameWithoutExtension(name)] = reader.ReadToEnd();
+        }
+        try
+        {
+            if (Directory.Exists(Folder(folder)))
+                foreach (string file in Directory.GetFiles(Folder(folder), "*.yml"))
+                    files[Path.GetFileNameWithoutExtension(file)] = File.ReadAllText(file);
+        }
+        catch (Exception e) { Logger.Warning($"Couldn't read the {folder} folder", e); }
+        return files;
+    }
+
+    // ------------------------------------------------------------------------------------------ language
+    static List<Translation.Language>? _languages;
+
+    /// <summary>Every language the launcher has, English first.</summary>
+    public static IReadOnlyList<Translation.Language> Languages => _languages ??=
+        [new Translation.Language(Translation.English, "English", []),
+         .. Files("lang").Where(f => !f.Key.Equals(Translation.English, StringComparison.OrdinalIgnoreCase))
+                         .Select(f => Translation.FromYaml(f.Key, f.Value)).OrderBy(l => l.Code, StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>Picks and loads the language (the player's, else launcher.env's LANGUAGE, else the computer's).</summary>
+    public static void UseLanguage(string? player, string? server)
+    {
+        string code = Translation.Pick(player, server, CultureInfo.CurrentUICulture, Languages.Select(l => l.Code));
+        Translation.Use(Languages.FirstOrDefault(l => l.Code.Equals(code, StringComparison.OrdinalIgnoreCase)));
+        Logger.Info($"Language: {Translation.Code}");
+    }
+
+    static bool _hooked;
+
+    /// <summary>
+    /// Translates the launcher's own text wherever it is set: in the window's layout or later from code. Text the
+    /// server wrote sits in controls with the "raw" class (and their children) and is left alone.
+    /// </summary>
+    public static void HookTranslation()
+    {
+        if (_hooked) return;
+        _hooked = true;
+        TextBlock.TextProperty.Changed.AddClassHandler<TextBlock>((block, e) => Swap(block, TextBlock.TextProperty, e.NewValue));
+        ContentControl.ContentProperty.Changed.AddClassHandler<ContentControl>((control, e) => Swap(control, ContentControl.ContentProperty, e.NewValue));
+        TextBox.WatermarkProperty.Changed.AddClassHandler<TextBox>((box, e) => Swap(box, TextBox.WatermarkProperty, e.NewValue));
+        ToggleSwitch.OnContentProperty.Changed.AddClassHandler<ToggleSwitch>((t, e) => Swap(t, ToggleSwitch.OnContentProperty, e.NewValue));
+        ToggleSwitch.OffContentProperty.Changed.AddClassHandler<ToggleSwitch>((t, e) => Swap(t, ToggleSwitch.OffContentProperty, e.NewValue));
+        ToolTip.TipProperty.Changed.AddClassHandler<Control>((control, e) => Swap(control, ToolTip.TipProperty, e.NewValue));
+        Window.TitleProperty.Changed.AddClassHandler<Window>((window, e) => Swap(window, Window.TitleProperty, e.NewValue));
+        Run.TextProperty.Changed.AddClassHandler<Run>((run, e) =>
+        {
+            if (_untranslated == 0 && e.NewValue is string text && Translation.Find(text) is { } translated && translated != text) run.Text = translated;
+        });
+    }
+
+    static int _untranslated;
+
+    /// <summary>While this is open (using), nothing is translated: for building the server's own text (news,
+    /// changelog, option and addon names), which stays as the server wrote it.</summary>
+    public static IDisposable Untranslated()
+    {
+        _untranslated++;
+        return new Scope();
+    }
+
+    sealed class Scope : IDisposable
+    {
+        bool _done;
+        public void Dispose() { if (!_done) { _done = true; _untranslated--; } }
+    }
+
+    static void Swap(AvaloniaObject target, AvaloniaProperty property, object? value)
+    {
+        if (_untranslated > 0 || value is not string text || text.Length == 0 || IsRaw(target)) return;
+        if (Translation.Find(text) is { } translated && translated != text) target.SetValue(property, translated);
+    }
+
+    /// <summary>Server text: a control with the "raw" class, or inside one (set before the text, or the text is
+    /// translated first).</summary>
+    static bool IsRaw(AvaloniaObject target)
+    {
+        for (StyledElement? e = target as StyledElement; e is not null; e = e.Parent)
+            if (e.Classes.Contains("raw")) return true;
+        return false;
+    }
+
+    // ------------------------------------------------------------------------------------------ theme
+    static List<Themes.Theme>? _themes;
+    static Dictionary<string, Themes.Theme>? _modes;
+
+    static void LoadThemes()
+    {
+        if (_themes is not null) return;
+        Dictionary<string, string> files = Files("themes");
+        _modes = Themes.Modes.Where(files.ContainsKey).ToDictionary(m => m, m => Themes.FromYaml(m, files[m]));
+        _themes = files.Where(f => !Themes.Modes.Contains(f.Key, StringComparer.OrdinalIgnoreCase))
+                       .Select(f => Themes.FromYaml(f.Key, f.Value)).OrderBy(t => t.Order).ThenBy(t => t.Name).ToList();
+    }
+
+    /// <summary>Every theme (Temucraft, then the expansions, then any added ones).</summary>
+    public static IReadOnlyList<Themes.Theme> ThemeList { get { LoadThemes(); return _themes!; } }
+
+    public static string Mode { get; private set; } = "dark";
+    public static string Theme { get; private set; } = "";
+
+    /// <summary>Picks the mode and theme (the server's enforced ones, the player's, the server's default) and applies them.</summary>
+    public static void UseTheme(UserSettings settings)
+    {
+        LoadThemes();
+        (string mode, string theme) = Themes.Pick(settings.ThemeMode, settings.Theme, settings.ServerLook ?? new(), _themes!.Select(t => t.Id));
+        Apply(mode, theme);
+    }
+
+    /// <summary>Puts the colours in the app's resources ("T.accent"...): the whole window follows straight away.</summary>
+    public static void Apply(string mode, string theme)
+    {
+        LoadThemes();
+        if (Application.Current is not { } app) return;
+        Mode = mode;
+        Theme = theme;
+        Dictionary<string, string> colours = Themes.Resolve(_modes!.GetValueOrDefault(mode), _themes!.FirstOrDefault(t => t.Id == theme), mode,
+                                                            _modes!.GetValueOrDefault("dark"));
+        foreach ((string key, string value) in colours)
+            app.Resources["T." + key] = new SolidColorBrush(Color.Parse(value));
+        app.RequestedThemeVariant = mode == "light" ? ThemeVariant.Light : ThemeVariant.Dark;
+        // the switches, check boxes and sliders in the theme's colour
+        if (colours.TryGetValue("accent", out string? accent))
+        {
+            Color c = Color.Parse(accent);
+            app.Resources["SystemAccentColor"] = c;
+            for (int i = 1; i <= 3; i++)
+            {
+                app.Resources[$"SystemAccentColorDark{i}"] = Shade(c, 1 - 0.15 * i);
+                app.Resources[$"SystemAccentColorLight{i}"] = Shade(c, 1 + 0.15 * i);
+            }
+        }
+    }
+
+    /// <summary>A fixed colour (news tags, {+better} values) made darker in light mode so it reads on white.</summary>
+    public static Color Readable(string colour)
+    {
+        Color c = Color.Parse(colour);
+        return Mode == "light" ? Shade(c, 0.6) : c;
+    }
+
+    static Color Shade(Color c, double factor)
+    {
+        byte Part(byte v) => (byte)Math.Clamp(factor <= 1 ? v * factor : v + (255 - v) * (factor - 1), 0, 255);
+        return Color.FromRgb(Part(c.R), Part(c.G), Part(c.B));
+    }
+}

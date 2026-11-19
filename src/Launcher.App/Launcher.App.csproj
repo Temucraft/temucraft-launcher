@@ -23,6 +23,9 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- the launcher's languages and themes; a "lang" or "themes" folder next to the launcher adds or replaces them -->
+    <EmbeddedResource Include="Lang\*.yml" LogicalName="lang/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Themes\*.yml" LogicalName="themes/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

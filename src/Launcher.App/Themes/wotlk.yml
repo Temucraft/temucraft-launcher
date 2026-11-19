@@ -1,0 +1,11 @@
+# Wrath of the Lich King: Northrend ice.
+name: Wrath of the Lich King
+order: 3
+accent: "#3BA7E3"
+section: "#3BA7E3"
+dark.background: "#0E0F11"
+dark.panel: "#CC141619"
+dark.border: "#1D3A4B"
+dark.field: "#101114"
+light.accent: "#24678C"
+light.section: "#24678C"

@@ -1,0 +1,11 @@
+# Battle for Azeroth: deep sea blue.
+name: Battle for Azeroth
+order: 8
+accent: "#2F6FD6"
+section: "#2F6FD6"
+dark.background: "#0B0E13"
+dark.panel: "#CC10141C"
+dark.border: "#172A4A"
+dark.field: "#0C1016"
+light.accent: "#1D4484"
+light.section: "#1D4484"

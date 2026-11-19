@@ -82,11 +82,37 @@ recommendation (and as the value outright where the launcher has no box for it).
 | `defaultLocale` | e.g. `"enUS"` | the server's default language (its base client's): always installed, ticked and greyed out; `enUS` when not set. The game's own language is always kept too. |
 | `requiredLocales` | e.g. `["deDE"]` | extra languages everyone gets (players can still add more) |
 | `news`, `changelog` | `{"show": true, "entries": 20, "more": 20}` | whether the panel shows (the other one then takes the whole page), how many entries at first, and how many "Load more" adds; `-1` makes it "Load all". The launcher keeps the last ones it got, so they show at once on the next start. |
-| `tweaks` | `{"<CVar>": {...}}` | any `Config.wtf` value by its name, the Tweaks page's or any other (e.g. `farclip`, `maxFPS`); enforced ones are written to `Config.wtf` after every update and on Save, others show as the recommendation ("Use recommended") |
+| `tweaks` | `{"<CVar>": {...}}` | any `Config.wtf` value by its name, the Tweaks page's or any other (e.g. `farclip`, `maxFPS`); enforced ones are written to `Config.wtf` after every update and on Save, others show as the recommendation ("Use recommended"). DXVK's settings (`d3d9.maxFrameRate`, `d3d9.samplerAnisotropy`, `d3d9.presentInterval`, `dxvk.hud`) go to `dxvk.conf`; Awesome WotLK's (`nameplateDistance`, `cameraFov`) to `Config.wtf`. The Tweaks page only shows those while that option is on. |
+| `theme` | e.g. `"temucraft"`, `"wotlk"` | the launcher's default theme (see Themes below) |
+| `themeMode` | `"dark"` or `"light"` | the default mode |
 
 Names the launcher doesn't know are skipped and noted in its log, so a newer policy never breaks an older launcher.
-See `server/examples/launcher-policy.json`. An option group's `group.json` can say `"enforce": true` too: everyone
+`launcher-policy.json` may hold `//` and `/* */` comments; `make-manifest.py` removes them. See
+`server/examples/launcher-policy.json`. An option group's `group.json` can say `"enforce": true` too: everyone
 then gets its first option.
+
+## Languages
+
+The launcher's own text comes in the languages the 3.3.5a client has: English (enUS), German (deDE), French (frFR),
+Spanish (esES and esMX), Russian (ruRU), Korean (koKR) and Chinese (zhCN and zhTW), in `src/Launcher.App/Lang/*.yml`.
+By default it uses the computer's language (English when the game has no such language); `LANGUAGE=enUS` (or `deDE`,
+`ruRU`...) in `launcher.env` picks one instead, and the player can still choose another on the Launcher page. Only the
+launcher's words are translated: what the server writes (news, changelog, option names) shows as the server wrote it.
+
+Each file is one line per text, the English text first: `"Save": "Speichern"`. `{0}`, `{1}` stand for parts that
+change (`"Downloading {0}": "Lade {0} herunter"`). A `lang` folder next to the launcher can hold your own files: one
+with the same name replaces the built-in one, and a missing line just stays English.
+
+## Themes
+
+Like the database website, the look has two parts: a **mode** (Dark, the default, or Light) and a **theme**: Temucraft,
+or one per expansion (Vanilla, The Burning Crusade, Wrath of the Lich King ... Midnight). The player picks both on the
+Launcher page; the server picks the defaults with `theme` and `themeMode` in `launcher-policy.json` and can enforce
+them. The launcher remembers the server's choice, so the next start opens in it straight away.
+
+The files are in `src/Launcher.App/Themes/`: `dark.yml` and `light.yml` set every colour; a theme file sets `name`,
+`order`, colours for both modes (`accent: "#3BA7E3"`) and colours for one mode (`light.accent: "#24678C"`). A
+`themes` folder next to the launcher adds more themes or replaces the built-in ones.
 
 ## The log
 
