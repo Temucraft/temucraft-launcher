@@ -530,7 +530,7 @@ public partial class MainWindow : Window
             if (!haveGame)
             {
                 // connected, but no game yet: the tabs are filled in; the game files come from Install game files…
-                Status(Folder.Length > 0
+                Status(folder.Length > 0   // the value read before the job: the folder box only works on the window's thread
                     ? "Connected. There's no game in your WoW folder yet: press INSTALL to download it there."
                     : "Connected. Pick your WoW folder under Settings, or an empty folder to install the game into.");
                 await Dispatcher.UIThread.InvokeAsync(ShowPlayState);

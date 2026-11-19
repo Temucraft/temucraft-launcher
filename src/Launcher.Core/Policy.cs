@@ -40,7 +40,7 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// <list type="bullet">
 /// <item>On/off: installAddons, clearCache, reopenAfterGame, rememberWindow, backupBeforeUpdate, largeAddressAware</item>
 /// <item>backupsToKeep: a number</item>
-/// <item>requiredLocales: languages everyone gets, e.g. ["enUS"] (players may add more)</item>
+/// <item>requiredLocales: languages everyone gets (players may add more); enUS when not set, [] for none</item>
 /// <item>tweaks: any Config.wtf value by its CVar name, the Tweaks page's or any other, e.g. "farclip"</item>
 /// </list>
 /// Names the launcher doesn't know are kept in <see cref="Unknown"/> (and logged), never an error.
@@ -88,7 +88,11 @@ public sealed class LauncherPolicy
 
     public bool? EnforcedBool(string key) => Setting(key) is { Enforce: true } rule ? rule.Bool : null;
 
-    public IReadOnlyList<string> RequiredLocales => Setting("requiredLocales")?.Strings ?? [];
+    /// <summary>Languages everyone gets: the server's list, or enUS when it doesn't say (the base client and the
+    /// Temucraft patches are English). An empty list ([]) requires none.</summary>
+    public IReadOnlyList<string> RequiredLocales => Setting("requiredLocales")?.Strings ?? DefaultRequiredLocales;
+
+    public static readonly IReadOnlyList<string> DefaultRequiredLocales = ["enUS"];
 
     public IEnumerable<KeyValuePair<string, PolicyRule>> EnforcedTweaks => Tweaks.Where(t => t.Value.Enforce);
 

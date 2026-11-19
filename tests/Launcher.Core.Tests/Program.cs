@@ -678,6 +678,8 @@ static Task PolicyReadsEverything()
     Assert(p.Setting("backupsToKeep") is { Int: 3, Enforce: false }, "backupsToKeep");
     Assert(p.EnforcedBool("largeAddressAware") == true, "a string \"on\" isn't true");
     Assert(p.RequiredLocales.SequenceEqual(["enUS", "deDE"]), "required locales: " + string.Join(",", p.RequiredLocales));
+    Assert(LauncherPolicy.From(null).RequiredLocales.SequenceEqual(["enUS"]), "enUS isn't required by default");
+    Assert(Manifest.Parse("""{"files": [], "policy": {"requiredLocales": {"value": []}}}""").Rules.RequiredLocales.Count == 0, "[] must require none");
     Assert(p.Setting("clearCache") is { Enforce: false, Bool: false }, "a bare value isn't a recommendation");
     Assert(p.Unknown.Contains("somethingNew") && p.Unknown.Contains("tweaks.SET weird"), "unknown names: " + string.Join(",", p.Unknown));
     Assert(p.Tweaks["FARCLIP"].CVarText == "1277" && p.Tweaks["gxWindow"].CVarText == "1" && p.Tweaks["cameraDistanceMaxFactor"].CVarText == "2.5",
