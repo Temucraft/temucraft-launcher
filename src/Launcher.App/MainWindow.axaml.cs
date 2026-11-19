@@ -49,6 +49,24 @@ public partial class MainWindow : Window
         {
             _server = ServerSettings.Load(Path.Combine(AppContext.BaseDirectory, "launcher.env"));
             ServerText.Text = _server.ServerUrl.Host;
+            ServerText.IsVisible = _server.ShowIp;
+            AccountText.IsVisible = _server.ShowUsername;
+            // the server's websites (register page, database...) as links in the header
+            foreach ((string name, Uri url) in _server.Nav)
+            {
+                Button link = new() { Content = name, Classes = { "link" }, FontSize = 12, Padding = new Thickness(6, 0, 0, 0) };
+                ToolTip.SetTip(link, url.ToString());
+                link.Click += (_, _) => OpenUrl(url.ToString());
+                NavLinks.Children.Add(link);
+            }
+            // the same links under the login (a new player needs Register before they have a login)
+            foreach ((string name, Uri url) in _server.Nav)
+            {
+                Button link = new() { Content = name, Classes = { "link" }, FontSize = 12 };
+                ToolTip.SetTip(link, url.ToString());
+                link.Click += (_, _) => OpenUrl(url.ToString());
+                LoginLinks.Children.Add(link);
+            }
         }
         catch (Exception e)
         {
@@ -79,6 +97,13 @@ public partial class MainWindow : Window
             Position = new PixelPoint((int)x, (int)y);
             Width = _settings.WindowWidth;
             Height = _settings.WindowHeight;
+        }
+        // the changelog's tag colours, as a legend under its title
+        TagLegend.Inlines ??= [];
+        foreach ((string tag, string color) in NewsItem.Tags)
+        {
+            TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run($"[{tag}]") { Foreground = new SolidColorBrush(Color.Parse(color)), FontWeight = FontWeight.SemiBold });
+            TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run("  "));
         }
         BuildTweaks();
         RefreshInstalledAddons();
@@ -494,12 +519,20 @@ public partial class MainWindow : Window
         list.Children.Clear();
         if (items.Count == 0)
             list.Children.Add(new TextBlock { Text = "Nothing yet.", Classes = { "dim" } });
-        foreach (NewsItem item in items)
+        IReadOnlyList<string> dates = NewsItem.DateLines(items);
+        for (int i = 0; i < items.Count; i++)
         {
+            NewsItem item = items[i];
             StackPanel card = new() { Spacing = 4 };
-            if (item.Date.Length > 0) card.Children.Add(new TextBlock { Text = item.Date, Classes = { "dim" }, FontSize = 12 });
+            if (dates[i].Length > 0) card.Children.Add(new TextBlock { Text = dates[i], Classes = { "dim" }, FontSize = 12 });
             if (item.Title.Length > 0) card.Children.Add(new TextBlock { Text = item.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#F2C14E")), TextWrapping = TextWrapping.Wrap });
-            card.Children.Add(new SelectableTextBlock { Text = item.Text, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) });
+            // [New], [Fixed], [Not live yet]... in their colours
+            SelectableTextBlock body = new() { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) };
+            body.Inlines ??= [];
+            foreach ((string part, string? color) in NewsItem.Segments(item.Text))
+                body.Inlines.Add(color is null ? new Avalonia.Controls.Documents.Run(part)
+                    : new Avalonia.Controls.Documents.Run(part) { Foreground = new SolidColorBrush(Color.Parse(color)), FontWeight = FontWeight.SemiBold });
+            card.Children.Add(body);
             if (Uri.TryCreate(item.Link, UriKind.Absolute, out Uri? link) && link.Scheme is "https" or "http")
             {
                 Button open = new() { Content = "Read more", Classes = { "link" } };
@@ -787,11 +820,27 @@ public partial class MainWindow : Window
                 Text = t.Name, VerticalAlignment = VerticalAlignment.Center,
                 Foreground = new SolidColorBrush(Color.Parse(t.Highlighted ? "#8FC24A" : "#E8E2D0")),
             });
+            // numbers: a number box that only takes numbers and keeps them in the setting's range
             Control control = t.Kind == TweakKind.Toggle
                 ? new CheckBox()
-                : new TextBox { Width = 90, HorizontalAlignment = HorizontalAlignment.Left };
+                : new NumericUpDown
+                {
+                    Width = 130, HorizontalAlignment = HorizontalAlignment.Left,
+                    Minimum = (decimal)t.Min, Maximum = (decimal)t.Max, ClipValueToMinMax = true,
+                    Increment = t.Max - t.Min <= 4 ? 0.5m : 1m, FormatString = "0.###",
+                    ParsingNumberStyle = System.Globalization.NumberStyles.Float,
+                };
+            if (control is NumericUpDown range) ToolTip.SetTip(range, $"Between {Tweaks.Format(t.Min)} and {Tweaks.Format(t.Max)}");
             Grid.SetColumn(control, 1);
             row.Children.Add(control);
+            if (control is CheckBox check) check.IsCheckedChanged += (_, _) => TweakEdited();
+            else if (control is NumericUpDown number)
+                number.ValueChanged += (_, e) =>
+                {
+                    // never outside the setting's range, however the value got there
+                    if (e.NewValue is decimal v && (v < number.Minimum || v > number.Maximum)) { number.Value = Math.Clamp(v, number.Minimum, number.Maximum); return; }
+                    TweakEdited();
+                };
             TextBlock description = new() { Text = t.Description, Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
             Grid.SetColumn(description, 2);
             row.Children.Add(description);
@@ -829,13 +878,89 @@ public partial class MainWindow : Window
         TweaksHint.IsVisible = !GameFolder.LooksLikeClient(Folder);
         if (TweaksHint.IsVisible) return;
         ConfigWtf config = ConfigWtf.Load(Folder);
+        _fillingTweaks = true;
         foreach (Tweak t in Tweaks.All)
             SetTweak(t.CVar, config.Get(t.CVar) ?? t.Default);
+        _fillingTweaks = false;
         foreach (string cvar in _serverTweaks)
             SetTweak(cvar, config.Get(cvar) ?? TweakRule(cvar)?.CVarText ?? "");
         try { if (_laaBox is not null) _laaBox.IsChecked = LargeAddressAware.IsEnabled(GameFolder.ExePath(Folder)); }
         catch (Exception e) { Logger.Warning("Large Address Aware", e); }
+        // a fresh game (none of these set yet) starts on the server's recommendation, or the defaults; a game with its
+        // own settings keeps them and shows whichever preset they match
+        bool fresh = Tweaks.All.All(t => config.Get(t.CVar) is null);
+        if (fresh && !_settings.TweakPresetChosen) FillPreset(_policy.Tweaks.Count > 0 ? "server" : "default");
         LockEnforcedTweaks();
+        MarkPreset(MatchingPreset());
+    }
+
+    // ------------------------------------------------------------------------------------- presets
+    bool _fillingTweaks;   // true while the launcher fills the boxes itself (not the player editing)
+
+    /// <summary>The value a preset gives a tweak: the server's recommendation, the launcher's, or its default.</summary>
+    string PresetValue(string preset, Tweak t) => preset switch
+    {
+        "server" => TweakRule(t.CVar)?.CVarText ?? t.Default,
+        "recommended" => t.Recommended,
+        _ => t.Default,
+    };
+
+    void FillPreset(string preset)
+    {
+        _fillingTweaks = true;
+        try
+        {
+            foreach (Tweak t in Tweaks.All) SetTweak(t.CVar, PresetValue(preset, t));
+            foreach (string cvar in _serverTweaks) SetTweak(cvar, preset == "server" ? TweakRule(cvar)?.CVarText ?? "" : "");
+            if (_laaBox is not null && preset != "default") _laaBox.IsChecked = _policy.Setting("largeAddressAware")?.Bool ?? true;
+            LockEnforcedTweaks();
+        }
+        finally { _fillingTweaks = false; }
+        MarkPreset(preset);
+    }
+
+    /// <summary>The preset the boxes match (server first), or "custom".</summary>
+    string MatchingPreset()
+    {
+        string Current(Tweak t) => _tweakControls.GetValueOrDefault(t.CVar) switch
+        {
+            CheckBox box => box.IsChecked == true ? "1" : "0",
+            NumericUpDown { Value: decimal v } => Tweaks.Format((double)v),
+            TextBox text => text.Text?.Trim() ?? "",
+            _ => "",
+        };
+        bool Same(string a, string b) => a == b || (double.TryParse(a, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double x)
+            && double.TryParse(b, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double y) && x == y);
+        foreach (string preset in _policy.Tweaks.Count > 0 ? new[] { "server", "recommended", "default" } : ["recommended", "default"])
+            if (Tweaks.All.All(t => Same(Current(t), PresetValue(preset, t)))) return preset;
+        return "custom";
+    }
+
+    /// <summary>Gold border on the active preset; "Custom" when the boxes match none.</summary>
+    void MarkPreset(string preset)
+    {
+        _settings.TweakPreset = preset;
+        PresetServer.Classes.Set("active", preset == "server");
+        PresetRecommended.Classes.Set("active", preset == "recommended");
+        PresetDefault.Classes.Set("active", preset == "default");
+        PresetCustom.IsVisible = preset == "custom";
+        PresetServer.IsEnabled = _policy.Tweaks.Count > 0;
+        ToolTip.SetTip(PresetServer, _policy.Tweaks.Count > 0 ? "The server's values; the rest at the launcher's defaults" : "This server recommends nothing");
+    }
+
+    void OnServerTweaks(object? sender, RoutedEventArgs e)
+    {
+        _settings.TweakPresetChosen = true;
+        FillPreset("server");
+        Status("The server's recommended values are filled in; press Save.");
+    }
+
+    /// <summary>The player changed a box: no preset any more (unless it happens to match one).</summary>
+    void TweakEdited()
+    {
+        if (_fillingTweaks) return;
+        _settings.TweakPresetChosen = true;
+        MarkPreset(MatchingPreset());
     }
 
     /// <summary>Tweaks the server enforces: shown with the server's value and greyed out.</summary>
@@ -863,6 +988,10 @@ public partial class MainWindow : Window
         switch (_tweakControls.GetValueOrDefault(cvar))
         {
             case CheckBox box: box.IsChecked = value == "1"; break;
+            case NumericUpDown number:
+                number.Value = decimal.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out decimal v)
+                    ? Math.Clamp(v, number.Minimum, number.Maximum) : null;
+                break;
             case TextBox text: text.Text = value; break;
         }
     }
@@ -878,14 +1007,17 @@ public partial class MainWindow : Window
                 string? value = _tweakControls[t.CVar] switch
                 {
                     CheckBox box => box.IsChecked == true ? "1" : "0",
-                    TextBox text when double.TryParse(text.Text, System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture, out double number) => Tweaks.Format(Math.Clamp(number, t.Min, t.Max)),
-                    _ => null,
+                    NumericUpDown { Value: decimal number } => Tweaks.Format(Math.Clamp((double)number, t.Min, t.Max)),
+                    _ => null,   // an empty number box leaves the game's own value alone
                 };
                 if (value is not null) config.Set(t.CVar, value);
             }
             foreach (string cvar in _serverTweaks)
-                if (_tweakControls[cvar] is TextBox { Text: { Length: > 0 } text }) config.Set(cvar, text.Trim());
+                if (_tweakControls[cvar] is TextBox { Text: { Length: > 0 } text })
+                {
+                    string clean = new string(text.Trim().Where(c => c is not ('"' or '\r' or '\n')).ToArray());
+                    if (clean.Length > 0) config.Set(cvar, clean);
+                }
             _policy.ApplyEnforcedTweaks(config);   // enforced values win, whatever the boxes say
             config.Save();
             if (_laaBox is not null) LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true);
@@ -902,19 +1034,16 @@ public partial class MainWindow : Window
 
     void OnRecommendedTweaks(object? sender, RoutedEventArgs e)
     {
-        // the server's recommendation first, then the launcher's own
-        foreach (Tweak t in Tweaks.All) SetTweak(t.CVar, TweakRule(t.CVar)?.CVarText ?? t.Recommended);
-        foreach (string cvar in _serverTweaks) SetTweak(cvar, TweakRule(cvar)?.CVarText ?? "");
-        if (_laaBox is not null) _laaBox.IsChecked = _policy.Setting("largeAddressAware")?.Bool ?? true;
-        LockEnforcedTweaks();
-        Status("Recommended values filled in; press Save.");
+        _settings.TweakPresetChosen = true;
+        FillPreset("recommended");
+        Status("The launcher's recommended values are filled in; press Save.");
     }
 
     void OnDefaultTweaks(object? sender, RoutedEventArgs e)
     {
-        foreach (Tweak t in Tweaks.All) SetTweak(t.CVar, t.Default);
-        LockEnforcedTweaks();
-        Status("Default values filled in; press Save.");
+        _settings.TweakPresetChosen = true;
+        FillPreset("default");
+        Status("The launcher's default values are filled in; press Save.");
     }
 
     // ------------------------------------------------------------------------------------------- addons

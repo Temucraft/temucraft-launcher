@@ -25,6 +25,14 @@ public sealed class ServerSettings
     /// (see <see cref="ClientInfo.Normalize"/>); empty only with COLLECT=none.</summary>
     public IReadOnlyList<string> Collect { get; init; } = [];
 
+    /// <summary>Links to the server's websites in the launcher's header (NAV=Name|https://...; Other|https://...).</summary>
+    public IReadOnlyList<(string Name, Uri Url)> Nav { get; init; } = [];
+
+    /// <summary>Show the server's address (SHOW_IP) and the logged-in username (SHOW_USERNAME) in the header; both on
+    /// unless set to 0.</summary>
+    public bool ShowIp { get; init; } = true;
+    public bool ShowUsername { get; init; } = true;
+
     /// <summary>The server's name for the login window (SERVER_NAME), e.g. "Temucraft"; empty: "this server".</summary>
     public string Name { get; init; } = "";
 
@@ -38,6 +46,21 @@ public sealed class ServerSettings
                 $"{System.IO.Path.GetFileName(envFile)} is missing. Copy launcher.env.example next to the launcher " +
                 "as launcher.env and put your server's address in it.", envFile);
         return Parse(File.ReadAllLines(envFile));
+    }
+
+    /// <summary>"Register|https://a/; AoWoW|https://b/": only http(s) links, others are skipped.</summary>
+    public static IReadOnlyList<(string Name, Uri Url)> ParseNav(string text)
+    {
+        List<(string, Uri)> links = [];
+        foreach (string part in text.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int bar = part.IndexOf('|');
+            if (bar <= 0) continue;
+            string name = part[..bar].Trim();
+            if (Uri.TryCreate(part[(bar + 1)..].Trim(), UriKind.Absolute, out Uri? url) && url.Scheme is "https" or "http" && name.Length > 0)
+                links.Add((name, url));
+        }
+        return links;
     }
 
     public static ServerSettings Parse(IEnumerable<string> lines)
@@ -75,7 +98,10 @@ public sealed class ServerSettings
         IReadOnlyList<string> collect = ClientInfo.Normalize(values.TryGetValue("COLLECT", out string? list) ? list.Split(',') : null);
         string note = values.TryGetValue("COLLECT_NOTE", out string? n) ? n.Replace("\\n", "\n") : "";
         return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin, Collect = collect, CollectNote = note,
-            Name = values.TryGetValue("SERVER_NAME", out string? name) ? name : "" };
+            Name = values.TryGetValue("SERVER_NAME", out string? name) ? name : "",
+            Nav = values.TryGetValue("NAV", out string? nav) ? ParseNav(nav) : [],
+            ShowIp = !values.TryGetValue("SHOW_IP", out string? ip) || ip is not ("0" or "false" or "no"),
+            ShowUsername = !values.TryGetValue("SHOW_USERNAME", out string? user) || user is not ("0" or "false" or "no") };
     }
 }
 
@@ -100,6 +126,10 @@ public sealed class UserSettings
     /// <summary>Background picture of the launcher ("" = the default).</summary>
     public string Background { get; set; } = "";
     public bool BackupBeforeUpdate { get; set; } = true;
+    /// <summary>The Tweaks page's preset: "server", "recommended", "default" or "custom" ("" = not chosen yet).</summary>
+    public string TweakPreset { get; set; } = "";
+    /// <summary>True once the player picked a preset or changed a tweak themselves (then nothing is filled in for them).</summary>
+    public bool TweakPresetChosen { get; set; }
     public int BackupsToKeep { get; set; } = 10;
     /// <summary>Installed catalog addons and the commit they were installed from (to offer updates).</summary>
     public Dictionary<string, string> AddonCommits { get; set; } = [];

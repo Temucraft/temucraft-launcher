@@ -44,6 +44,9 @@ List<(string Name, Func<Task> Body)> tests =
     ("Only what the server lists is read and sent, one header each", ClientInfoSent),
     ("Remember me works through the Linux keyring (secret-tool)", LinuxKeyring),
     ("Only real MACs and useful local addresses are reported", ClientInfoFilters),
+    ("News dates read as 18th of November 2026 (18/11/2026), numbered per day", NewsDates),
+    ("Website links and the header switches are read from launcher.env", NavAndHeader),
+    ("Changelog tags are found and coloured", NewsTags),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -772,6 +775,42 @@ static Task ClientInfoFilters()
         Assert(ClientInfo.IsUsefulLocal(IPAddress.Parse(keep)), "dropped " + keep);
     foreach (string drop in new[] { "fe80::8b63:3ebc:dc5b:d70c%17", "169.254.83.107", "2001:0:4625:9800:3c0b:950:ae3e:d1ee", "127.0.0.1", "::1" })
         Assert(!ClientInfo.IsUsefulLocal(IPAddress.Parse(drop)), "kept " + drop);
+    return Task.CompletedTask;
+}
+
+static Task NewsDates()
+{
+    Assert(NewsItem.FormatDate("2026-11-18") == "18th of November 2026 (18/11/2026)", NewsItem.FormatDate("2026-11-18"));
+    foreach ((string date, string start) in new[] { ("2026-11-01", "1st"), ("2026-11-02", "2nd"), ("2026-11-03", "3rd"), ("2026-11-11", "11th"),
+                                                    ("2026-11-12", "12th"), ("2026-11-13", "13th"), ("2026-11-21", "21st"), ("2026-11-22", "22nd"), ("2026-12-31", "31st") })
+        Assert(NewsItem.FormatDate(date).StartsWith(start + " of "), NewsItem.FormatDate(date));
+    Assert(NewsItem.FormatDate("soon") == "soon", "a free-text date must stay as written");
+    var items = NewsItem.Parse("""[{"date": "2026-11-19", "title": "c"}, {"date": "2026-11-19", "title": "b"}, {"date": "2026-11-19", "title": "a"}, {"date": "2026-11-18", "title": "z"}]""");
+    var lines = NewsItem.DateLines(items);
+    Assert(lines[0] == "#3 · 19th of November 2026 (19/11/2026)" && lines[2] == "#1 · 19th of November 2026 (19/11/2026)", lines[0] + " / " + lines[2]);
+    Assert(lines[3] == "18th of November 2026 (18/11/2026)", "a single entry that day got a number: " + lines[3]);
+    return Task.CompletedTask;
+}
+
+static Task NavAndHeader()
+{
+    ServerSettings s = ServerSettings.Parse(["SERVER_URL=https://f.example/",
+        "NAV=Register|https://f.example:4000/; AoWoW|https://db.example/ ; Bad|javascript:alert(1); NoName|; |https://x/",
+        "SHOW_IP=0"]);
+    Assert(s.Nav.Select(n => n.Name).SequenceEqual(["Register", "AoWoW"]), "links: " + string.Join(",", s.Nav.Select(n => n.Name)));
+    Assert(s.Nav[0].Url.Port == 4000, "port");
+    Assert(!s.ShowIp && s.ShowUsername, "switches");
+    ServerSettings d = ServerSettings.Parse(["SERVER_URL=https://f.example/"]);
+    Assert(d.Nav.Count == 0 && d.ShowIp && d.ShowUsername, "defaults");
+    return Task.CompletedTask;
+}
+
+static Task NewsTags()
+{
+    var parts = NewsItem.Segments("• [new] Login window\n• [Not live yet] Wardrobe [not a tag] [Fixed]");
+    Assert(parts.Count(p => p.Color is not null) == 3, string.Join("|", parts.Select(p => p.Text)));
+    Assert(parts[1] == ("[New]", "#8FC24A"), "tag written in its own spelling and colour");
+    Assert(string.Concat(parts.Select(p => p.Text)).Contains("[not a tag]"), "an unknown bracket was changed");
     return Task.CompletedTask;
 }
 

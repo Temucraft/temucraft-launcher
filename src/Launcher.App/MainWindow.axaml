@@ -1,15 +1,15 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Launcher.App.MainWindow"
-        Title="Temucraft Launcher" Icon="/Assets/temucraft.ico" Width="980" Height="640" MinWidth="820" MinHeight="560"
+        Title="Temucraft Launcher" Icon="/Assets/temucraft.ico" Width="980" Height="640" MinWidth="960" MinHeight="560"
         Background="#0E0B14">
   <Window.Styles>
     <Style Selector="Button.tab">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="#E8E2D0" />
-      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Padding" Value="8,6" />
     </Style>
     <Style Selector="Button.tab.selected">
       <Setter Property="Foreground" Value="#F2C14E" />
@@ -49,6 +49,14 @@
     <Style Selector="Button.play.update">
       <Setter Property="Background" Value="#B5501E" />
     </Style>
+    <Style Selector="Button.preset">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.preset.active">
+      <Setter Property="BorderBrush" Value="#F2C14E" />
+      <Setter Property="Foreground" Value="#F2C14E" />
+    </Style>
     <Style Selector="Button.link">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="#8FC24A" />
@@ -65,10 +73,12 @@
       <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Image Source="/Assets/temucraft.png" Width="44" Height="44" Margin="0,0,10,0" VerticalAlignment="Center" />
-          <TextBlock Text="TEMUCRAFT" FontSize="30" FontWeight="Black" Foreground="#F2C14E" VerticalAlignment="Center" />
-          <TextBlock Name="ServerText" Classes="dim" VerticalAlignment="Center" Margin="12,6,0,0" FontSize="12" />
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="TEMUCRAFT" FontSize="30" FontWeight="Black" Foreground="#F2C14E" LineHeight="32" />
+            <TextBlock Name="ServerText" Classes="dim" FontSize="11" Margin="2,0,0,0" />
+          </StackPanel>
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="28,0,0,0" VerticalAlignment="Center" Spacing="2">
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="24,0,0,0" VerticalAlignment="Center" Spacing="0">
           <Button Name="NewsTab" Classes="tab selected" Content="NEWS" Click="OnTab" Tag="0" />
           <Button Name="TweaksTab" Classes="tab" Content="TWEAKS" Click="OnTab" Tag="1" />
           <Button Name="AddonsTab" Classes="tab" Content="ADDONS" Click="OnTab" Tag="2" />
@@ -76,7 +86,11 @@
           <Button Name="SettingsTab" Classes="tab" Content="SETTINGS" Click="OnTab" Tag="4" />
           <Button Name="LauncherTab" Classes="tab" Content="LAUNCHER" Click="OnTab" Tag="5" />
         </StackPanel>
-        <TextBlock Grid.Column="2" Name="AccountText" Foreground="#E8E2D0" VerticalAlignment="Center" />
+        <!-- right: the username, and the server's website links under it -->
+        <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
+          <TextBlock Name="AccountText" Foreground="#E8E2D0" HorizontalAlignment="Right" FontSize="13" />
+          <StackPanel Name="NavLinks" Orientation="Horizontal" Spacing="0" HorizontalAlignment="Right" />
+        </StackPanel>
       </Grid>
 
       <!-- footer -->
@@ -108,7 +122,8 @@
           </Border>
           <Border Grid.Column="2" Classes="panel">
             <DockPanel>
-              <TextBlock DockPanel.Dock="Top" Classes="title" Text="CHANGELOG" />
+              <TextBlock DockPanel.Dock="Top" Classes="title" Text="CHANGELOG" Margin="0,0,0,2" />
+              <TextBlock DockPanel.Dock="Top" Name="TagLegend" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap" />
               <ScrollViewer><StackPanel Name="ChangelogList" Spacing="14" /></ScrollViewer>
             </DockPanel>
           </Border>
@@ -117,11 +132,21 @@
         <!-- 1 tweaks -->
         <Border Name="TweaksPage" Classes="panel" IsVisible="False">
           <DockPanel>
-            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
-              <Button Content="Save" Click="OnSaveTweaks" />
-              <Button Content="Use recommended" Click="OnRecommendedTweaks" />
-              <Button Content="Restore defaults" Click="OnDefaultTweaks" />
-              <TextBlock Classes="dim" VerticalAlignment="Center" Text="Highlighted options are recommended. Changes are written to WTF\Config.wtf; close the game first." />
+            <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,10,0,0">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Save" Click="OnSaveTweaks" />
+                <Border Width="1" Background="#3A3346" Margin="4,2" />
+                <Button Name="PresetServer" Classes="preset" Content="Server recommended" Click="OnServerTweaks" />
+                <Button Name="PresetRecommended" Classes="preset" Content="Recommended" Click="OnRecommendedTweaks" />
+                <Button Name="PresetDefault" Classes="preset" Content="Default" Click="OnDefaultTweaks"
+                        ToolTip.Tip="Back to the launcher's defaults" />
+                <TextBlock Name="PresetCustom" Text="Custom" Foreground="#F2C14E" VerticalAlignment="Center" Margin="6,0,0,0" IsVisible="False"
+                           ToolTip.Tip="Your own values: none of the presets" />
+              </StackPanel>
+              <TextBlock Classes="dim" TextWrapping="Wrap">
+                <Run Text="Highlighted" Foreground="#8FC24A" FontFamily="Consolas, Cascadia Mono, Menlo, DejaVu Sans Mono, monospace" />
+                <Run Text=" options are the launcher's recommended ones. Changes are written to WTF\Config.wtf when you press Save; close the game first." />
+              </TextBlock>
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Name="TweaksHint" Classes="dim" IsVisible="False" Margin="0,0,0,8"
                        Text="These are read from your game's WTF\Config.wtf: pick your WoW folder under Settings, or install the game files there first." />
@@ -289,6 +314,7 @@
                         HorizontalContentAlignment="Center" Click="OnLogin" />
                 <Button Grid.Column="2" Content="Not now" Click="OnLoginLater" />
               </Grid>
+              <WrapPanel Name="LoginLinks" HorizontalAlignment="Center" />
             </StackPanel>
             <Border Grid.Column="2" Background="#22FFFFFF" CornerRadius="4" Padding="14,12" VerticalAlignment="Center">
               <StackPanel Spacing="6">

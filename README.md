@@ -50,6 +50,10 @@ The window has six pages:
 - **Launcher**: the launcher's own settings (reopen after WoW closes, remember the window, background picture), its
   version and the log.
 
+**The header** shows the server's address and the logged-in username (`SHOW_IP=0` / `SHOW_USERNAME=0` in
+`launcher.env` hide them) and links to the server's websites: `NAV=Register|https://...; Database|https://...` (only
+http and https links).
+
 **Knowing who connects.** The server's owner can have the launcher send information about the player's PC: its
 version, the operating system with version and build, a random ID for the install, the computer's name, the operating
 system username, the MAC addresses, the local IP addresses, time zone, language and hardware. The launcher's version,

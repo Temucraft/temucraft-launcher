@@ -14,6 +14,60 @@ public sealed class NewsItem
     static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
     public static IReadOnlyList<NewsItem> Parse(string? json) =>
         string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<NewsItem>>(json, Json) ?? [];
+
+    /// <summary>The tags news and changelog lines can carry, in square brackets, with their colours.</summary>
+    public static readonly IReadOnlyList<(string Tag, string Color)> Tags =
+    [
+        ("New", "#8FC24A"), ("Changed", "#F2C14E"), ("Fixed", "#5FB8D9"), ("Removed", "#E06C5C"),
+        ("Planned", "#B48CE0"), ("Not live yet", "#E0894A"),
+    ];
+
+    /// <summary>Splits text into plain parts and [Tag] parts (only the known tags); a tag part's Color is set.</summary>
+    public static IReadOnlyList<(string Text, string? Color)> Segments(string text)
+    {
+        List<(string, string?)> parts = [];
+        int at = 0;
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"\[([^\]\n]{2,20})\]"))
+        {
+            (string Tag, string Color) known = Tags.FirstOrDefault(t => t.Tag.Equals(m.Groups[1].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (known.Tag is null) continue;
+            if (m.Index > at) parts.Add((text[at..m.Index], null));
+            parts.Add(($"[{known.Tag}]", known.Color));
+            at = m.Index + m.Length;
+        }
+        if (at < text.Length) parts.Add((text[at..], null));
+        return parts;
+    }
+
+    /// <summary>"18th of November 2026 (18/11/2026)"; the date as written when it isn't YYYY-MM-DD.</summary>
+    public static string FormatDate(string date)
+    {
+        if (!DateOnly.TryParseExact(date.Trim(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out DateOnly d))
+            return date;
+        string suffix = (d.Day % 100) is 11 or 12 or 13 ? "th" : (d.Day % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
+        return $"{d.Day}{suffix} of {d.ToString("MMMM", System.Globalization.CultureInfo.InvariantCulture)} {d.Year} ({d:dd/MM/yyyy})";
+    }
+
+    /// <summary>
+    /// The date line of each item (newest first, as the files list them): days with several entries number them,
+    /// #1 being the day's earliest (the lowest in the list), e.g. "#2 · 19th of November 2026 (19/11/2026)".
+    /// </summary>
+    public static IReadOnlyList<string> DateLines(IReadOnlyList<NewsItem> items)
+    {
+        Dictionary<string, int> perDay = items.GroupBy(i => i.Date.Trim()).ToDictionary(g => g.Key, g => g.Count());
+        Dictionary<string, int> seen = [];
+        List<string> lines = [];
+        foreach (NewsItem item in items)
+        {
+            string day = item.Date.Trim();
+            if (day.Length == 0) { lines.Add(""); continue; }
+            int count = perDay[day], before = seen.GetValueOrDefault(day);
+            seen[day] = before + 1;
+            lines.Add((count > 1 ? $"#{count - before} · " : "") + FormatDate(day));
+        }
+        return lines;
+    }
 }
 
 /// <summary>
