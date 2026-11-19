@@ -18,7 +18,8 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
                                       an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
         launcher-policy.json          the server's say over launcher settings: {"installAddons": {"value": true,
-                                      "enforce": true}, ...}; options/<Group>/group.json may say "enforce": true too
+                                      "enforce": true}, "tweaks": {"farclip": {"value": 1277, "enforce": true}}, ...};
+                                      see the launcher's README; options/<Group>/group.json may say "enforce": true too
         news.json, changelog.json     [{"date": "...", "title": "...", "text": "...", "link": "https://..."}]
         addons.json                   [{"name": "...", "description": "...", "repo": "owner/repo", "branch": "main",
                                         "folders": ["Addon"], "required": true}]
@@ -153,8 +154,10 @@ def build(files_dir, realmlist, cache):
     policy_file = os.path.join(files_dir, "launcher-policy.json")
     if os.path.isfile(policy_file):
         with open(policy_file) as f:
-            manifest["policy"] = {k: {"value": bool(v.get("value")), "enforce": bool(v.get("enforce"))}
-                                  for k, v in json.load(f).items() if isinstance(v, dict)}
+            policy = json.load(f)
+        if not isinstance(policy, dict):
+            sys.exit("launcher-policy.json must be an object: {\"setting\": {\"value\": ..., \"enforce\": true}, ...}")
+        manifest["policy"] = policy   # passed through as it is: the launcher knows the names (unknown ones are skipped)
     version_file = os.path.join(files_dir, "client-version.txt")
     if os.path.isfile(version_file):
         with open(version_file) as f:

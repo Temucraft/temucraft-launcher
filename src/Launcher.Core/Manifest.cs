@@ -25,17 +25,15 @@ public sealed class Manifest
     /// <summary>Paths (relative to the WoW folder) to delete, such as patches that were renamed.</summary>
     public List<string> Obsolete { get; set; } = [];
 
-    /// <summary>
-    /// The server's say over the launcher's settings (launcher-policy.json next to the manifest): per setting a value
-    /// and whether it is enforced. Enforced settings are set by the server and the player can't change them; the
-    /// others stay the player's choice. Keys: installAddons, clearCache, reopenAfterGame, rememberWindow,
-    /// backupBeforeUpdate.
-    /// </summary>
-    public Dictionary<string, PolicySetting> Policy { get; set; } = [];
+    /// <summary>The server's say over the launcher (launcher-policy.json next to the manifest); see <see cref="LauncherPolicy"/>.</summary>
+    public Dictionary<string, JsonElement> Policy { get; set; } = [];
 
-    /// <summary>The enforced value of a setting, or null when the player decides.</summary>
-    public bool? Enforced(string setting) =>
-        Policy.FirstOrDefault(p => p.Key.Equals(setting, StringComparison.OrdinalIgnoreCase)).Value is { Enforce: true } s ? s.Value : null;
+    [JsonIgnore]
+    public LauncherPolicy Rules => _rules ??= LauncherPolicy.From(Policy);
+    LauncherPolicy? _rules;
+
+    /// <summary>The enforced value of an on/off setting, or null when the player decides.</summary>
+    public bool? Enforced(string setting) => Rules.EnforcedBool(setting);
 
     static readonly JsonSerializerOptions Options = new()
     {
@@ -62,12 +60,6 @@ public sealed class Manifest
     public IReadOnlyList<string> Locales =>
         Files.Where(f => f.Category == FileCategory.Locale && f.Locale is not null)
              .Select(f => f.Locale!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
-}
-
-public sealed class PolicySetting
-{
-    public bool Value { get; set; }
-    public bool Enforce { get; set; }
 }
 
 public enum FileCategory

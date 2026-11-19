@@ -40,6 +40,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("A locale file another installed locale already has is copied, not downloaded", LocaleFileCopiedFromOtherLocale),
     ("A copy source that changed is not used", ChangedSourceIsDownloaded),
     ("The server's policy enforces settings and option groups", PolicyEnforces),
+    ("The policy reads every kind of setting and tweak", PolicyReadsEverything),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -650,6 +651,43 @@ static Task PolicyEnforces()
     Dictionary<string, string> picks = new() { ["DXVK"] = "Off", ["Night sky"] = "Off" };
     Assert(UpdatePlanner.ChosenOption(m, picks, "DXVK") == "On", "the player turned off an enforced option");
     Assert(UpdatePlanner.ChosenOption(m, picks, "Night sky") == "Off", "the player's own pick was ignored");
+    return Task.CompletedTask;
+}
+
+static Task PolicyReadsEverything()
+{
+    Manifest m = Manifest.Parse("""
+        {"files": [], "policy": {
+          "backupsToKeep": {"value": 3, "enforce": false},
+          "largeAddressAware": {"value": "on", "enforce": true},
+          "requiredLocales": {"value": ["enUS", "deDE"]},
+          "clearCache": false,
+          "somethingNew": {"value": 1, "enforce": true},
+          "tweaks": {
+            "farclip": {"value": 1277, "enforce": true},
+            "maxFPS": {"value": "144", "enforce": false},
+            "gxWindow": {"value": true, "enforce": true},
+            "cameraDistanceMaxFactor": {"value": 2.5, "enforce": true},
+            "SET weird": {"enforce": true}
+          }}}
+        """);
+    LauncherPolicy p = m.Rules;
+    Assert(p.Setting("backupsToKeep") is { Int: 3, Enforce: false }, "backupsToKeep");
+    Assert(p.EnforcedBool("largeAddressAware") == true, "a string \"on\" isn't true");
+    Assert(p.RequiredLocales.SequenceEqual(["enUS", "deDE"]), "required locales: " + string.Join(",", p.RequiredLocales));
+    Assert(p.Setting("clearCache") is { Enforce: false, Bool: false }, "a bare value isn't a recommendation");
+    Assert(p.Unknown.Contains("somethingNew") && p.Unknown.Contains("tweaks.SET weird"), "unknown names: " + string.Join(",", p.Unknown));
+    Assert(p.Tweaks["FARCLIP"].CVarText == "1277" && p.Tweaks["gxWindow"].CVarText == "1" && p.Tweaks["cameraDistanceMaxFactor"].CVarText == "2.5",
+        "tweak values not written the Config.wtf way");
+
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "WTF"));
+    File.WriteAllText(Path.Combine(wow, "WTF", "Config.wtf"), "SET farclip \"777\"\nSET maxFPS \"60\"\n");
+    ConfigWtf config = ConfigWtf.Load(wow);
+    Assert(p.ApplyEnforcedTweaks(config) == 3, "enforced tweaks not all written");
+    Assert(config.Get("farclip") == "1277" && config.Get("gxWindow") == "1" && config.Get("cameraDistanceMaxFactor") == "2.5", "enforced values");
+    Assert(config.Get("maxFPS") == "60", "a recommended (not enforced) tweak overwrote the player's value");
+    Assert(p.ApplyEnforcedTweaks(config) == 0, "writing again changed something");
     return Task.CompletedTask;
 }
 

@@ -28,6 +28,8 @@ public partial class MainWindow : Window
     CancellationTokenSource? _work;
     readonly Dictionary<string, Control> _tweakControls = new(StringComparer.OrdinalIgnoreCase);
     CheckBox? _laaBox;
+    LauncherPolicy _policy = new();   // the server's rules, from the last manifest
+    readonly List<string> _serverTweaks = [];   // Config.wtf values the server sets that the Tweaks list doesn't have
 
     static HttpClient NewWebClient()
     {
@@ -198,14 +200,21 @@ public partial class MainWindow : Window
     void ShowLocales(IEnumerable<string> available)
     {
         List<string> chosen = _settings.Locales.Count > 0 ? _settings.Locales : GameFolder.InstalledLocales(Folder).ToList();
+        IReadOnlyList<string> required = _policy.RequiredLocales;
         LocalePanel.Children.Clear();
-        foreach (string locale in available.Concat(chosen).Distinct(StringComparer.OrdinalIgnoreCase))
-            LocalePanel.Children.Add(new CheckBox
+        foreach (string locale in available.Concat(chosen).Concat(required).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            bool must = required.Contains(locale, StringComparer.OrdinalIgnoreCase);
+            CheckBox box = new()
             {
                 Content = locale,
                 Margin = new Thickness(0, 0, 14, 0),
-                IsChecked = chosen.Contains(locale, StringComparer.OrdinalIgnoreCase),
-            });
+                IsChecked = must || chosen.Contains(locale, StringComparer.OrdinalIgnoreCase),
+                IsEnabled = !must,
+            };
+            if (must) ToolTip.SetTip(box, "Everyone gets this one (set by the server)");
+            LocalePanel.Children.Add(box);
+        }
     }
 
     List<string> SelectedLocales() => LocalePanel.Children.OfType<CheckBox>()
@@ -309,9 +318,9 @@ public partial class MainWindow : Window
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
+            ApplyPolicy(manifest);
             ShowLocales(manifest.Locales);
             ClientButton.IsVisible = manifest.Files.Any(f => f.Category == FileCategory.Base);
-            ApplyPolicy(manifest);
             RefreshMods();
             VersionText.Text = manifest.ClientVersion.Length > 0 ? $"Version: {manifest.ClientVersion}" : "";
             WarningBanner.IsVisible = !launcherOk;
@@ -337,15 +346,23 @@ public partial class MainWindow : Window
             ("installAddons", AddonsBox), ("clearCache", ClearCacheBox), ("reopenAfterGame", ReopenBox),
             ("rememberWindow", RememberWindowBox), ("backupBeforeUpdate", BackupBox),
         ];
+        _policy = manifest.Rules;
         foreach ((string key, CheckBox box) in settings)
         {
-            bool? enforced = manifest.Enforced(key);
+            bool? enforced = _policy.EnforcedBool(key);
             box.IsEnabled = enforced is null;
             if (enforced is bool value) box.IsChecked = value;
             ToolTip.SetTip(box, enforced is null ? null : "Set by the server");
         }
+        // no box for these: the server's value is used whether it's enforced or only recommended
+        if (_policy.Setting("backupsToKeep")?.Int is int keep and > 0) _settings.BackupsToKeep = keep;
+        foreach (string unknown in _policy.Unknown)
+            Logger.Warning($"launcher-policy.json: \"{unknown}\" isn't a setting this launcher knows; skipped");
         SaveSettings();
+        BuildTweaks();
     }
+
+    PolicyRule? TweakRule(string cvar) => _policy.Tweaks.GetValueOrDefault(cvar);
 
     static void ShowNews(StackPanel list, IReadOnlyList<NewsItem> items)
     {
@@ -397,6 +414,8 @@ public partial class MainWindow : Window
             using ServerClient _ = client;
             Manifest manifest = await FetchManifestAsync(client, token);
             if (manifest.Enforced("installAddons") is bool addonsEnforced) choice = choice with { Addons = addonsEnforced };
+            if (manifest.Rules.RequiredLocales.Count > 0)
+                choice = choice with { Locales = choice.Locales.Concat(manifest.Rules.RequiredLocales).Distinct(StringComparer.OrdinalIgnoreCase).ToList() };
             if (manifest.Enforced("backupBeforeUpdate") is bool backupEnforced) _settings.BackupBeforeUpdate = backupEnforced;
             if (!haveGame)
             {
@@ -436,9 +455,28 @@ public partial class MainWindow : Window
             await InstallAsync(client, outdated, folder, token);
             foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, folder, token);
             GameFolder.WriteRealmlist(folder, manifest.Realmlist);
+            ApplyEnforcedToGame(folder);
             Status("Everything up to date!");
             await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
         });
+    }
+
+    /// <summary>After an update: the server's enforced Config.wtf values and Large Address Aware (runs in the background).</summary>
+    void ApplyEnforcedToGame(string folder)
+    {
+        try
+        {
+            ConfigWtf config = ConfigWtf.Load(folder);
+            int changed = _policy.ApplyEnforcedTweaks(config);
+            if (changed > 0) { config.Save(); Log($"{changed} game setting(s) set by the server written to WTF\\Config.wtf"); }
+            if (_policy.EnforcedBool("largeAddressAware") is bool laa && File.Exists(GameFolder.ExePath(folder))
+                && LargeAddressAware.IsEnabled(GameFolder.ExePath(folder)) != laa)
+            {
+                LargeAddressAware.Set(GameFolder.ExePath(folder), laa);
+                Log($"Large Address Aware turned {(laa ? "on" : "off")} (set by the server)");
+            }
+        }
+        catch (Exception e) { Logger.Warning("Couldn't apply the server's game settings (is the game running?)", e); }
     }
 
     void ShowPlayState()
@@ -633,6 +671,26 @@ public partial class MainWindow : Window
             TweaksList.Children.Add(row);
             _tweakControls[t.CVar] = control;
         }
+        _serverTweaks.Clear();
+        List<string> extra = _policy.Tweaks.Keys.Where(k => !Tweaks.All.Any(t => t.CVar.Equals(k, StringComparison.OrdinalIgnoreCase))).Order().ToList();
+        if (extra.Count > 0)
+        {
+            TweaksList.Children.Add(new TextBlock { Text = "FROM THE SERVER", Classes = { "section" } });
+            foreach (string cvar in extra)
+            {
+                Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,110,*"), Margin = new Thickness(0, 3) };
+                row.Children.Add(new TextBlock { Text = cvar, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) });
+                TextBox box = new() { Width = 90, HorizontalAlignment = HorizontalAlignment.Left };
+                Grid.SetColumn(box, 1);
+                row.Children.Add(box);
+                TextBlock note = new() { Text = "A Config.wtf value the server sets.", Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+                Grid.SetColumn(note, 2);
+                row.Children.Add(note);
+                TweaksList.Children.Add(row);
+                _tweakControls[cvar] = box;
+                _serverTweaks.Add(cvar);
+            }
+        }
         TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
         _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
@@ -645,14 +703,37 @@ public partial class MainWindow : Window
         if (TweaksHint.IsVisible) return;
         ConfigWtf config = ConfigWtf.Load(Folder);
         foreach (Tweak t in Tweaks.All)
-            SetTweak(t, config.Get(t.CVar) ?? t.Default);
+            SetTweak(t.CVar, config.Get(t.CVar) ?? t.Default);
+        foreach (string cvar in _serverTweaks)
+            SetTweak(cvar, config.Get(cvar) ?? TweakRule(cvar)?.CVarText ?? "");
         try { if (_laaBox is not null) _laaBox.IsChecked = LargeAddressAware.IsEnabled(GameFolder.ExePath(Folder)); }
         catch (Exception e) { Logger.Warning("Large Address Aware", e); }
+        LockEnforcedTweaks();
     }
 
-    void SetTweak(Tweak t, string value)
+    /// <summary>Tweaks the server enforces: shown with the server's value and greyed out.</summary>
+    void LockEnforcedTweaks()
     {
-        switch (_tweakControls[t.CVar])
+        foreach ((string cvar, Control control) in _tweakControls)
+        {
+            PolicyRule? rule = TweakRule(cvar);
+            bool locked = rule is { Enforce: true };
+            control.IsEnabled = !locked;
+            ToolTip.SetTip(control, locked ? "Set by the server" : rule is not null ? $"The server recommends {rule.CVarText}" : null);
+            if (locked) SetTweak(cvar, rule!.CVarText!);
+        }
+        if (_laaBox is not null)
+        {
+            bool? laa = _policy.EnforcedBool("largeAddressAware");
+            _laaBox.IsEnabled = laa is null;
+            ToolTip.SetTip(_laaBox, laa is null ? null : "Set by the server");
+            if (laa is bool on) _laaBox.IsChecked = on;
+        }
+    }
+
+    void SetTweak(string cvar, string value)
+    {
+        switch (_tweakControls.GetValueOrDefault(cvar))
         {
             case CheckBox box: box.IsChecked = value == "1"; break;
             case TextBox text: text.Text = value; break;
@@ -676,6 +757,9 @@ public partial class MainWindow : Window
                 };
                 if (value is not null) config.Set(t.CVar, value);
             }
+            foreach (string cvar in _serverTweaks)
+                if (_tweakControls[cvar] is TextBox { Text: { Length: > 0 } text }) config.Set(cvar, text.Trim());
+            _policy.ApplyEnforcedTweaks(config);   // enforced values win, whatever the boxes say
             config.Save();
             if (_laaBox is not null) LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true);
             LoadTweaks();
@@ -691,14 +775,18 @@ public partial class MainWindow : Window
 
     void OnRecommendedTweaks(object? sender, RoutedEventArgs e)
     {
-        foreach (Tweak t in Tweaks.All) SetTweak(t, t.Recommended);
-        if (_laaBox is not null) _laaBox.IsChecked = true;
+        // the server's recommendation first, then the launcher's own
+        foreach (Tweak t in Tweaks.All) SetTweak(t.CVar, TweakRule(t.CVar)?.CVarText ?? t.Recommended);
+        foreach (string cvar in _serverTweaks) SetTweak(cvar, TweakRule(cvar)?.CVarText ?? "");
+        if (_laaBox is not null) _laaBox.IsChecked = _policy.Setting("largeAddressAware")?.Bool ?? true;
+        LockEnforcedTweaks();
         Status("Recommended values filled in; press Save.");
     }
 
     void OnDefaultTweaks(object? sender, RoutedEventArgs e)
     {
-        foreach (Tweak t in Tweaks.All) SetTweak(t, t.Default);
+        foreach (Tweak t in Tweaks.All) SetTweak(t.CVar, t.Default);
+        LockEnforcedTweaks();
         Status("Default values filled in; press Save.");
     }
 

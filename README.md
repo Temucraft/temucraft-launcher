@@ -47,11 +47,22 @@ The window has six pages:
 - **Launcher**: the launcher's own settings (reopen after WoW closes, remember the window, background picture), its
   version and the log.
 
-**The server decides what it wants to.** `launcher-policy.json` next to the manifest gives each setting a value and
-`"enforce"`: an enforced setting is set by the server and greyed out; the others stay the player's choice. Settings:
-`installAddons`, `clearCache`, `reopenAfterGame`, `rememberWindow`, `backupBeforeUpdate` (see
-`server/examples/launcher-policy.json`). An option group's `group.json` can say `"enforce": true` too: everyone then
-gets its first option.
+**The server decides what it wants to.** `launcher-policy.json` next to the manifest can set any launcher setting.
+Each entry is `{"value": ..., "enforce": true|false}` (a bare value means "recommended"). An enforced setting is set by
+the server and greyed out; one that isn't enforced stays the player's choice, with the server's value as the
+recommendation (and as the value outright where the launcher has no box for it).
+
+| Name | Value | What it does |
+|---|---|---|
+| `installAddons`, `clearCache`, `reopenAfterGame`, `rememberWindow`, `backupBeforeUpdate` | true / false | the launcher's switches |
+| `largeAddressAware` | true / false | Wow.exe's 4 GB switch; enforced, it's set again after every update |
+| `backupsToKeep` | a number | how many backups the launcher keeps |
+| `requiredLocales` | e.g. `["enUS"]` | languages everyone gets (players can still add more) |
+| `tweaks` | `{"<CVar>": {...}}` | any `Config.wtf` value by its name, the Tweaks page's or any other (e.g. `farclip`, `maxFPS`); enforced ones are written to `Config.wtf` after every update and on Save, others show as the recommendation ("Use recommended") |
+
+Names the launcher doesn't know are skipped and noted in its log, so a newer policy never breaks an older launcher.
+See `server/examples/launcher-policy.json`. An option group's `group.json` can say `"enforce": true` too: everyone
+then gets its first option.
 
 ## The log
 

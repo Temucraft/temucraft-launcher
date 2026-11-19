@@ -3,5 +3,13 @@
   "clearCache":         { "value": true,  "enforce": false },
   "reopenAfterGame":    { "value": true,  "enforce": false },
   "rememberWindow":     { "value": false, "enforce": false },
-  "backupBeforeUpdate": { "value": true,  "enforce": false }
+  "backupBeforeUpdate": { "value": true,  "enforce": false },
+  "backupsToKeep":      { "value": 10,    "enforce": false },
+  "largeAddressAware":  { "value": true,  "enforce": false },
+  "requiredLocales":    { "value": ["enUS"] },
+  "tweaks": {
+    "farclip":           { "value": 1277, "enforce": false },
+    "maxFPS":            { "value": 144,  "enforce": false },
+    "cameraDistanceMax": { "value": 50,   "enforce": false }
+  }
 }
