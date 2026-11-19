@@ -41,6 +41,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("A copy source that changed is not used", ChangedSourceIsDownloaded),
     ("The server's policy enforces settings and option groups", PolicyEnforces),
     ("The policy reads every kind of setting and tweak", PolicyReadsEverything),
+    ("Only what the server lists is read and sent, one header each", ClientInfoSent),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -692,6 +693,32 @@ static Task PolicyReadsEverything()
     return Task.CompletedTask;
 }
 
+static async Task ClientInfoSent()
+{
+    ServerSettings settings = ServerSettings.Parse(["SERVER_URL=https://f.example/", "COLLECT=osUser, mac,installId, nonsense",
+                                                    @"COLLECT_NOTE=Line one\nLine two"]);
+    Assert(settings.Collect.SequenceEqual(["installId", "osUser", "mac"]), "collect list: " + string.Join(",", settings.Collect));
+    Assert(settings.CollectNote == "Line one\nLine two", "note: " + settings.CollectNote);
+    Assert(ServerSettings.Parse(["SERVER_URL=https://f.example/", "COLLECT=all"]).Collect.Count == ClientInfo.Items.Count, "all");
+    Assert(ServerSettings.Parse(["SERVER_URL=https://f.example/"]).Collect.Count == 0, "nothing listed must mean nothing collected");
+
+    Dictionary<string, string> values = ClientInfo.Read(settings.Collect, "id-123");
+    Assert(values.Keys.All(k => settings.Collect.Contains(k)), "read something not listed: " + string.Join(",", values.Keys));
+    Assert(values["installId"] == "id-123" && values["osUser"] == Environment.UserName, "values");
+
+    FakeServer server = new(new() { ["news.json"] = "[]"u8.ToArray() });
+    using (ServerClient client = new(settings, "u", "p", server, values))
+        await client.GetTextAsync("news.json");
+    Assert(server.LastHeaders["X-Temucraft-installId"] == "id-123", "installId header missing");
+    Assert(Uri.UnescapeDataString(server.LastHeaders["X-Temucraft-osUser"]) == Environment.UserName, "osUser header wrong");
+    Assert(!server.LastHeaders.ContainsKey("X-Temucraft-computerName"), "sent an item that wasn't listed");
+
+    FakeServer quiet = new(new() { ["news.json"] = "[]"u8.ToArray() });
+    using (ServerClient client = new(settings, "u", "p", quiet, clientInfo: null))
+        await client.GetTextAsync("news.json");
+    Assert(!quiet.LastHeaders.Keys.Any(k => k.StartsWith(ClientInfo.HeaderPrefix)), "sent something without agreement");
+}
+
 /// <summary>A tiny https server on 127.0.0.1 with a made-up self-signed certificate, answering every request with "ok".</summary>
 static async Task CertPinOverTls()
 {
@@ -764,10 +791,16 @@ sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler
     public string? LastAuth { get; private set; }
     public long? LastRangeFrom { get; private set; }
     public List<string> Requests { get; } = [];
+    public Dictionary<string, string> LastHeaders { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
     {
         LastAuth = request.Headers.Authorization?.ToString();
+        lock (LastHeaders)
+        {
+            LastHeaders.Clear();
+            foreach (var h in request.Headers) LastHeaders[h.Key] = string.Join(",", h.Value);
+        }
         if (ForceStatus is { } status)
             return Task.FromResult(new HttpResponseMessage(status));
         string path = request.RequestUri!.AbsolutePath.TrimStart('/');

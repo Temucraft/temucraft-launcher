@@ -32,7 +32,9 @@ public sealed class ServerClient : IDisposable
         },
     };
 
-    public ServerClient(ServerSettings settings, string username, string password, HttpMessageHandler? handler = null)
+    /// <param name="clientInfo">The player's PC information the server collects (sent as one header); null sends none.</param>
+    public ServerClient(ServerSettings settings, string username, string password, HttpMessageHandler? handler = null,
+        IReadOnlyDictionary<string, string>? clientInfo = null)
     {
         _base = settings.ServerUrl;
         _pinned = settings.CertificateSha256 is not null;
@@ -41,6 +43,9 @@ public sealed class ServerClient : IDisposable
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
             Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}")));
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(LauncherInfo.UserAgent);
+        if (clientInfo is { Count: > 0 })
+            foreach ((string name, string value) in ClientInfo.Headers(clientInfo))
+                _http.DefaultRequestHeaders.TryAddWithoutValidation(name, value);
     }
 
     public async Task<Manifest> GetManifestAsync(CancellationToken token = default)

@@ -21,6 +21,12 @@ public sealed class ServerSettings
     /// </summary>
     public string? CertificateSha256 { get; init; }
 
+    /// <summary>What the launcher sends about the player's PC (COLLECT, see <see cref="ClientInfo.Items"/>); empty: nothing.</summary>
+    public IReadOnlyList<string> Collect { get; init; } = [];
+
+    /// <summary>The server owner's own words about why (COLLECT_NOTE), shown in the login window.</summary>
+    public string CollectNote { get; init; } = "";
+
     public static ServerSettings Load(string envFile)
     {
         if (!File.Exists(envFile))
@@ -62,7 +68,9 @@ public sealed class ServerSettings
             if (pin.Length != 64 || !pin.All(Uri.IsHexDigit))
                 throw new InvalidDataException("CERT_SHA256 must be the certificate's SHA-256 fingerprint (64 hex digits).");
         }
-        return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin };
+        IReadOnlyList<string> collect = values.TryGetValue("COLLECT", out string? list) ? ClientInfo.Normalize(list.Split(',')) : [];
+        string note = values.TryGetValue("COLLECT_NOTE", out string? n) ? n.Replace("\\n", "\n") : "";
+        return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin, Collect = collect, CollectNote = note };
     }
 }
 
@@ -90,6 +98,13 @@ public sealed class UserSettings
     public int BackupsToKeep { get; set; } = 10;
     /// <summary>Installed catalog addons and the commit they were installed from (to offer updates).</summary>
     public Dictionary<string, string> AddonCommits { get; set; } = [];
+
+    /// <summary>A random ID for this launcher install (made once; sent only when a server collects "installId").</summary>
+    public string InstallId { get; set; } = "";
+
+    /// <summary>The items the player agreed to send, and to which server; a longer list asks again.</summary>
+    public List<string> CollectAgreed { get; set; } = [];
+    public string CollectAgreedServer { get; set; } = "";
 
     // NaN/Infinity are allowed so an odd value can never stop the settings from saving
     static readonly JsonSerializerOptions JsonOptions = new()

@@ -49,6 +49,18 @@ The window has six pages:
 - **Launcher**: the launcher's own settings (reopen after WoW closes, remember the window, background picture), its
   version and the log.
 
+**Knowing who connects.** The server's owner can have the launcher send information about the player's PC: its
+version, the operating system with version and build, a random ID for the install, the computer's name, the operating
+system username, the MAC addresses, the local IP addresses, time zone, language and hardware. Nothing is sent unless
+`COLLECT` in `launcher.env` lists it. The login window shows what any server might collect, what this one collects
+and the owner's own words (`COLLECT_NOTE`) before anything is sent, and logging in is agreeing to it; if the list
+grows, the launcher asks again. The Launcher page shows the exact values sent from this PC. Each item goes in its
+own header (`X-Temucraft-<item>`, URL-encoded). On the server, `server/apache-launcher-clients.conf.example` logs every
+login (manifest.json) as a CSV line with the time, the public IP (IPv4 or IPv6), the login, whether it was let in and
+one column per item; `server/clients-csv.py` writes a readable copy with a header row, starting with the code and its
+description (200 OK, 401 Unauthorized...), then operating system, unique ID, public IP, local IP, username and MAC
+(`--last`: the newest line per install).
+
 **The server decides what it wants to.** `launcher-policy.json` next to the manifest can set any launcher setting.
 Each entry is `{"value": ..., "enforce": true|false}` (a bare value means "recommended"). An enforced setting is set by
 the server and greyed out; one that isn't enforced stays the player's choice, with the server's value as the

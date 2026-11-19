@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         Logger.Written += ShowLogLine;
         _settings = UserSettings.Load(_settingsFile);
+        if (_settings.InstallId.Length == 0) _settings.InstallId = Guid.NewGuid().ToString("N");
 
         try
         {
@@ -88,11 +89,12 @@ public partial class MainWindow : Window
         Opened += async (_, _) =>
         {
             LauncherVersionText.Text = $"Temucraft Launcher {LauncherInfo.Version}";
+            ShowPrivacy();
             // with a login, connect right away: news, addons and options show even before a game is installed
             // (nothing is downloaded until Update)
             if (_server is null)
                 Status("launcher.env is missing next to the launcher: get it from the server's owner.");
-            else if (HaveLogin)
+            else if (HaveLogin && Agreed)
                 await CheckAsync(download: false);
             else
                 AskForLogin();
@@ -290,7 +292,34 @@ public partial class MainWindow : Window
     }
 
     /// <summary>A server connection with the login typed in the window (call on the window's thread).</summary>
-    ServerClient NewClient() => new(_server!, UsernameBox.Text?.Trim() ?? "", PasswordBox.Text ?? "");
+    ServerClient NewClient() => new(_server!, UsernameBox.Text?.Trim() ?? "", PasswordBox.Text ?? "",
+        clientInfo: Agreed ? ClientInfo.Read(_server!.Collect, _settings.InstallId) : null);
+
+    /// <summary>The player agreed to everything this server collects (at the login window); otherwise nothing is sent.</summary>
+    bool Agreed => _server is not null && _settings.CollectAgreedServer == _server.ServerUrl.ToString()
+                   && _server.Collect.All(k => _settings.CollectAgreed.Contains(k, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>The login window's notice: what any server might collect, what this one does and why.</summary>
+    string CollectText()
+    {
+        System.Text.StringBuilder text = new();
+        text.AppendLine("Depending on the server you connect to, the launcher may send: "
+                        + string.Join(", ", ClientInfo.Items.Select(i => char.ToLowerInvariant(i.Description[0]) + i.Description[1..])) + ".");
+        text.AppendLine();
+        if (_server is null || _server.Collect.Count == 0)
+            text.AppendLine("This server collects nothing from your PC besides your login.");
+        else
+        {
+            text.AppendLine("This server collects:");
+            foreach (string key in _server.Collect) text.AppendLine("  • " + ClientInfo.Describe(key));
+            if (_server.CollectNote.Length > 0) { text.AppendLine(); text.AppendLine(_server.CollectNote); }
+        }
+        text.AppendLine();
+        text.Append("Like any server, it also sees the public IP address you connect from.");
+        if (_server is { Collect.Count: > 0 })
+            text.Append("\n\nBy logging in, you agree to the items above being sent to this server with every request the launcher makes.");
+        return text.ToString();
+    }
 
     /// <summary>Every player has their own login for the game files (and the server only lets in known addresses).</summary>
     bool HaveLogin => _server is not null && !string.IsNullOrWhiteSpace(UsernameBox.Text) && !string.IsNullOrEmpty(PasswordBox.Text);
@@ -304,6 +333,7 @@ public partial class MainWindow : Window
         LoginPass.Text = error is null ? PasswordBox.Text : "";
         LoginRemember.IsChecked = RememberBox.IsChecked;
         LoginRemember.IsEnabled = CredentialStore.IsSupported;
+        CollectNotice.Text = CollectText();
         LoginError.Text = error ?? "";
         LoginError.IsVisible = error is not null;
         LoginButton.IsEnabled = true;
@@ -322,6 +352,13 @@ public partial class MainWindow : Window
         }
         UsernameBox.Text = LoginUser.Text.Trim();
         PasswordBox.Text = LoginPass.Text;
+        // logging in is agreeing to what this server collects (shown in the window); a longer list asks again
+        if (_server is not null)
+        {
+            _settings.CollectAgreed = [.. _server.Collect];
+            _settings.CollectAgreedServer = _server.ServerUrl.ToString();
+            Logger.Info($"Agreed to send: {(_server.Collect.Count == 0 ? "nothing" : string.Join(", ", _server.Collect))}", toWindow: false);
+        }
         RememberBox.IsChecked = LoginRemember.IsChecked;
         LoginButton.IsEnabled = false;
         LoginError.Text = "Logging in…";
@@ -329,6 +366,15 @@ public partial class MainWindow : Window
         LoginOverlay.IsVisible = false;   // a refused login brings it back with the reason
         SaveSettings();
         await CheckAsync(download: false);
+    }
+
+    /// <summary>The Launcher page: what this server collects and the exact values sent from this PC.</summary>
+    void ShowPrivacy()
+    {
+        if (_server is null || _server.Collect.Count == 0) { PrivacyText.Text = "Nothing besides your login."; return; }
+        Dictionary<string, string> values = ClientInfo.Read(_server.Collect, _settings.InstallId);
+        PrivacyText.Text = string.Join("\n", _server.Collect.Select(k => $"{ClientInfo.Describe(k)}: {values.GetValueOrDefault(k, "(not available)")}"))
+                           + (Agreed ? "" : "\n\nNothing is sent until you log in and agree.");
     }
 
     void OnLoginLater(object? sender, RoutedEventArgs e)
@@ -436,7 +482,7 @@ public partial class MainWindow : Window
     async Task CheckAsync(bool download)
     {
         if (_server is null || Busy) return;
-        if (!HaveLogin) { AskForLogin(); return; }
+        if (!HaveLogin || !Agreed) { AskForLogin(); return; }
         bool haveGame = GameFolder.LooksLikeClient(Folder);
         if (download && NoGameYet)
         {

@@ -1,0 +1,11 @@
+# The launcher's logins, with what it sends about the player's PC (COLLECT in launcher.env), as one CSV line each.
+# Put this inside the <VirtualHost> that serves the launcher's files, then: systemctl reload apache2
+# Only manifest.json is logged (the launcher reads it once per check or update), not every file download.
+# Columns: time, public IP (IPv4 or IPv6, whichever the player used), login, HTTP code (200 = let in, 401/403 = refused),
+# then one column per item; "-" when the launcher didn't send it. Values are URL-encoded: server/clients-csv.py writes
+# a readable copy with a header row, the code's description and the columns in the order: code, description, operating
+# system, unique ID, public IP, local IP, username, MAC, then the rest.
+
+SetEnvIf Request_URI "manifest\.json$" temucraft_login
+LogFormat "\"%{%Y-%m-%d %H:%M:%S}t\",\"%a\",\"%u\",\"%>s\",\"%{X-Temucraft-launcherVersion}i\",\"%{X-Temucraft-os}i\",\"%{X-Temucraft-installId}i\",\"%{X-Temucraft-computerName}i\",\"%{X-Temucraft-osUser}i\",\"%{X-Temucraft-mac}i\",\"%{X-Temucraft-localIp}i\",\"%{X-Temucraft-timezone}i\",\"%{X-Temucraft-language}i\",\"%{X-Temucraft-hardware}i\"" temucraft_clients
+CustomLog ${APACHE_LOG_DIR}/temucraft-launcher-clients.csv temucraft_clients env=temucraft_login

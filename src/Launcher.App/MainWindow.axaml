@@ -246,6 +246,9 @@
               </StackPanel>
               <TextBlock Name="LauncherVersionText" Classes="dim" Margin="0,10,0,0" />
 
+              <TextBlock Classes="section" Text="WHAT THIS SERVER COLLECTS" />
+              <SelectableTextBlock Name="PrivacyText" TextWrapping="Wrap" Foreground="#D8D2C4" FontSize="12" />
+
               <TextBlock Classes="section" Text="LOG" />
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Content="Open log file" Click="OnOpenLog" />
@@ -260,7 +263,8 @@
 
     <!-- login: asked first, like a website's login prompt -->
     <Grid Name="LoginOverlay" Background="#F20E0B14" IsVisible="False">
-      <Border Classes="panel" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24">
+      <Border Classes="panel" Width="520" MaxHeight="620" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24">
+        <ScrollViewer>
         <StackPanel Spacing="10">
           <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
             <Image Source="/Assets/temucraft.png" Width="56" Height="56" />
@@ -271,6 +275,9 @@
           <TextBox Name="LoginUser" Watermark="Username" />
           <TextBox Name="LoginPass" Watermark="Password" PasswordChar="•" />
           <CheckBox Name="LoginRemember" Content="Remember me (Windows Credential Manager)" />
+          <Border Background="#22FFFFFF" CornerRadius="4" Padding="12,10" Margin="0,4,0,0">
+            <SelectableTextBlock Name="CollectNotice" TextWrapping="Wrap" FontSize="12" Foreground="#D8D2C4" />
+          </Border>
           <TextBlock Name="LoginError" Foreground="#FF7A6A" TextWrapping="Wrap" IsVisible="False" />
           <Grid ColumnDefinitions="*,8,Auto">
             <Button Name="LoginButton" Content="Log in" IsDefault="True" HorizontalAlignment="Stretch"
@@ -278,6 +285,7 @@
             <Button Grid.Column="2" Content="Not now" Click="OnLoginLater" />
           </Grid>
         </StackPanel>
+        </ScrollViewer>
       </Border>
     </Grid>
   </Panel>
