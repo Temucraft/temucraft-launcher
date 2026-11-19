@@ -162,7 +162,8 @@ def main():
     parser = argparse.ArgumentParser(description="Write manifest.json for the Temucraft launcher.")
     parser.add_argument("files_dir", help="the folder Apache serves (where SERVER_URL points)")
     parser.add_argument("--realmlist", default=None,
-                        help="logon server for realmlist.wtf (keeps the previous manifest's if left out)")
+                        help="logon server for realmlist.wtf (keeps the previous manifest's if left out; "
+                             "127.0.0.1 the first time)")
     args = parser.parse_args()
 
     files_dir = os.path.abspath(args.files_dir)
@@ -178,7 +179,8 @@ def main():
     if os.path.isfile(manifest_path):
         with open(manifest_path) as f:
             previous = json.load(f)
-    realmlist = args.realmlist if args.realmlist is not None else (previous or {}).get("realmlist", "")
+    # the launcher writes realmlist.wtf into every installed locale from this, so it is never left empty
+    realmlist = args.realmlist if args.realmlist is not None else (previous or {}).get("realmlist") or "127.0.0.1"
 
     manifest = build(files_dir, realmlist, cache)
 
