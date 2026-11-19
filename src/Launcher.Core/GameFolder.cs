@@ -26,6 +26,34 @@ public static class GameFolder
             .ToList();
     }
 
+    /// <summary>The client's languages: the name in English and in the language itself.</summary>
+    public static readonly IReadOnlyDictionary<string, (string English, string Native)> LocaleNames =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["enUS"] = ("English (United States)", "English (United States)"),
+            ["enGB"] = ("English (United Kingdom)", "English (United Kingdom)"),
+            ["enCN"] = ("English (China)", "English (China)"),
+            ["enTW"] = ("English (Taiwan)", "English (Taiwan)"),
+            ["deDE"] = ("German", "Deutsch"),
+            ["frFR"] = ("French", "Français"),
+            ["esES"] = ("Spanish (Spain)", "Español (España)"),
+            ["esMX"] = ("Spanish (Latin America)", "Español (Latinoamérica)"),
+            ["ruRU"] = ("Russian", "Русский"),
+            ["koKR"] = ("Korean", "한국어"),
+            ["zhCN"] = ("Chinese (Simplified)", "简体中文"),
+            ["zhTW"] = ("Chinese (Traditional)", "繁體中文"),
+            ["ptBR"] = ("Portuguese (Brazil)", "Português (Brasil)"),
+            ["itIT"] = ("Italian", "Italiano"),
+        };
+
+    /// <summary>"German (Deutsch)": the name in the launcher's language, then in its own, once when they're the same.</summary>
+    public static string LocaleName(string locale, Func<string, string>? translate = null)
+    {
+        if (!LocaleNames.TryGetValue(locale, out (string English, string Native) n)) return locale;
+        string shown = translate?.Invoke(n.English) ?? n.English;
+        return shown == n.Native ? shown : $"{shown} ({n.Native})";
+    }
+
     /// <summary>The game's own language: Config.wtf's SET locale, else its only (or first) language folder; null
     /// without a game.</summary>
     public static string? ClientLocale(string folder)

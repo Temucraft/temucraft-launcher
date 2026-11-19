@@ -282,11 +282,11 @@
 
               <TextBlock Classes="section" Text="WHAT THIS SERVER COLLECTS (THE LOGIN NOTICE)" />
               <SelectableTextBlock Name="PrivacyText" TextWrapping="Wrap" Foreground="#D8D2C4" FontSize="12" />
-              <TextBlock Name="PrivacyValuesTitle" Text="What this PC sends:" Foreground="#D8D2C4" FontSize="12" Margin="0,10,0,4" />
-              <Border Name="PrivacyValuesBox" Background="#1A1622" BorderBrush="#3A3346" BorderThickness="1" CornerRadius="4" Padding="10,8">
-                <SelectableTextBlock Name="PrivacyValues" TextWrapping="Wrap" FontSize="12" Foreground="#E8E2D0"
-                                     FontFamily="Consolas, Cascadia Mono, Menlo, DejaVu Sans Mono, monospace" />
-              </Border>
+              <StackPanel Name="PrivacyValuesTitle" Orientation="Horizontal" Spacing="10" Margin="0,10,0,4">
+                <TextBlock Text="What this PC sends:" Foreground="#D8D2C4" FontSize="12" VerticalAlignment="Center" />
+                <Button Name="CopyValuesButton" Content="Copy to clipboard" FontSize="12" Padding="8,2" Click="OnCopyValues" />
+              </StackPanel>
+              <Grid Name="PrivacyValuesBox" ColumnDefinitions="Auto,12,*" />
               <TextBlock Text="Date format: &quot;DD-MM-YYYY HH:MM:SS&quot;" Foreground="#7A7486" FontSize="11" Margin="0,8,0,0" />
               <TextBlock Name="PrivacyAgreed" Foreground="#D8D2C4" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
 

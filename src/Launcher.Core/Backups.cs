@@ -52,21 +52,57 @@ public sealed class NewsItem
         ("Planned", "#B48CE0"), ("Not live yet", "#E0894A"),
     ];
 
-    /// <summary>Splits text into plain parts and [Tag] parts (only the known tags); a tag part's Color is set.</summary>
+    /// <summary>Better and worse values: {+350 mana} in green, {-335 mana} in red.</summary>
+    public const string Better = "#6FD06F", Worse = "#E06C5C";
+
+    /// <summary>
+    /// Splits text into plain parts, [Tag] parts (only the known tags, in their colour) and {+better} / {-worse}
+    /// parts (green / red, braces and sign dropped). Bold is set for tags.
+    /// </summary>
     public static IReadOnlyList<(string Text, string? Color)> Segments(string text)
     {
         List<(string, string?)> parts = [];
         int at = 0;
-        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"\[([^\]\n]{2,20})\]"))
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"\[([^\]\n]{2,20})\]|\{([+-])([^{}\n]+)\}"))
         {
-            (string Tag, string Color) known = Tags.FirstOrDefault(t => t.Tag.Equals(m.Groups[1].Value.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (known.Tag is null) continue;
+            string shown; string color;
+            if (m.Groups[1].Success)
+            {
+                (string Tag, string Color) known = Tags.FirstOrDefault(t => t.Tag.Equals(m.Groups[1].Value.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (known.Tag is null) continue;
+                shown = $"[{known.Tag}]"; color = known.Color;
+            }
+            else
+            {
+                shown = m.Groups[3].Value; color = m.Groups[2].Value == "+" ? Better : Worse;
+            }
             if (m.Index > at) parts.Add((text[at..m.Index], null));
-            parts.Add(($"[{known.Tag}]", known.Color));
+            parts.Add((shown, color));
             at = m.Index + m.Length;
         }
         if (at < text.Length) parts.Add((text[at..], null));
         return parts;
+    }
+
+    /// <summary>
+    /// The text's lines with their details: a line followed by indented lines ("  - Human: ...") gets those as
+    /// details, which the launcher shows folded under it (click to open). Bullets ("- ", "• ") are dropped from details.
+    /// </summary>
+    public static IReadOnlyList<(string Line, IReadOnlyList<string> Details)> Lines(string text)
+    {
+        List<(string, List<string>)> lines = [];
+        foreach (string raw in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            if (raw.Length > 0 && char.IsWhiteSpace(raw[0]) && raw.Trim().Length > 0 && lines.Count > 0)
+            {
+                string detail = raw.Trim();
+                if (detail.StartsWith("- ") || detail.StartsWith("• ")) detail = detail[2..];
+                lines[^1].Item2.Add(detail);
+            }
+            else if (raw.Trim().Length > 0 || lines.Count > 0)
+                lines.Add((raw, []));
+        }
+        return lines.Select(l => (l.Item1, (IReadOnlyList<string>)l.Item2)).ToList();
     }
 
     /// <summary>"18th of November 2026 (18/11/2026)"; the date as written when it isn't YYYY-MM-DD.</summary>

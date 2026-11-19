@@ -242,7 +242,8 @@ public partial class MainWindow : Window
                 IsChecked = must || chosen.Contains(locale, StringComparer.OrdinalIgnoreCase),
                 IsEnabled = !must,
             };
-            if (must) ToolTip.SetTip(box, why);
+            // hover: the language's name (in the launcher's language and its own), and why it's locked
+            ToolTip.SetTip(box, GameFolder.LocaleName(locale) + (must ? "\n" + why : ""));
             LocalePanel.Children.Add(box);
         }
     }
@@ -433,15 +434,55 @@ public partial class MainWindow : Window
         if (any)
         {
             Dictionary<string, string> values = ClientInfo.Read(_server!.Collect, _settings.InstallId);
-            int width = _server.Collect.Max(k => k.Length);
-            // one adapter per line under the item, so long lists of addresses stay readable
-            string indent = "\n" + new string(' ', width + 2);
-            PrivacyValues.Text = string.Join("\n", _server.Collect.Select(k =>
-                $"{k.PadRight(width)}  {values.GetValueOrDefault(k, "(not available)").Replace(ClientInfo.AdapterSeparator, indent)}"));
+            // a title, then the value in a code box (one adapter per line)
+            PrivacyValuesBox.Children.Clear();
+            PrivacyValuesBox.RowDefinitions.Clear();
+            int row = 0;
+            foreach (string key in _server.Collect)
+            {
+                PrivacyValuesBox.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                TextBlock title = new() { Text = ClientInfo.Title(key), Foreground = new SolidColorBrush(Color.Parse("#D8D2C4")), FontSize = 12,
+                                          VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 5, 0, 0) };
+                Grid.SetRow(title, row);
+                PrivacyValuesBox.Children.Add(title);
+                Border code = new()
+                {
+                    Background = new SolidColorBrush(Color.Parse("#1A1622")), BorderBrush = new SolidColorBrush(Color.Parse("#3A3346")),
+                    BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(7, 3), Margin = new Thickness(0, 2),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Child = new SelectableTextBlock
+                    {
+                        Text = values.GetValueOrDefault(key, "(not available)").Replace(ClientInfo.AdapterSeparator, "\n"),
+                        FontFamily = new FontFamily("Consolas, Cascadia Mono, Menlo, DejaVu Sans Mono, monospace"), FontSize = 12,
+                        Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")), TextWrapping = TextWrapping.Wrap,
+                    },
+                };
+                Grid.SetRow(code, row);
+                Grid.SetColumn(code, 2);
+                PrivacyValuesBox.Children.Add(code);
+                row++;
+            }
         }
         PrivacyAgreed.Text = Agreed && _settings.CollectAgreedAt is DateTime when
             ? $"You agreed on {when:dd-MM-yyyy HH:mm:ss}. If the server changes what it collects or its note, you'll be asked again."
             : "You haven't agreed yet: nothing is sent until you log in.";
+    }
+
+    /// <summary>Copies what this PC sends, as "Title: value" lines, e.g. to paste into a message to the server's owner.</summary>
+    async void OnCopyValues(object? sender, RoutedEventArgs e)
+    {
+        if (_server is not { Collect.Count: > 0 } || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+        Dictionary<string, string> values = ClientInfo.Read(_server.Collect, _settings.InstallId);
+        string text = string.Join(Environment.NewLine, _server.Collect.Select(k =>
+            $"{ClientInfo.Title(k)}: {values.GetValueOrDefault(k, "(not available)").Replace(ClientInfo.AdapterSeparator, "; ")}"));
+        try
+        {
+            await clipboard.SetTextAsync(text);
+            CopyValuesButton.Content = "Copied";
+            await Task.Delay(1500);
+            CopyValuesButton.Content = "Copy to clipboard";
+        }
+        catch (Exception error) { Logger.Warning("Couldn't copy to the clipboard", error); }
     }
 
     void OnLoginLater(object? sender, RoutedEventArgs e)
@@ -519,6 +560,17 @@ public partial class MainWindow : Window
 
     PolicyRule? TweakRule(string cvar) => _policy.Tweaks.GetValueOrDefault(cvar);
 
+    /// <summary>A line of news text with its [Tags] and {+better}/{-worse} parts in colour.</summary>
+    static TextBlock Rich(string line, double size = 14)
+    {
+        TextBlock block = new() { TextWrapping = TextWrapping.Wrap, FontSize = size, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) };
+        block.Inlines ??= [];
+        foreach ((string part, string? color) in NewsItem.Segments(line))
+            block.Inlines.Add(color is null ? new Avalonia.Controls.Documents.Run(part)
+                : new Avalonia.Controls.Documents.Run(part) { Foreground = new SolidColorBrush(Color.Parse(color)), FontWeight = FontWeight.SemiBold });
+        return block;
+    }
+
     /// <summary>News and changelog as the server wants them: which panels show, how many entries, "Load more".</summary>
     void ShowFeeds(FeedCache feeds)
     {
@@ -551,12 +603,25 @@ public partial class MainWindow : Window
             StackPanel card = new() { Spacing = 4 };
             if (dates[i].Length > 0) card.Children.Add(new TextBlock { Text = dates[i], Classes = { "dim" }, FontSize = 12 });
             if (item.Title.Length > 0) card.Children.Add(new TextBlock { Text = item.Title, FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#F2C14E")), TextWrapping = TextWrapping.Wrap });
-            // [New], [Fixed], [Not live yet]... in their colours
-            SelectableTextBlock body = new() { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.Parse("#E8E2D0")) };
-            body.Inlines ??= [];
-            foreach ((string part, string? color) in NewsItem.Segments(item.Text))
-                body.Inlines.Add(color is null ? new Avalonia.Controls.Documents.Run(part)
-                    : new Avalonia.Controls.Documents.Run(part) { Foreground = new SolidColorBrush(Color.Parse(color)), FontWeight = FontWeight.SemiBold });
+            // each line, with [Tags] and {+better}/{-worse} in colour; a line with details folds them under it
+            StackPanel body = new() { Spacing = 1 };
+            foreach ((string line, IReadOnlyList<string> details) in NewsItem.Lines(item.Text))
+            {
+                if (details.Count == 0) { body.Children.Add(Rich(line)); continue; }
+                StackPanel inner = new() { Spacing = 1, Margin = new Thickness(18, 2, 0, 4) };
+                foreach (string detail in details) inner.Children.Add(Rich("• " + detail, 13));
+                TextBlock arrow = new() { Text = "▸", Foreground = new SolidColorBrush(Color.Parse("#F2C14E")), Width = 14, VerticalAlignment = VerticalAlignment.Top };
+                Grid head = new() { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand), Background = Brushes.Transparent };
+                head.Children.Add(arrow);
+                TextBlock text = Rich(line + $"  ({details.Count})");
+                Grid.SetColumn(text, 1);
+                head.Children.Add(text);
+                inner.IsVisible = false;
+                ToolTip.SetTip(head, "Click to show or hide the details");
+                head.PointerPressed += (_, _) => { inner.IsVisible = !inner.IsVisible; arrow.Text = inner.IsVisible ? "▾" : "▸"; };
+                body.Children.Add(head);
+                body.Children.Add(inner);
+            }
             card.Children.Add(body);
             if (Uri.TryCreate(item.Link, UriKind.Absolute, out Uri? link) && link.Scheme is "https" or "http")
             {

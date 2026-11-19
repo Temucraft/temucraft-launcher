@@ -73,7 +73,9 @@ public static class ClientInfo
                     "computerName" => Environment.MachineName,
                     "osUser" => Environment.UserName,
                     // per adapter, by its name ("Ethernet", "Wi-Fi", eth0, en0...): "Ethernet: 02:50:... | Wi-Fi: ..."
-                    "mac" => Group(Adapters().Select(n => (n.Name, FormatMac(n.GetPhysicalAddress().GetAddressBytes()) is { } mac ? new[] { mac } : []))),
+                    // each MAC once, under the first (real) adapter that has it: Windows also lists it under its filter drivers
+                    "mac" => Group(Adapters().Select(n => (n.Name, FormatMac(n.GetPhysicalAddress().GetAddressBytes())))
+                        .Where(a => a.Item2 is not null).DistinctBy(a => a.Item2).Select(a => (a.Name, new[] { a.Item2! }))),
                     "localIp" => Group(Adapters().Select(n => (n.Name, n.GetIPProperties().UnicastAddresses
                         .Where(a => IsUsefulLocal(a.Address) && !IsTemporary(a))
                         .OrderBy(a => a.Address.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
@@ -95,7 +97,23 @@ public static class ClientInfo
 
     static IEnumerable<NetworkInterface> Adapters() =>
         NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up
-                                                              && n.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel));
+                                                              && n.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel)
+                                                              && !IsFilterDriver(n.Name));
+
+    /// <summary>Windows' filter drivers show up as extra adapters ("Ethernet-WFP Native MAC Layer LightWeight
+    /// Filter-0000", "...-Npcap Packet Driver (NPCAP)-0000", "...-QoS Packet Scheduler-0000").</summary>
+    public static bool IsFilterDriver(string name) =>
+        name.EndsWith("-0000", StringComparison.Ordinal) || name.Contains("Filter-", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("Packet Driver", StringComparison.OrdinalIgnoreCase) || name.Contains("Packet Scheduler", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A short title for each item, for the Launcher page.</summary>
+    public static string Title(string key) => key switch
+    {
+        "launcherVersion" => "Launcher version (Temucraft)", "os" => "Operating system", "installId" => "Install ID",
+        "computerName" => "Computer name", "osUser" => "Operating system username", "mac" => "MAC addresses",
+        "localIp" => "Local IP addresses", "timezone" => "Time zone", "language" => "System language",
+        "hardware" => "Processor and memory", _ => key,
+    };
 
     /// <summary>Adapters with something to report, as "Name: a, b | Other: c" (adapters with nothing are left out).</summary>
     public const string AdapterSeparator = " | ";

@@ -694,6 +694,8 @@ static Task PolicyReadsEverything()
     File.WriteAllText(Path.Combine(game, "WTF", "Config.wtf"), "SET locale \"frFR\"\n");
     Assert(GameFolder.ClientLocale(game) == "frFR", "Config.wtf's locale");
     Assert(GameFolder.ClientLocale(TempDir()) is null, "a language for an empty folder");
+    Assert(GameFolder.LocaleName("deDE") == "German (Deutsch)" && GameFolder.LocaleName("enUS") == "English (United States)", "locale names");
+    Assert(GameFolder.LocaleName("deDE", t => t == "German" ? "Alemão" : t) == "Alemão (Deutsch)" && GameFolder.LocaleName("xxYY") == "xxYY", "translated / unknown");
     Assert(p.Setting("clearCache") is { Enforce: false, Bool: false }, "a bare value isn't a recommendation");
     Assert(p.Unknown.Contains("somethingNew") && p.Unknown.Contains("tweaks.SET weird"), "unknown names: " + string.Join(",", p.Unknown));
     Assert(p.Tweaks["FARCLIP"].CVarText == "1277" && p.Tweaks["gxWindow"].CVarText == "1" && p.Tweaks["cameraDistanceMaxFactor"].CVarText == "2.5",
@@ -770,6 +772,10 @@ static Task ClientInfoFilters()
     Assert(ClientInfo.FormatMac([0x02, 0x50, 0x55, 0x6F, 0x87, 0x0E]) == "02:50:55:6F:87:0E", "MAC format");
     Assert(ClientInfo.FormatMac([0, 0, 0, 0, 0, 0, 0, 0xE0]) is null, "a tunnel's 8-byte address was kept");
     Assert(ClientInfo.FormatMac(new byte[6]) is null, "an empty MAC was kept");
+    foreach (string filter in new[] { "Radmin VPN-WFP Native MAC Layer LightWeight Filter-0000", "Ethernet-Npcap Packet Driver (NPCAP)-0000", "Ethernet-QoS Packet Scheduler-0000", "Ethernet-WFP 802.3 MAC Layer LightWeight Filter-0000" })
+        Assert(ClientInfo.IsFilterDriver(filter), "kept the filter driver " + filter);
+    foreach (string real in new[] { "Ethernet", "Wi-Fi", "Radmin VPN", "eth0", "en0" })
+        Assert(!ClientInfo.IsFilterDriver(real), "dropped " + real);
     Assert(ClientInfo.Group([("Ethernet", ["192.168.1.150", "2001:8a0::1"]), ("Teredo", []), ("Radmin VPN", ["26.157.96.187"])])
            == "Ethernet: 192.168.1.150, 2001:8a0::1 | Radmin VPN: 26.157.96.187", "adapter grouping");
     foreach (string keep in new[] { "192.168.1.150", "26.157.96.187", "2001:8a0:6396:d400:4853:f01a:c9d:3439", "fdfd::1a9d:60bb" })
@@ -812,6 +818,10 @@ static Task NewsTags()
     Assert(parts.Count(p => p.Color is not null) == 3, string.Join("|", parts.Select(p => p.Text)));
     Assert(parts[1] == ("[New]", "#8FC24A"), "tag written in its own spelling and colour");
     Assert(string.Concat(parts.Select(p => p.Text)).Contains("[not a tag]"), "an unknown bracket was changed");
+    var values = NewsItem.Segments("Costs {-350 mana} instead of 335, heals {+661} more");
+    Assert(values.Any(p => p.Text == "350 mana" && p.Color == NewsItem.Worse) && values.Any(p => p.Text == "661" && p.Color == NewsItem.Better), "better/worse");
+    var lines = NewsItem.Lines("• [New] Racial heals\n  - Human: Light's Mending\n  • Dwarf: Stoneform Mend\n• [New] Other");
+    Assert(lines.Count == 2 && lines[0].Details.SequenceEqual(["Human: Light's Mending", "Dwarf: Stoneform Mend"]) && lines[1].Details.Count == 0, "details");
     return Task.CompletedTask;
 }
 
