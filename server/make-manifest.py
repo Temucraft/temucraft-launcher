@@ -17,7 +17,7 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
                                       may hold {"description": "...", "optional": true, "order": ["Classic", ...]};
                                       an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
-        launcher-policy.json          the server's say over launcher settings: {"installAddons": {"value": true,
+        launcher-policy.json          (// comments allowed) the server's say over launcher settings: {"installAddons": {"value": true,
                                       "enforce": true}, "tweaks": {"farclip": {"value": 1277, "enforce": true}}, ...};
                                       see the launcher's README; options/<Group>/group.json may say "enforce": true too
         news.json, changelog.json     [{"date": "...", "title": "...", "text": "...", "link": "https://..."}]
@@ -39,6 +39,36 @@ import sys
 
 LOCALES = {"enUS", "enGB", "enCN", "enTW", "deDE", "frFR", "esES", "esMX", "ruRU", "koKR", "zhCN", "zhTW", "ptBR", "itIT"}
 CACHE_NAME = ".manifest-cache.json"
+
+
+def load_jsonc(path):
+    """Reads JSON that may hold // line and /* block */ comments (launcher-policy.json, group.json); comments are only
+    for the server's owner and never reach the launcher."""
+    with open(path, encoding="utf-8-sig") as f:
+        text = f.read()
+    out, i, in_string = [], 0, False
+    while i < len(text):
+        c = text[i]
+        if in_string:
+            out.append(c)
+            if c == "\\" and i + 1 < len(text):
+                out.append(text[i + 1]); i += 1
+            elif c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True; out.append(c)
+        elif text.startswith("//", i):
+            while i < len(text) and text[i] != "\n":
+                i += 1
+            continue
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = len(text) if end < 0 else end + 2
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return json.loads("".join(out))
 
 
 def sha256(path, cache):
@@ -133,8 +163,7 @@ def build(files_dir, realmlist, cache):
                 continue
             info = {}
             if os.path.isfile(os.path.join(gdir, "group.json")):
-                with open(os.path.join(gdir, "group.json")) as f:
-                    info = json.load(f)
+                info = load_jsonc(os.path.join(gdir, "group.json"))
             names = sorted(o for o in os.listdir(gdir) if os.path.isdir(os.path.join(gdir, o)) and not o.startswith("."))
             # an option listed in "order" may have no folder: it installs nothing (e.g. "Off"; uploads skip empty folders)
             order = list(info.get("order", [])) + [o for o in names if o not in info.get("order", [])]
@@ -153,8 +182,7 @@ def build(files_dir, realmlist, cache):
     # launcher-policy.json: {"installAddons": {"value": true, "enforce": true}, ...}; enforced settings can't be changed
     policy_file = os.path.join(files_dir, "launcher-policy.json")
     if os.path.isfile(policy_file):
-        with open(policy_file) as f:
-            policy = json.load(f)
+        policy = load_jsonc(policy_file)
         if not isinstance(policy, dict):
             sys.exit("launcher-policy.json must be an object: {\"setting\": {\"value\": ..., \"enforce\": true}, ...}")
         manifest["policy"] = policy   # passed through as it is: the launcher knows the names (unknown ones are skipped)

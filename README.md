@@ -52,7 +52,8 @@ The window has six pages:
 
 **The header** shows the server's address and the logged-in username (`SHOW_IP=0` / `SHOW_USERNAME=0` in
 `launcher.env` hide them) and links to the server's websites: `NAV=Register|https://...; Database|https://...` (only
-http and https links).
+http and https links). A third part is your own text shown when hovering the link (`Register|https://...|Ask Ryan
+for a login`), and `NAV_SHOW_URL=0` hides the address under it.
 
 **Knowing who connects.** The server's owner can have the launcher send information about the player's PC: its
 version, the operating system with version and build, a random ID for the install, the computer's name, the operating

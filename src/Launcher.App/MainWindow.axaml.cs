@@ -53,19 +53,19 @@ public partial class MainWindow : Window
             ServerText.IsVisible = _server.ShowIp;
             AccountText.IsVisible = _server.ShowUsername;
             // the server's websites (register page, database...) as links in the header
-            foreach ((string name, Uri url) in _server.Nav)
+            foreach (NavLink nav in _server.Nav)
             {
-                Button link = new() { Content = name, Classes = { "link" }, FontSize = 12, Padding = new Thickness(6, 0, 0, 0) };
-                ToolTip.SetTip(link, url.ToString());
-                link.Click += (_, _) => OpenUrl(url.ToString());
+                Button link = new() { Content = nav.Name, Classes = { "link" }, FontSize = 12, Padding = new Thickness(6, 0, 0, 0) };
+                SetNavTip(link, nav);
+                link.Click += (_, _) => OpenUrl(nav.Url.ToString());
                 NavLinks.Children.Add(link);
             }
             // the same links under the login (a new player needs Register before they have a login)
-            foreach ((string name, Uri url) in _server.Nav)
+            foreach (NavLink nav in _server.Nav)
             {
-                Button link = new() { Content = name, Classes = { "link" }, FontSize = 12 };
-                ToolTip.SetTip(link, url.ToString());
-                link.Click += (_, _) => OpenUrl(url.ToString());
+                Button link = new() { Content = nav.Name, Classes = { "link" }, FontSize = 12 };
+                SetNavTip(link, nav);
+                link.Click += (_, _) => OpenUrl(nav.Url.ToString());
                 LoginLinks.Children.Add(link);
             }
         }
@@ -886,6 +886,24 @@ public partial class MainWindow : Window
     }
 
     void OnCancel(object? sender, RoutedEventArgs e) => _work?.Cancel();
+
+    /// <summary>The server's hover text for a link, with the address under it in grey (NAV_SHOW_URL).</summary>
+    void SetNavTip(Control link, NavLink nav)
+    {
+        if (nav.Tooltip(_server!.NavShowUrl) is null)
+            return;
+        TextBlock tip = new() { TextWrapping = TextWrapping.Wrap, MaxWidth = 340 };
+        if (nav.Tip.Length > 0)
+            tip.Inlines!.Add(new Avalonia.Controls.Documents.Run(nav.Tip));
+        if (_server.NavShowUrl)
+        {
+            if (nav.Tip.Length > 0)
+                tip.Inlines!.Add(new Avalonia.Controls.Documents.LineBreak());
+            tip.Inlines!.Add(new Avalonia.Controls.Documents.Run(nav.Url.ToString())
+                { Foreground = Brushes.Gray, FontFamily = new FontFamily("Consolas, Menlo, monospace") });
+        }
+        ToolTip.SetTip(link, tip);
+    }
 
     static void OpenUrl(string url)
     {

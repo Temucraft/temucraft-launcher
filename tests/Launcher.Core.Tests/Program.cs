@@ -806,9 +806,14 @@ static Task NavAndHeader()
         "SHOW_IP=0"]);
     Assert(s.Nav.Select(n => n.Name).SequenceEqual(["Register", "AoWoW"]), "links: " + string.Join(",", s.Nav.Select(n => n.Name)));
     Assert(s.Nav[0].Url.Port == 4000, "port");
+    Assert(s.Nav[0].Tip == "" && s.Nav[0].Tooltip(true) == "https://f.example:4000/" && s.Nav[0].Tooltip(false) is null, "plain tip");
+    ServerSettings t = ServerSettings.Parse(["SERVER_URL=https://f.example/", "NAV_SHOW_URL=0",
+        "NAV=Register|https://f.example:4000/|Use the login you were given.\\nAsk Ryan if it fails"]);
+    Assert(!t.NavShowUrl && t.Nav[0].Tip == "Use the login you were given.\nAsk Ryan if it fails", "tip: " + t.Nav[0].Tip);
+    Assert(t.Nav[0].Tooltip(true) == t.Nav[0].Tip + "\nhttps://f.example:4000/", "tip with url");
     Assert(!s.ShowIp && s.ShowUsername, "switches");
     ServerSettings d = ServerSettings.Parse(["SERVER_URL=https://f.example/"]);
-    Assert(d.Nav.Count == 0 && d.ShowIp && d.ShowUsername, "defaults");
+    Assert(d.Nav.Count == 0 && d.ShowIp && d.ShowUsername && d.NavShowUrl, "defaults");
     return Task.CompletedTask;
 }
 

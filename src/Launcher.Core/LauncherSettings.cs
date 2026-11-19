@@ -25,8 +25,11 @@ public sealed class ServerSettings
     /// (see <see cref="ClientInfo.Normalize"/>); empty only with COLLECT=none.</summary>
     public IReadOnlyList<string> Collect { get; init; } = [];
 
-    /// <summary>Links to the server's websites in the launcher's header (NAV=Name|https://...; Other|https://...).</summary>
-    public IReadOnlyList<(string Name, Uri Url)> Nav { get; init; } = [];
+    /// <summary>Links to the server's websites in the launcher's header (NAV=Name|https://...|tooltip; Other|https://...).</summary>
+    public IReadOnlyList<NavLink> Nav { get; init; } = [];
+
+    /// <summary>Show the link's address when hovering it (NAV_SHOW_URL); on unless set to 0.</summary>
+    public bool NavShowUrl { get; init; } = true;
 
     /// <summary>Show the server's address (SHOW_IP) and the logged-in username (SHOW_USERNAME) in the header; both on
     /// unless set to 0.</summary>
@@ -48,17 +51,17 @@ public sealed class ServerSettings
         return Parse(File.ReadAllLines(envFile));
     }
 
-    /// <summary>"Register|https://a/; AoWoW|https://b/": only http(s) links, others are skipped.</summary>
-    public static IReadOnlyList<(string Name, Uri Url)> ParseNav(string text)
+    /// <summary>"Register|https://a/|Text shown on hover; AoWoW|https://b/": only http(s) links, others are skipped.
+    /// The hover text is optional; "\n" in it starts a new line.</summary>
+    public static IReadOnlyList<NavLink> ParseNav(string text)
     {
-        List<(string, Uri)> links = [];
+        List<NavLink> links = [];
         foreach (string part in text.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            int bar = part.IndexOf('|');
-            if (bar <= 0) continue;
-            string name = part[..bar].Trim();
-            if (Uri.TryCreate(part[(bar + 1)..].Trim(), UriKind.Absolute, out Uri? url) && url.Scheme is "https" or "http" && name.Length > 0)
-                links.Add((name, url));
+            string[] bits = part.Split('|', 3, StringSplitOptions.TrimEntries);
+            if (bits.Length < 2 || bits[0].Length == 0) continue;
+            if (Uri.TryCreate(bits[1], UriKind.Absolute, out Uri? url) && url.Scheme is "https" or "http")
+                links.Add(new NavLink(bits[0], url, bits.Length > 2 ? bits[2].Replace("\\n", "\n") : ""));
         }
         return links;
     }
@@ -100,8 +103,21 @@ public sealed class ServerSettings
         return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin, Collect = collect, CollectNote = note,
             Name = values.TryGetValue("SERVER_NAME", out string? name) ? name : "",
             Nav = values.TryGetValue("NAV", out string? nav) ? ParseNav(nav) : [],
+            NavShowUrl = !values.TryGetValue("NAV_SHOW_URL", out string? showUrl) || showUrl is not ("0" or "false" or "no"),
             ShowIp = !values.TryGetValue("SHOW_IP", out string? ip) || ip is not ("0" or "false" or "no"),
             ShowUsername = !values.TryGetValue("SHOW_USERNAME", out string? user) || user is not ("0" or "false" or "no") };
+    }
+}
+
+/// <summary>A link in the header: its name, address and the server's own hover text (may be empty).</summary>
+public sealed record NavLink(string Name, Uri Url, string Tip)
+{
+    /// <summary>What hovering the link shows: the hover text, then the address when <paramref name="showUrl"/>;
+    /// null when there is nothing to show.</summary>
+    public string? Tooltip(bool showUrl)
+    {
+        string text = string.Join("\n", new[] { Tip, showUrl ? Url.ToString() : "" }.Where(t => t.Length > 0));
+        return text.Length > 0 ? text : null;
     }
 }
 
