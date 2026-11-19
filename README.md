@@ -51,8 +51,9 @@ The window has six pages:
 
 **Knowing who connects.** The server's owner can have the launcher send information about the player's PC: its
 version, the operating system with version and build, a random ID for the install, the computer's name, the operating
-system username, the MAC addresses, the local IP addresses, time zone, language and hardware. Nothing is sent unless
-`COLLECT` in `launcher.env` lists it. The login window shows what any server might collect, what this one collects
+system username, the MAC addresses, the local IP addresses, time zone, language and hardware. The launcher's version,
+the operating system (version and build) and the install ID are sent to every server unless `COLLECT=none`; the rest
+only when `COLLECT` in `launcher.env` lists it (`all` for everything). Every server also sees the public IP address. The login window shows what any server might collect, what this one collects
 and the owner's own words (`COLLECT_NOTE`) before anything is sent, and logging in is agreeing to it; if the list
 grows, the launcher asks again. The Launcher page shows the exact values sent from this PC. Each item goes in its
 own header (`X-Temucraft-<item>`, URL-encoded). On the server, `server/apache-launcher-clients.conf.example` logs every

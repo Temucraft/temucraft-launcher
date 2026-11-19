@@ -21,7 +21,8 @@ public sealed class ServerSettings
     /// </summary>
     public string? CertificateSha256 { get; init; }
 
-    /// <summary>What the launcher sends about the player's PC (COLLECT, see <see cref="ClientInfo.Items"/>); empty: nothing.</summary>
+    /// <summary>What the launcher sends about the player's PC: <see cref="ClientInfo.Defaults"/> plus COLLECT's items
+    /// (see <see cref="ClientInfo.Normalize"/>); empty only with COLLECT=none.</summary>
     public IReadOnlyList<string> Collect { get; init; } = [];
 
     /// <summary>The server owner's own words about why (COLLECT_NOTE), shown in the login window.</summary>
@@ -68,7 +69,7 @@ public sealed class ServerSettings
             if (pin.Length != 64 || !pin.All(Uri.IsHexDigit))
                 throw new InvalidDataException("CERT_SHA256 must be the certificate's SHA-256 fingerprint (64 hex digits).");
         }
-        IReadOnlyList<string> collect = values.TryGetValue("COLLECT", out string? list) ? ClientInfo.Normalize(list.Split(',')) : [];
+        IReadOnlyList<string> collect = ClientInfo.Normalize(values.TryGetValue("COLLECT", out string? list) ? list.Split(',') : null);
         string note = values.TryGetValue("COLLECT_NOTE", out string? n) ? n.Replace("\\n", "\n") : "";
         return new ServerSettings { ServerUrl = uri, AllowHttp = allowHttp, CertificateSha256 = pin, Collect = collect, CollectNote = note };
     }

@@ -31,14 +31,29 @@ public static class ClientInfo
         ("hardware", "Your processor and memory"),
     ];
 
+    /// <summary>
+    /// Sent to every server unless its launcher.env says COLLECT=none: the launcher's version (also in the User-Agent),
+    /// the operating system with version and build, and the random install ID. Every server also sees the public IP
+    /// address and answers with a code (let in or not); the login window says so.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Defaults = ["launcherVersion", "os", "installId"];
+
+    /// <summary>The items a server may add on top of <see cref="Defaults"/>.</summary>
+    public static IEnumerable<(string Key, string Description)> Optional => Items.Where(i => !Defaults.Contains(i.Key));
+
     public static string Describe(string key) =>
         Items.FirstOrDefault(i => i.Key.Equals(key, StringComparison.OrdinalIgnoreCase)).Description ?? key;
 
-    /// <summary>The known items of a COLLECT list, in the order of <see cref="Items"/>; "all" means every item.</summary>
-    public static IReadOnlyList<string> Normalize(IEnumerable<string> keys)
+    /// <summary>
+    /// What a COLLECT list means, in the order of <see cref="Items"/>: <see cref="Defaults"/> plus the items listed;
+    /// "all" is every item, "none" is nothing at all (not even the defaults). No list at all: the defaults.
+    /// </summary>
+    public static IReadOnlyList<string> Normalize(IEnumerable<string>? keys)
     {
-        HashSet<string> wanted = new(keys.Select(k => k.Trim()).Where(k => k.Length > 0), StringComparer.OrdinalIgnoreCase);
+        HashSet<string> wanted = new((keys ?? []).Select(k => k.Trim()).Where(k => k.Length > 0), StringComparer.OrdinalIgnoreCase);
+        if (wanted.Contains("none")) return [];
         if (wanted.Contains("all")) return Items.Select(i => i.Key).ToList();
+        wanted.UnionWith(Defaults);
         return Items.Where(i => wanted.Contains(i.Key)).Select(i => i.Key).ToList();
     }
 

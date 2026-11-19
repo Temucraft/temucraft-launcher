@@ -697,10 +697,11 @@ static async Task ClientInfoSent()
 {
     ServerSettings settings = ServerSettings.Parse(["SERVER_URL=https://f.example/", "COLLECT=osUser, mac,installId, nonsense",
                                                     @"COLLECT_NOTE=Line one\nLine two"]);
-    Assert(settings.Collect.SequenceEqual(["installId", "osUser", "mac"]), "collect list: " + string.Join(",", settings.Collect));
+    Assert(settings.Collect.SequenceEqual(["launcherVersion", "os", "installId", "osUser", "mac"]), "collect list: " + string.Join(",", settings.Collect));
     Assert(settings.CollectNote == "Line one\nLine two", "note: " + settings.CollectNote);
     Assert(ServerSettings.Parse(["SERVER_URL=https://f.example/", "COLLECT=all"]).Collect.Count == ClientInfo.Items.Count, "all");
-    Assert(ServerSettings.Parse(["SERVER_URL=https://f.example/"]).Collect.Count == 0, "nothing listed must mean nothing collected");
+    Assert(ServerSettings.Parse(["SERVER_URL=https://f.example/"]).Collect.SequenceEqual(ClientInfo.Defaults), "no list must mean the defaults");
+    Assert(ServerSettings.Parse(["SERVER_URL=https://f.example/", "COLLECT=none"]).Collect.Count == 0, "none must mean nothing at all");
 
     Dictionary<string, string> values = ClientInfo.Read(settings.Collect, "id-123");
     Assert(values.Keys.All(k => settings.Collect.Contains(k)), "read something not listed: " + string.Join(",", values.Keys));

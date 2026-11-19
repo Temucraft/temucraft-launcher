@@ -299,25 +299,37 @@ public partial class MainWindow : Window
     bool Agreed => _server is not null && _settings.CollectAgreedServer == _server.ServerUrl.ToString()
                    && _server.Collect.All(k => _settings.CollectAgreed.Contains(k, StringComparer.OrdinalIgnoreCase));
 
-    /// <summary>The login window's notice: what any server might collect, what this one does and why.</summary>
+    /// <summary>The login window's notice: what every server gets, what a server may add, what this one adds and why.</summary>
     string CollectText()
     {
+        static string Lower(string d) => char.ToLowerInvariant(d[0]) + d[1..];
+        IReadOnlyList<string> collect = _server?.Collect ?? ClientInfo.Normalize(null);
         System.Text.StringBuilder text = new();
-        text.AppendLine("Depending on the server you connect to, the launcher may send: "
-                        + string.Join(", ", ClientInfo.Items.Select(i => char.ToLowerInvariant(i.Description[0]) + i.Description[1..])) + ".");
-        text.AppendLine();
-        if (_server is null || _server.Collect.Count == 0)
+        if (collect.Count == 0)
             text.AppendLine("This server collects nothing from your PC besides your login.");
         else
         {
-            text.AppendLine("This server collects:");
-            foreach (string key in _server.Collect) text.AppendLine("  • " + ClientInfo.Describe(key));
-            if (_server.CollectNote.Length > 0) { text.AppendLine(); text.AppendLine(_server.CollectNote); }
+            List<string> defaults = ClientInfo.Defaults.Where(collect.Contains).ToList();
+            if (defaults.Count > 0)
+                text.AppendLine("Every server gets: " + string.Join("; ", defaults.Select(k => Lower(ClientInfo.Describe(k)))) + ".");
+            text.AppendLine();
+            text.AppendLine("Depending on the server, the launcher may also send: "
+                            + string.Join("; ", ClientInfo.Optional.Select(i => Lower(i.Description))) + ".");
+            List<string> extra = collect.Where(k => !ClientInfo.Defaults.Contains(k)).ToList();
+            text.AppendLine();
+            if (extra.Count == 0)
+                text.AppendLine("This server collects nothing more.");
+            else
+            {
+                text.AppendLine("This server also collects:");
+                foreach (string key in extra) text.AppendLine("  • " + ClientInfo.Describe(key));
+            }
+            if (_server?.CollectNote.Length > 0) { text.AppendLine(); text.AppendLine(_server.CollectNote); }
         }
         text.AppendLine();
-        text.Append("Like any server, it also sees the public IP address you connect from.");
-        if (_server is { Collect.Count: > 0 })
-            text.Append("\n\nBy logging in, you agree to the items above being sent to this server with every request the launcher makes.");
+        text.Append("Like any server, it also sees the public IP address (IPv4 or IPv6) you connect from, and it records whether it let you in (its answer code).");
+        if (collect.Count > 0)
+            text.Append("\n\nBy logging in, you agree to all of the above being sent to this server with every request the launcher makes.");
         return text.ToString();
     }
 
