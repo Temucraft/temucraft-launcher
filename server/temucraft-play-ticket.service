@@ -1,0 +1,15 @@
+# systemd service for play tickets. Copy to /etc/systemd/system/, change the path to play-ticket.py, then:
+#   systemctl daemon-reload && systemctl enable --now temucraft-play-ticket
+# Stop it with "systemctl stop temucraft-play-ticket" and open the port again with "python3 play-ticket.py teardown".
+[Unit]
+Description=Temucraft play tickets (game login only through the launcher)
+After=network-online.target apache2.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /root/temucraft-launcher/server/play-ticket.py run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

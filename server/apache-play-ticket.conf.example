@@ -1,0 +1,12 @@
+# Play tickets: put this inside the <VirtualHost> that serves the launcher's files, then: systemctl reload apache2
+# The launcher asks for <SERVER_URL>play-ticket when the player presses PLAY. The request goes through the same IP
+# list and login as the game files, and Apache writes "<ip> <status> <user>" to its own log, which play-ticket.py
+# follows to open the game's login port for that IP (only for status 200: let in).
+
+SetEnvIf Request_URI "/play-ticket$" temucraft_ticket
+LogFormat "%a %>s %u" temucraft_ticket
+CustomLog ${APACHE_LOG_DIR}/temucraft-play-tickets.log temucraft_ticket env=temucraft_ticket
+
+<LocationMatch "/play-ticket$">
+    Header set Cache-Control "no-store"
+</LocationMatch>

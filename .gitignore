@@ -8,4 +8,5 @@ publish/
 .vs/
 *.user
 upload.env
+server/play-ticket.env
 __pycache__/

@@ -798,6 +798,52 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
+    // ------------------------------------------------------------------------------------------- play tickets
+    /// <summary>
+    /// Tells the server this PC is about to play: a request for SERVER_URL/play-ticket, with the player's login.
+    /// A server that uses play tickets (server/play-ticket.py) then opens the game's login port to this IP for a few
+    /// hours; on a server without them the file is missing (404) and nothing happens. Never stops the game starting.
+    /// </summary>
+    async Task<bool> RequestPlayTicketAsync(bool quiet = false)
+    {
+        if (_server is null) return false;
+        if (!HaveLogin || !Agreed)
+        {
+            if (!quiet) Log("No play ticket: not logged in (on a server that needs one, the game can't log in until you log in here)");
+            return false;
+        }
+        ServerClient client = NewClient();   // reads the login boxes: on the window's thread
+        try
+        {
+            using (client)
+            {
+                string? answer = await client.GetTextAsync("play-ticket");
+                if (answer is null) return false;   // this server doesn't use play tickets
+                if (!quiet) Log("Play ticket: this PC may log in to the game");
+                return true;
+            }
+        }
+        catch (Exception error)
+        {
+            Logger.Warning("Couldn't get a play ticket", error);
+            if (!quiet) Status(string.Format(Translation.T("The server didn't give this PC a play ticket ({0}); the game may not be able to log in."), error.Message));
+            return false;
+        }
+    }
+
+    async Task RenewPlayTicketAsync(CancellationToken token)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromHours(1), token);
+                await RequestPlayTicketAsync(quiet: true);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
     // ------------------------------------------------------------------------------------------- shared settings
     void OnShareSettingChanged(object? sender, EventArgs e)
     {
@@ -1655,6 +1701,7 @@ public partial class MainWindow : Window
             if (ClearCacheBox.IsChecked == true) GameFolder.ClearCache(Folder);
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
             ShareSettings(Folder);
+            await RequestPlayTicketAsync();
             Process? game = GameFolder.Start(Folder);
             Log("Started the game");
             if (game is null) return;
@@ -1665,7 +1712,13 @@ public partial class MainWindow : Window
                 case "hide": HideToTray(); break;
             }
             _gameRunning = true;
-            await game.WaitForExitAsync();
+            // the ticket is renewed every hour while the game runs, so a relog late at night still gets in
+            using (CancellationTokenSource playing = new())
+            {
+                _ = RenewPlayTicketAsync(playing.Token);
+                await game.WaitForExitAsync();
+                playing.Cancel();
+            }
             _gameRunning = false;
             Log($"The game closed (exit code {game.ExitCode})");
             ShareSettings(Folder);

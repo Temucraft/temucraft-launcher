@@ -110,6 +110,27 @@ folder), a banner recommends updating and shows the changelog's newest "Launcher
 downloads it (checked against the manifest), swaps it with the running one and restarts; "Later" hides the banner
 until the next start. It is never forced.
 
+## Play tickets: the game only through the launcher
+
+With play tickets, the game's login port (3724) only opens for computers that came through the launcher. When a player
+presses PLAY, the launcher asks for `<SERVER_URL>play-ticket` with their login; Apache logs it, and
+`server/play-ticket.py` opens the port to that IP for 12 hours (renewed every hour while the game runs). Everyone else
+is dropped by the firewall, so starting Wow.exe by hand can't reach the login. A server without play tickets just
+answers 404 and nothing changes.
+
+Setup on the server (Linux, root):
+
+1. Add `server/apache-play-ticket.conf.example` to the `<VirtualHost>` that serves the files, then
+   `a2enmod headers && systemctl reload apache2`.
+2. `apt install ipset iptables`
+3. `cp server/play-ticket.env.example server/play-ticket.env`; put your own IP in `TICKET_ALWAYS` while testing.
+4. `cp server/temucraft-play-ticket.service /etc/systemd/system/` (fix the path inside), then
+   `systemctl daemon-reload && systemctl enable --now temucraft-play-ticket`.
+
+`python3 server/play-ticket.py status` shows who may log in; `allow <ip>` lets someone in by hand; `teardown` (after
+stopping the service) opens the port to everyone again. Use an IPv4 address in `SERVER_URL` when the realmlist is IPv4,
+so the launcher and the game come from the same address.
+
 ## Shared settings between accounts
 
 On the Game files page, "Keep my settings, key bindings and macros the same on all my accounts on this PC" copies the
