@@ -114,13 +114,13 @@
       <Panel>
         <!-- 0 news -->
         <Grid Name="NewsPage" ColumnDefinitions="*,12,*">
-          <Border Classes="panel">
+          <Border Name="NewsPanel" Classes="panel">
             <DockPanel>
               <TextBlock DockPanel.Dock="Top" Classes="title" Text="NEWS" />
               <ScrollViewer><StackPanel Name="NewsList" Spacing="14" /></ScrollViewer>
             </DockPanel>
           </Border>
-          <Border Grid.Column="2" Classes="panel">
+          <Border Grid.Column="2" Name="ChangelogPanel" Classes="panel">
             <DockPanel>
               <TextBlock DockPanel.Dock="Top" Classes="title" Text="CHANGELOG" Margin="0,0,0,2" />
               <TextBlock DockPanel.Dock="Top" Name="TagLegend" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap" />

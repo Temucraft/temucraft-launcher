@@ -3,6 +3,36 @@ using System.Text.Json;
 
 namespace Launcher.Core;
 
+/// <summary>
+/// The last news, changelog and their panel rules the launcher received, kept in the launcher's folder so they show
+/// at once on the next start, before logging in or when the server can't be reached.
+/// </summary>
+public sealed class FeedCache
+{
+    public string News { get; set; } = "";
+    public string Changelog { get; set; } = "";
+    public FeedRule NewsRule { get; set; } = FeedRule.Default;
+    public FeedRule ChangelogRule { get; set; } = FeedRule.Default;
+    public DateTime? Saved { get; set; }
+
+    public static FeedCache Load(string file)
+    {
+        try { return File.Exists(file) ? JsonSerializer.Deserialize<FeedCache>(File.ReadAllText(file)) ?? new() : new(); }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException or NotSupportedException) { return new(); }
+    }
+
+    public void Save(string file)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file + ".tmp", JsonSerializer.Serialize(this));
+            File.Move(file + ".tmp", file, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Logger.Warning("Couldn't keep the news for next time", e); }
+    }
+}
+
 /// <summary>A news post or changelog entry (news.json / changelog.json next to the manifest).</summary>
 public sealed class NewsItem
 {

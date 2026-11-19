@@ -49,7 +49,11 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 public sealed class LauncherPolicy
 {
     public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware"];
-    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks"];
+    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog"];
+
+    /// <summary>How the News or Changelog panel shows (the "news" / "changelog" entries); shown, 20 then 20 more, by default.</summary>
+    public FeedRule News { get; private set; } = FeedRule.Default;
+    public FeedRule Changelog { get; private set; } = FeedRule.Default;
 
     public Dictionary<string, PolicyRule> Settings { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, PolicyRule> Tweaks { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -60,7 +64,12 @@ public sealed class LauncherPolicy
         LauncherPolicy rules = new();
         foreach ((string key, JsonElement value) in policy ?? new Dictionary<string, JsonElement>())
         {
-            if (key.Equals("tweaks", StringComparison.OrdinalIgnoreCase))
+            if (key.Equals("news", StringComparison.OrdinalIgnoreCase) || key.Equals("changelog", StringComparison.OrdinalIgnoreCase))
+            {
+                FeedRule feed = FeedRule.From(value);
+                if (key.Equals("news", StringComparison.OrdinalIgnoreCase)) rules.News = feed; else rules.Changelog = feed;
+            }
+            else if (key.Equals("tweaks", StringComparison.OrdinalIgnoreCase))
             {
                 if (value.ValueKind != JsonValueKind.Object) { rules.Unknown.Add(key); continue; }
                 foreach (JsonProperty cvar in value.EnumerateObject())
@@ -106,4 +115,28 @@ public sealed class LauncherPolicy
             if (config.Get(cvar) != rule.CVarText) { config.Set(cvar, rule.CVarText); changed++; }
         return changed;
     }
+}
+
+/// <summary>
+/// The News or Changelog panel: whether it shows, how many entries at first, and how many "Load more" adds
+/// (-1: the button loads all of them).
+/// </summary>
+public sealed record FeedRule(bool Show, int Entries, int More)
+{
+    public static readonly FeedRule Default = new(true, 20, 20);
+
+    public static FeedRule From(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.False) return Default with { Show = false };
+        if (element.ValueKind != JsonValueKind.Object) return Default;
+        bool show = !element.TryGetProperty("show", out JsonElement s) || s.ValueKind != JsonValueKind.False;
+        int entries = element.TryGetProperty("entries", out JsonElement e) && e.TryGetInt32(out int n) && n > 0 ? n : Default.Entries;
+        int more = element.TryGetProperty("more", out JsonElement m) && m.TryGetInt32(out int k) && (k > 0 || k == -1) ? k : Default.More;
+        return new FeedRule(show, entries, more);
+    }
+
+    /// <summary>The "Load more" button's text for how many entries are left; null when none are.</summary>
+    public string? MoreLabel(int left) => left <= 0 ? null : More == -1 || More >= left ? $"Load all ({left})" : $"Load {More} more ({left} left)";
+
+    public int NextCount(int shown, int total) => More == -1 ? total : Math.Min(total, shown + More);
 }

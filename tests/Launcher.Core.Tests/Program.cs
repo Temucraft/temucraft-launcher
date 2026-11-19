@@ -47,6 +47,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("News dates read as 18th of November 2026 (18/11/2026), numbered per day", NewsDates),
     ("Website links and the header switches are read from launcher.env", NavAndHeader),
     ("Changelog tags are found and coloured", NewsTags),
+    ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -811,6 +812,25 @@ static Task NewsTags()
     Assert(parts.Count(p => p.Color is not null) == 3, string.Join("|", parts.Select(p => p.Text)));
     Assert(parts[1] == ("[New]", "#8FC24A"), "tag written in its own spelling and colour");
     Assert(string.Concat(parts.Select(p => p.Text)).Contains("[not a tag]"), "an unknown bracket was changed");
+    return Task.CompletedTask;
+}
+
+static Task FeedRules()
+{
+    LauncherPolicy p = Manifest.Parse("""{"files": [], "policy": {"news": {"show": false}, "changelog": {"entries": 5, "more": -1}}}""").Rules;
+    Assert(!p.News.Show && p.Changelog is { Show: true, Entries: 5, More: -1 }, $"{p.News} {p.Changelog}");
+    Assert(LauncherPolicy.From(null).News == FeedRule.Default, "default");
+    Assert(new FeedRule(true, 20, 20).MoreLabel(45) == "Load 20 more (45 left)", new FeedRule(true, 20, 20).MoreLabel(45)!);
+    Assert(new FeedRule(true, 20, 20).MoreLabel(7) == "Load all (7)", "fewer left than a page");
+    Assert(new FeedRule(true, 20, -1).MoreLabel(45) == "Load all (45)" && new FeedRule(true, 20, -1).NextCount(20, 65) == 65, "-1 loads all");
+    Assert(new FeedRule(true, 20, 20).MoreLabel(0) is null && new FeedRule(true, 20, 20).NextCount(20, 65) == 40, "paging");
+
+    string file = Path.Combine(TempDir(), "news-cache.json");
+    new FeedCache { News = "[]", Changelog = """[{"date":"2026-11-19","title":"x"}]""", ChangelogRule = new FeedRule(true, 5, -1) }.Save(file);
+    FeedCache back = FeedCache.Load(file);
+    Assert(back.ChangelogRule == new FeedRule(true, 5, -1) && NewsItem.Parse(back.Changelog).Count == 1, "cache round trip");
+    File.WriteAllText(file, "{ broken");
+    Assert(FeedCache.Load(file).News == "", "a broken cache must just be empty");
     return Task.CompletedTask;
 }
 

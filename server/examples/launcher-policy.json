@@ -8,6 +8,8 @@
   "largeAddressAware":  { "value": true,  "enforce": false },
   "defaultLocale":      { "value": "enUS" },
   "requiredLocales":    { "value": [] },
+  "news":               { "show": true, "entries": 20, "more": 20 },
+  "changelog":          { "show": true, "entries": 20, "more": 20 },
   "tweaks": {
     "farclip":           { "value": 1277, "enforce": false },
     "maxFPS":            { "value": 144,  "enforce": false },

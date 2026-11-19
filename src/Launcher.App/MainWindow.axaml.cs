@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 {
     readonly string _settingsFile = Path.Combine(UserSettings.DefaultFolder, "settings.json");
     readonly string _cacheFile = Path.Combine(UserSettings.DefaultFolder, "hash-cache.json");
+    readonly string _feedFile = Path.Combine(UserSettings.DefaultFolder, "news-cache.json");
     readonly UserSettings _settings;
     readonly ServerSettings? _server;
     static readonly HttpClient Web = NewWebClient();
@@ -105,6 +106,7 @@ public partial class MainWindow : Window
             TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run($"[{tag}]") { Foreground = new SolidColorBrush(Color.Parse(color)), FontWeight = FontWeight.SemiBold });
             TagLegend.Inlines.Add(new Avalonia.Controls.Documents.Run("  "));
         }
+        ShowFeeds(FeedCache.Load(_feedFile));   // the last news and changelog, until the server sends new ones
         BuildTweaks();
         RefreshInstalledAddons();
         RefreshBackups();
@@ -461,8 +463,8 @@ public partial class MainWindow : Window
         Log($"Server lists {manifest.Files.Count} files");
 
         bool launcherOk = await SelfCheck.MatchesAsync(manifest, token);
-        IReadOnlyList<NewsItem> news = NewsItem.Parse(await client.GetTextAsync("news.json", token));
-        IReadOnlyList<NewsItem> changelog = NewsItem.Parse(await client.GetTextAsync("changelog.json", token));
+        string? newsText = await client.GetTextAsync("news.json", token);
+        string? changelogText = await client.GetTextAsync("changelog.json", token);
         string? catalog = await client.GetTextAsync("addons.json", token);
         _catalog = catalog is null ? [] : AddonFolder.ParseCatalog(catalog);
 
@@ -476,8 +478,11 @@ public partial class MainWindow : Window
             WarningBanner.IsVisible = !launcherOk;
             WarningText.Text = launcherOk ? "" :
                 "This launcher isn't the one the server hands out (it's older, or it was changed). Download the current launcher from the website.";
-            ShowNews(NewsList, news);
-            ShowNews(ChangelogList, changelog);
+            // shown, and kept for the next start (before logging in, or when the server can't be reached)
+            FeedCache feeds = new() { News = newsText ?? "", Changelog = changelogText ?? "", NewsRule = manifest.Rules.News,
+                                      ChangelogRule = manifest.Rules.Changelog, Saved = DateTime.Now };
+            ShowFeeds(feeds);
+            feeds.Save(_feedFile);
             RefreshCatalog();
             RefreshUntrackedButton();
         });
@@ -514,13 +519,33 @@ public partial class MainWindow : Window
 
     PolicyRule? TweakRule(string cvar) => _policy.Tweaks.GetValueOrDefault(cvar);
 
-    static void ShowNews(StackPanel list, IReadOnlyList<NewsItem> items)
+    /// <summary>News and changelog as the server wants them: which panels show, how many entries, "Load more".</summary>
+    void ShowFeeds(FeedCache feeds)
     {
+        bool news = feeds.NewsRule.Show, changelog = feeds.ChangelogRule.Show;
+        NewsPanel.IsVisible = news;
+        ChangelogPanel.IsVisible = changelog;
+        // one panel shown: it takes the whole page
+        Grid.SetColumn(ChangelogPanel, news ? 2 : 0);
+        Grid.SetColumnSpan(NewsPanel, changelog ? 1 : 3);
+        Grid.SetColumnSpan(ChangelogPanel, news ? 1 : 3);
+        NewsTab.IsVisible = news || changelog;
+        IReadOnlyList<NewsItem> newsItems = [], changelogItems = [];
+        try { newsItems = NewsItem.Parse(feeds.News); changelogItems = NewsItem.Parse(feeds.Changelog); }
+        catch (System.Text.Json.JsonException e) { Logger.Warning("The news or changelog isn't valid JSON", e); }
+        ShowNews(NewsList, newsItems, feeds.NewsRule);
+        ShowNews(ChangelogList, changelogItems, feeds.ChangelogRule);
+    }
+
+    static void ShowNews(StackPanel list, IReadOnlyList<NewsItem> items, FeedRule? rule = null, int? shown = null)
+    {
+        rule ??= FeedRule.Default;
+        int count = Math.Min(items.Count, shown ?? rule.Entries);
         list.Children.Clear();
         if (items.Count == 0)
             list.Children.Add(new TextBlock { Text = "Nothing yet.", Classes = { "dim" } });
         IReadOnlyList<string> dates = NewsItem.DateLines(items);
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i < count; i++)
         {
             NewsItem item = items[i];
             StackPanel card = new() { Spacing = 4 };
@@ -540,6 +565,12 @@ public partial class MainWindow : Window
                 card.Children.Add(open);
             }
             list.Children.Add(card);
+        }
+        if (rule.MoreLabel(items.Count - count) is { } label)
+        {
+            Button more = new() { Content = label, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
+            more.Click += (_, _) => ShowNews(list, items, rule, rule.NextCount(count, items.Count));
+            list.Children.Add(more);
         }
     }
 
