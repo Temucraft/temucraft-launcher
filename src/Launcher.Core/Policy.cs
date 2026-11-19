@@ -40,7 +40,8 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// <list type="bullet">
 /// <item>On/off: installAddons, clearCache, reopenAfterGame, rememberWindow, backupBeforeUpdate, largeAddressAware</item>
 /// <item>backupsToKeep: a number</item>
-/// <item>requiredLocales: languages everyone gets (players may add more); enUS when not set, [] for none</item>
+/// <item>defaultLocale: the server's default language (its base client's), always installed; enUS when not set</item>
+/// <item>requiredLocales: extra languages everyone gets (players may add more)</item>
 /// <item>tweaks: any Config.wtf value by its CVar name, the Tweaks page's or any other, e.g. "farclip"</item>
 /// </list>
 /// Names the launcher doesn't know are kept in <see cref="Unknown"/> (and logged), never an error.
@@ -48,7 +49,7 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 public sealed class LauncherPolicy
 {
     public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware"];
-    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "tweaks"];
+    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks"];
 
     public Dictionary<string, PolicyRule> Settings { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, PolicyRule> Tweaks { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -88,11 +89,12 @@ public sealed class LauncherPolicy
 
     public bool? EnforcedBool(string key) => Setting(key) is { Enforce: true } rule ? rule.Bool : null;
 
-    /// <summary>Languages everyone gets: the server's list, or enUS when it doesn't say (the base client and the
-    /// Temucraft patches are English). An empty list ([]) requires none.</summary>
-    public IReadOnlyList<string> RequiredLocales => Setting("requiredLocales")?.Strings ?? DefaultRequiredLocales;
+    /// <summary>Extra languages everyone gets (on top of <see cref="DefaultLocale"/> and the game's own language).</summary>
+    public IReadOnlyList<string> RequiredLocales => Setting("requiredLocales")?.Strings ?? [];
 
-    public static readonly IReadOnlyList<string> DefaultRequiredLocales = ["enUS"];
+    /// <summary>The server's default language, the language of its base client: enUS unless the server says. Always
+    /// installed (ticked and greyed out).</summary>
+    public string DefaultLocale => Setting("defaultLocale")?.Strings.FirstOrDefault() is { Length: 4 } locale ? locale : "enUS";
 
     public IEnumerable<KeyValuePair<string, PolicyRule>> EnforcedTweaks => Tweaks.Where(t => t.Value.Enforce);
 

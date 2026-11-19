@@ -6,7 +6,8 @@
   "backupBeforeUpdate": { "value": true,  "enforce": false },
   "backupsToKeep":      { "value": 10,    "enforce": false },
   "largeAddressAware":  { "value": true,  "enforce": false },
-  "requiredLocales":    { "value": ["enUS"] },
+  "defaultLocale":      { "value": "enUS" },
+  "requiredLocales":    { "value": [] },
   "tweaks": {
     "farclip":           { "value": 1277, "enforce": false },
     "maxFPS":            { "value": 144,  "enforce": false },

@@ -64,7 +64,7 @@ public partial class MainWindow : Window
         RememberBox.IsEnabled = CredentialStore.IsSupported;
         RememberBox.Content = CredentialStore.IsSupported ? $"Remember password ({CredentialStore.StoreName})" : "Remember password (no password store on this system)";
         WowFolderBox.Text = _settings.WowFolder;
-        WowFolderBox.TextChanged += (_, _) => { ShowPlayState(); LoadTweaks(); };
+        WowFolderBox.TextChanged += (_, _) => { ShowPlayState(); LoadTweaks(); ShowLocales(_manifest?.Locales ?? []); };
         AddonsBox.IsChecked = _settings.InstallAddons;
         ClearCacheBox.IsChecked = _settings.ClearCacheOnPlay;
         ReopenBox.IsChecked = _settings.ReopenAfterGame;
@@ -203,11 +203,11 @@ public partial class MainWindow : Window
     void ShowLocales(IEnumerable<string> available)
     {
         List<string> chosen = _settings.Locales.Count > 0 ? _settings.Locales : GameFolder.InstalledLocales(Folder).ToList();
-        IReadOnlyList<string> required = _policy.RequiredLocales;
+        Dictionary<string, string> locked = LockedLocales(Folder);
         LocalePanel.Children.Clear();
-        foreach (string locale in available.Concat(chosen).Concat(required).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (string locale in available.Concat(chosen).Concat(locked.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            bool must = required.Contains(locale, StringComparer.OrdinalIgnoreCase);
+            bool must = locked.TryGetValue(locale, out string? why);
             CheckBox box = new()
             {
                 Content = locale,
@@ -215,9 +215,20 @@ public partial class MainWindow : Window
                 IsChecked = must || chosen.Contains(locale, StringComparer.OrdinalIgnoreCase),
                 IsEnabled = !must,
             };
-            if (must) ToolTip.SetTip(box, "Everyone gets this one (set by the server)");
+            if (must) ToolTip.SetTip(box, why);
             LocalePanel.Children.Add(box);
         }
+    }
+
+    /// <summary>Languages that are always installed, with why: the game's own, the server's default, and any the
+    /// server requires.</summary>
+    Dictionary<string, string> LockedLocales(string folder)
+    {
+        Dictionary<string, string> locked = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string l in _policy.RequiredLocales) locked[l] = "Everyone gets this one (set by the server)";
+        locked[_policy.DefaultLocale] = "The server's default language (its game files are in it)";
+        if (GameFolder.ClientLocale(folder) is { } own) locked[own] = "Your game's language";
+        return locked;
     }
 
     List<string> SelectedLocales() => LocalePanel.Children.OfType<CheckBox>()
@@ -388,18 +399,22 @@ public partial class MainWindow : Window
     /// <summary>The Launcher page: what this server collects and the exact values sent from this PC.</summary>
     void ShowPrivacy()
     {
-        // the same notice as the login window, then the exact values from this PC and when the player agreed
-        string text = CollectText();
-        if (_server is { Collect.Count: > 0 })
+        // the same notice as the login window, then the exact values from this PC (in a code box) and when they agreed
+        PrivacyText.Text = CollectText();
+        bool any = _server is { Collect.Count: > 0 };
+        PrivacyValuesTitle.IsVisible = PrivacyValuesBox.IsVisible = any;
+        if (any)
         {
-            Dictionary<string, string> values = ClientInfo.Read(_server.Collect, _settings.InstallId);
-            text += "\n\nWhat this PC sends:\n" + string.Join("\n",
-                _server.Collect.Select(k => $"  {ClientInfo.Describe(k)}: {values.GetValueOrDefault(k, "(not available)")}"));
+            Dictionary<string, string> values = ClientInfo.Read(_server!.Collect, _settings.InstallId);
+            int width = _server.Collect.Max(k => k.Length);
+            // one adapter per line under the item, so long lists of addresses stay readable
+            string indent = "\n" + new string(' ', width + 2);
+            PrivacyValues.Text = string.Join("\n", _server.Collect.Select(k =>
+                $"{k.PadRight(width)}  {values.GetValueOrDefault(k, "(not available)").Replace(ClientInfo.AdapterSeparator, indent)}"));
         }
-        text += "\n\n" + (Agreed && _settings.CollectAgreedAt is DateTime when
+        PrivacyAgreed.Text = Agreed && _settings.CollectAgreedAt is DateTime when
             ? $"You agreed on {when:yyyy-MM-dd HH:mm}. If the server changes what it collects or its note, you'll be asked again."
-            : "You haven't agreed yet: nothing is sent until you log in.");
-        PrivacyText.Text = text;
+            : "You haven't agreed yet: nothing is sent until you log in.";
     }
 
     void OnLoginLater(object? sender, RoutedEventArgs e)
@@ -524,8 +539,10 @@ public partial class MainWindow : Window
             using ServerClient _ = client;
             Manifest manifest = await FetchManifestAsync(client, token);
             if (manifest.Enforced("installAddons") is bool addonsEnforced) choice = choice with { Addons = addonsEnforced };
-            if (manifest.Rules.RequiredLocales.Count > 0)
-                choice = choice with { Locales = choice.Locales.Concat(manifest.Rules.RequiredLocales).Distinct(StringComparer.OrdinalIgnoreCase).ToList() };
+            // the game's own language, the server's default and any it requires are always installed
+            IEnumerable<string> always = manifest.Rules.RequiredLocales.Append(manifest.Rules.DefaultLocale);
+            if (GameFolder.ClientLocale(folder) is { } own) always = always.Append(own);
+            choice = choice with { Locales = choice.Locales.Concat(always).Distinct(StringComparer.OrdinalIgnoreCase).ToList() };
             if (manifest.Enforced("backupBeforeUpdate") is bool backupEnforced) _settings.BackupBeforeUpdate = backupEnforced;
             if (!haveGame)
             {

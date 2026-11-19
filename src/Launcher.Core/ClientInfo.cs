@@ -68,17 +68,19 @@ public static class ClientInfo
                 string? value = key switch
                 {
                     "launcherVersion" => LauncherInfo.Version,
-                    "os" => RuntimeInformation.OSDescription,
+                    "os" => OsName(),
                     "installId" => installId,
                     "computerName" => Environment.MachineName,
                     "osUser" => Environment.UserName,
-                    "mac" => string.Join(",", Adapters().Select(n => n.GetPhysicalAddress().ToString()).Where(m => m.Length > 0 && m != "000000000000").Distinct()),
-                    "localIp" => string.Join(",", Adapters().SelectMany(n => n.GetIPProperties().UnicastAddresses)
-                        .Where(a => a.Address.AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6 && !System.Net.IPAddress.IsLoopback(a.Address))
-                        .Select(a => a.Address.ToString()).Distinct()),
+                    // per adapter, by its name ("Ethernet", "Wi-Fi", eth0, en0...): "Ethernet: 02:50:... | Wi-Fi: ..."
+                    "mac" => Group(Adapters().Select(n => (n.Name, FormatMac(n.GetPhysicalAddress().GetAddressBytes()) is { } mac ? new[] { mac } : []))),
+                    "localIp" => Group(Adapters().Select(n => (n.Name, n.GetIPProperties().UnicastAddresses
+                        .Where(a => IsUsefulLocal(a.Address) && !IsTemporary(a))
+                        .OrderBy(a => a.Address.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+                        .Select(a => a.Address.ToString()).Distinct().ToArray()))),
                     "timezone" => TimeZoneInfo.Local.Id,
                     "language" => CultureInfo.CurrentUICulture.Name,
-                    "hardware" => $"{Environment.ProcessorCount} threads, {GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1L << 30)} GB",
+                    "hardware" => $"{Environment.ProcessorCount} threads, {Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (double)(1L << 30))} GB memory",
                     _ => null,
                 };
                 if (!string.IsNullOrEmpty(value)) values[key] = value;
@@ -93,7 +95,59 @@ public static class ClientInfo
 
     static IEnumerable<NetworkInterface> Adapters() =>
         NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up
-                                                              && n.NetworkInterfaceType != NetworkInterfaceType.Loopback);
+                                                              && n.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel));
+
+    /// <summary>Adapters with something to report, as "Name: a, b | Other: c" (adapters with nothing are left out).</summary>
+    public const string AdapterSeparator = " | ";
+
+    public static string Group(IEnumerable<(string Name, string[] Values)> adapters) =>
+        string.Join(AdapterSeparator, adapters.Where(a => a.Values.Length > 0).Select(a => $"{a.Name}: {string.Join(", ", a.Values)}"));
+
+    /// <summary>A real 6-byte hardware address as 02:50:55:6F:87:0E; null for tunnels and empty ones.</summary>
+    public static string? FormatMac(byte[] bytes) =>
+        bytes.Length == 6 && bytes.Any(b => b != 0) ? string.Join(":", bytes.Select(b => b.ToString("X2"))) : null;
+
+    /// <summary>
+    /// An address worth reporting: not loopback, not link-local (fe80::, 169.254.x.x: made up by the PC itself), not
+    /// Teredo (2001:0::, a Windows tunnel). The LAN IPv4, VPN addresses and stable IPv6 stay.
+    /// </summary>
+    public static bool IsUsefulLocal(System.Net.IPAddress address)
+    {
+        if (System.Net.IPAddress.IsLoopback(address)) return false;
+        if (address.AddressFamily == AddressFamily.InterNetwork)
+        {
+            byte[] b = address.GetAddressBytes();
+            return !(b[0] == 169 && b[1] == 254) && !(b[0] == 0);
+        }
+        return address.AddressFamily == AddressFamily.InterNetworkV6 && !address.IsIPv6LinkLocal && !address.IsIPv6Teredo
+               && !address.IsIPv6Multicast;
+    }
+
+    /// <summary>IPv6 privacy addresses change every day or so; the stable one is enough.</summary>
+    static bool IsTemporary(UnicastIPAddressInformation a)
+    {
+        if (a.Address.AddressFamily != AddressFamily.InterNetworkV6 || !OperatingSystem.IsWindows()) return false;
+        try { return a.SuffixOrigin == SuffixOrigin.Random; }
+        catch (PlatformNotSupportedException) { return false; }
+    }
+
+    /// <summary>"Windows 11 25H2 (build 26200.7171)" rather than "Microsoft Windows 10.0.26200" (Windows 11 still
+    /// calls itself 10.0); other systems as they describe themselves.</summary>
+    public static string OsName()
+    {
+        if (!OperatingSystem.IsWindows()) return RuntimeInformation.OSDescription;
+        Version v = Environment.OSVersion.Version;
+        string name = v.Major == 10 && v.Build >= 22000 ? "Windows 11" : v.Major == 10 ? "Windows 10" : $"Windows {v.Major}.{v.Minor}";
+        string release = "", revision = "";
+        try
+        {
+            using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            release = key?.GetValue("DisplayVersion") as string ?? "";
+            revision = key?.GetValue("UBR") is int ubr ? "." + ubr : "";
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException) { }
+        return $"{name}{(release.Length > 0 ? " " + release : "")} (build {v.Build}{revision})";
+    }
 
     /// <summary>The headers to send: one per item, the value URL-encoded (any name or language fits in a header, and
     /// commas and quotes can't break the server's CSV log).</summary>

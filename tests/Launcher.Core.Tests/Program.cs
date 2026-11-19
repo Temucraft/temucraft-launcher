@@ -43,6 +43,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("The policy reads every kind of setting and tweak", PolicyReadsEverything),
     ("Only what the server lists is read and sent, one header each", ClientInfoSent),
     ("Remember me works through the Linux keyring (secret-tool)", LinuxKeyring),
+    ("Only real MACs and useful local addresses are reported", ClientInfoFilters),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -678,8 +679,17 @@ static Task PolicyReadsEverything()
     Assert(p.Setting("backupsToKeep") is { Int: 3, Enforce: false }, "backupsToKeep");
     Assert(p.EnforcedBool("largeAddressAware") == true, "a string \"on\" isn't true");
     Assert(p.RequiredLocales.SequenceEqual(["enUS", "deDE"]), "required locales: " + string.Join(",", p.RequiredLocales));
-    Assert(LauncherPolicy.From(null).RequiredLocales.SequenceEqual(["enUS"]), "enUS isn't required by default");
-    Assert(Manifest.Parse("""{"files": [], "policy": {"requiredLocales": {"value": []}}}""").Rules.RequiredLocales.Count == 0, "[] must require none");
+    Assert(LauncherPolicy.From(null).DefaultLocale == "enUS" && LauncherPolicy.From(null).RequiredLocales.Count == 0, "defaults");
+    Assert(Manifest.Parse("""{"files": [], "policy": {"defaultLocale": {"value": "deDE"}}}""").Rules.DefaultLocale == "deDE", "defaultLocale");
+
+    string game = TempDir();
+    Directory.CreateDirectory(Path.Combine(game, "Data", "enUS")); Directory.CreateDirectory(Path.Combine(game, "Data", "frFR"));
+    Directory.CreateDirectory(Path.Combine(game, "WTF"));
+    File.WriteAllText(Path.Combine(game, "Wow.exe"), "MZ");
+    Assert(GameFolder.ClientLocale(game) == "enUS", "first language folder");
+    File.WriteAllText(Path.Combine(game, "WTF", "Config.wtf"), "SET locale \"frFR\"\n");
+    Assert(GameFolder.ClientLocale(game) == "frFR", "Config.wtf's locale");
+    Assert(GameFolder.ClientLocale(TempDir()) is null, "a language for an empty folder");
     Assert(p.Setting("clearCache") is { Enforce: false, Bool: false }, "a bare value isn't a recommendation");
     Assert(p.Unknown.Contains("somethingNew") && p.Unknown.Contains("tweaks.SET weird"), "unknown names: " + string.Join(",", p.Unknown));
     Assert(p.Tweaks["FARCLIP"].CVarText == "1277" && p.Tweaks["gxWindow"].CVarText == "1" && p.Tweaks["cameraDistanceMaxFactor"].CVarText == "2.5",
@@ -748,6 +758,20 @@ static Task LinuxKeyring()
     {
         Environment.SetEnvironmentVariable("LAUNCHER_SECRET_TOOL", null);
     }
+    return Task.CompletedTask;
+}
+
+static Task ClientInfoFilters()
+{
+    Assert(ClientInfo.FormatMac([0x02, 0x50, 0x55, 0x6F, 0x87, 0x0E]) == "02:50:55:6F:87:0E", "MAC format");
+    Assert(ClientInfo.FormatMac([0, 0, 0, 0, 0, 0, 0, 0xE0]) is null, "a tunnel's 8-byte address was kept");
+    Assert(ClientInfo.FormatMac(new byte[6]) is null, "an empty MAC was kept");
+    Assert(ClientInfo.Group([("Ethernet", ["192.168.1.150", "2001:8a0::1"]), ("Teredo", []), ("Radmin VPN", ["26.157.96.187"])])
+           == "Ethernet: 192.168.1.150, 2001:8a0::1 | Radmin VPN: 26.157.96.187", "adapter grouping");
+    foreach (string keep in new[] { "192.168.1.150", "26.157.96.187", "2001:8a0:6396:d400:4853:f01a:c9d:3439", "fdfd::1a9d:60bb" })
+        Assert(ClientInfo.IsUsefulLocal(IPAddress.Parse(keep)), "dropped " + keep);
+    foreach (string drop in new[] { "fe80::8b63:3ebc:dc5b:d70c%17", "169.254.83.107", "2001:0:4625:9800:3c0b:950:ae3e:d1ee", "127.0.0.1", "::1" })
+        Assert(!ClientInfo.IsUsefulLocal(IPAddress.Parse(drop)), "kept " + drop);
     return Task.CompletedTask;
 }
 

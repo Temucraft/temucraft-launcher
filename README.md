@@ -74,7 +74,8 @@ recommendation (and as the value outright where the launcher has no box for it).
 | `installAddons`, `clearCache`, `reopenAfterGame`, `rememberWindow`, `backupBeforeUpdate` | true / false | the launcher's switches |
 | `largeAddressAware` | true / false | Wow.exe's 4 GB switch; enforced, it's set again after every update |
 | `backupsToKeep` | a number | how many backups the launcher keeps |
-| `requiredLocales` | e.g. `["enUS"]` | languages everyone gets, ticked and greyed out (players can still add more); `["enUS"]` when not set, `[]` for none |
+| `defaultLocale` | e.g. `"enUS"` | the server's default language (its base client's): always installed, ticked and greyed out; `enUS` when not set. The game's own language is always kept too. |
+| `requiredLocales` | e.g. `["deDE"]` | extra languages everyone gets (players can still add more) |
 | `tweaks` | `{"<CVar>": {...}}` | any `Config.wtf` value by its name, the Tweaks page's or any other (e.g. `farclip`, `maxFPS`); enforced ones are written to `Config.wtf` after every update and on Save, others show as the recommendation ("Use recommended") |
 
 Names the launcher doesn't know are skipped and noted in its log, so a newer policy never breaks an older launcher.

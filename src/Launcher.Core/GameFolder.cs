@@ -26,6 +26,18 @@ public static class GameFolder
             .ToList();
     }
 
+    /// <summary>The game's own language: Config.wtf's SET locale, else its only (or first) language folder; null
+    /// without a game.</summary>
+    public static string? ClientLocale(string folder)
+    {
+        if (!LooksLikeClient(folder)) return null;
+        string? configured = null;
+        try { configured = ConfigWtf.Load(folder).Get("locale"); } catch (IOException) { }
+        IReadOnlyList<string> installed = InstalledLocales(folder);
+        if (configured is { Length: 4 } && installed.Contains(configured, StringComparer.OrdinalIgnoreCase)) return configured;
+        return installed.FirstOrDefault();
+    }
+
     public static void WriteRealmlist(string folder, string realmlist)
     {
         if (string.IsNullOrWhiteSpace(realmlist))
