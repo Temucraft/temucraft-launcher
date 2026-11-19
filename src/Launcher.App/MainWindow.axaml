@@ -190,7 +190,7 @@
                 <CheckBox Grid.Row="1" Name="RememberBox" Content="Remember password (Windows Credential Manager)" />
                 <Button Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" Content="Connect" Click="OnConnect" Margin="0,4,0,0" />
               </Grid>
-              <TextBlock Classes="dim" Margin="0,4,0,0" Text="Your own login from the server's owner. The server also only accepts the addresses it knows, so ask them to add yours if it says your address isn't allowed." />
+              <TextBlock Classes="dim" Margin="0,4,0,0" Text="Your own login from the server's owner." />
               </StackPanel>
 
               <TextBlock Classes="section" Text="WORLD OF WARCRAFT 3.3.5a FOLDER" />

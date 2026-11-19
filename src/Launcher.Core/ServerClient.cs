@@ -12,11 +12,14 @@ public sealed class LoginFailedException(string message) : Exception(message);
 
 /// <summary>
 /// Talks to the Apache folder: the manifest and the files, with the username and password Apache asks for (HTTP
-/// basic auth, over https). Apache's IP whitelist is checked before the password, so an address that isn't on it gets
-/// 403 Forbidden.
+/// basic auth, over https). The server also only lets in known addresses; a refused login and a refused address get the
+/// same message, so nobody can tell which it was.
 /// </summary>
 public sealed class ServerClient : IDisposable
 {
+    public const string RefusedMessage =
+        "The server didn't accept the login. Check your username and password; if they're right, ask the server's owner to let you in.";
+
     readonly HttpClient _http;
     readonly Uri _base;
     readonly bool _pinned;
@@ -86,12 +89,12 @@ public sealed class ServerClient : IDisposable
 
     static void ThrowForStatus(HttpResponseMessage response)
     {
-        switch (response.StatusCode)
+        // One message for both on purpose: like the server, the launcher doesn't tell a stranger whether the password
+        // was wrong or the address isn't allowed
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            case HttpStatusCode.Unauthorized:
-                throw new LoginFailedException("Wrong username or password.");
-            case HttpStatusCode.Forbidden:
-                throw new LoginFailedException("The server doesn't accept connections from your IP address.");
+            Logger.Info($"Login refused ({(int)response.StatusCode})", toWindow: false);
+            throw new LoginFailedException(RefusedMessage);
         }
         response.EnsureSuccessStatusCode();
     }

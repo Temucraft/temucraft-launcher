@@ -16,7 +16,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Hash cache reuses and refreshes hashes", HashCacheReuse),
     ("Download installs a file only when its checksum matches", DownloadVerifies),
     ("Download resumes a partial file with a range request", DownloadResumes),
-    ("Wrong password and blocked IP give clear errors", LoginErrors),
+    ("A wrong password and a blocked address give the same message", LoginErrors),
     ("Realmlist goes to every locale; obsolete files are removed", GameFolderChanges),
     ("File names with spaces and # download from the right address", DownloadEscapesNames),
     ("Parses make-manifest.py's output (LAUNCHER_SAMPLE_MANIFEST)", SampleManifest),
@@ -339,8 +339,9 @@ static async Task DownloadResumes()
 
 static async Task LoginErrors()
 {
-    foreach ((HttpStatusCode code, string expected) in new[] { (HttpStatusCode.Unauthorized, "password"),
-                                                              (HttpStatusCode.Forbidden, "IP") })
+    // a wrong password and an address that isn't allowed must look the same
+    foreach ((HttpStatusCode code, string expected) in new[] { (HttpStatusCode.Unauthorized, ServerClient.RefusedMessage),
+                                                              (HttpStatusCode.Forbidden, ServerClient.RefusedMessage) })
     {
         FakeServer server = new(new()) { ForceStatus = code };
         using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
