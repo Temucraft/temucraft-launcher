@@ -310,6 +310,7 @@
                     <NumericUpDown Name="LimitNumber" Width="150" Height="32" MinHeight="32" Minimum="1" Maximum="10000000" Increment="100"
                                    FormatString="0" ClipValueToMinMax="True" VerticalContentAlignment="Center" />
                     <TextBlock Name="LimitUnit" Text="KB/s" VerticalAlignment="Center" />
+                      <TextBlock Name="LimitEquivalent" Classes="dim" VerticalAlignment="Center" />
                   </StackPanel>
                   <TextBlock Name="ServerCapNote" Classes="dim" FontSize="12" IsVisible="False" />
                   <CheckBox Name="BitsBox" Content="Show download speeds in bits per second" />

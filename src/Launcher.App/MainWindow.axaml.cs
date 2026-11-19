@@ -725,11 +725,23 @@ public partial class MainWindow : Window
         bool bits = _settings.SpeedInBits;
         long cap = _policy.DownloadLimitKBps;
         LimitUnit.Text = bits ? "kbit/s" : "KB/s";
-        LimitNumber.Maximum = cap > 0 ? cap * (bits ? 8 : 1) : 10_000_000;
-        LimitNumber.Value = Math.Min(_settings.DownloadLimitKBps, cap > 0 ? cap : long.MaxValue) * (bits ? 8 : 1);
+        // kbit/s are 1000 bits, KB/s 1024 bytes: 1 KB/s = 8.192 kbit/s
+        LimitNumber.Maximum = cap > 0 ? Math.Round(cap * (bits ? KbitPerKB : 1)) : 10_000_000;
+        LimitNumber.Value = Math.Round(Math.Min(_settings.DownloadLimitKBps, cap > 0 ? cap : long.MaxValue) * (bits ? KbitPerKB : 1));
         LimitNumber.IsEnabled = _settings.LimitDownloads;
+        ShowLimitEquivalent();
+        ShowSpeedTestText();
         ServerCapNote.IsVisible = cap > 0;
         ServerCapNote.Text = cap > 0 ? string.Format(Translation.T("This server caps downloads at {0}."), SpeedLimit.Format(cap * 1024, bits)) : "";
+    }
+
+    const decimal KbitPerKB = 8.192m;
+
+    /// <summary>The limit in bigger units next to the box: "= 3.9 MB/s" (or "= 31.3 Mbit/s").</summary>
+    void ShowLimitEquivalent()
+    {
+        long kb = LimitNumber.Value is decimal v && v > 0 ? (long)Math.Round(v / (_settings.SpeedInBits ? KbitPerKB : 1)) : 0;
+        LimitEquivalent.Text = kb >= 1024 ? "= " + SpeedLimit.Format(kb * 1024, _settings.SpeedInBits) : "";
     }
 
     void ApplySpeedLimit()
@@ -746,9 +758,13 @@ public partial class MainWindow : Window
         bool bitsBefore = _settings.SpeedInBits;
         _settings.SpeedInBits = BitsBox.IsChecked == true;
         if (sender == LimitNumber && LimitNumber.Value is decimal v && v > 0)
-            _settings.DownloadLimitKBps = (long)Math.Max(1, Math.Round(v / (_settings.SpeedInBits ? 8 : 1)));
+            _settings.DownloadLimitKBps = (long)Math.Max(1, Math.Round(v / (_settings.SpeedInBits ? KbitPerKB : 1)));
         _fillingWindowSettings = true;
-        try { if (sender != LimitNumber || bitsBefore != _settings.SpeedInBits) ShowLimitNumber(); else LimitNumber.IsEnabled = _settings.LimitDownloads; }
+        try
+        {
+            if (sender != LimitNumber || bitsBefore != _settings.SpeedInBits) ShowLimitNumber();
+            else { LimitNumber.IsEnabled = _settings.LimitDownloads; ShowLimitEquivalent(); }
+        }
         finally { _fillingWindowSettings = false; }
         ApplySpeedLimit();   // also for a download that is running now
         SaveSettings();
@@ -776,6 +792,15 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------------------------------------- speed test
     long _suggestedKBps;
+    double _measuredBytesPerSecond;
+
+    /// <summary>The speed test's result in the units chosen now (bits or bytes); empty before a test.</summary>
+    void ShowSpeedTestText()
+    {
+        if (_measuredBytesPerSecond <= 0) return;
+        SpeedTestText.Text = string.Format(Translation.T("Your speed to this server: {0}. Suggested limit: {1} (leaves room for games, calls and video)."),
+            SpeedLimit.Format(_measuredBytesPerSecond, _settings.SpeedInBits), SpeedLimit.Format(_suggestedKBps * 1024, _settings.SpeedInBits));
+    }
 
     /// <summary>Downloads part of the server's biggest file for a few seconds (no limit) and suggests a limit that
     /// leaves room for everything else on the connection.</summary>
@@ -799,8 +824,8 @@ public partial class MainWindow : Window
         SpeedTestButton.IsEnabled = true;
         if (!done || bytesPerSecond <= 0) { SpeedTestText.Text = ""; return; }
         _suggestedKBps = SpeedLimit.Suggest(bytesPerSecond, _policy.DownloadLimitKBps);
-        SpeedTestText.Text = string.Format(Translation.T("Your speed to this server: {0}. Suggested limit: {1} (leaves room for games, calls and video)."),
-            SpeedLimit.Format(bytesPerSecond, _settings.SpeedInBits), SpeedLimit.Format(_suggestedKBps * 1024, _settings.SpeedInBits));
+        _measuredBytesPerSecond = bytesPerSecond;
+        ShowSpeedTestText();
         UseSuggestedButton.IsVisible = true;
         Log($"Speed test: {SpeedLimit.Format(bytesPerSecond, false)} ({SpeedLimit.Format(bytesPerSecond, true)}); suggested limit {_suggestedKBps} KB/s");
     }
