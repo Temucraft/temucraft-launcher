@@ -69,8 +69,8 @@ UPDATE) and the untracked-files warning.
 2. Copy `server/apache-temucraft.conf.example` into your Apache config, set your whitelisted addresses and the path,
    create the users with `htpasswd`, and reload Apache. Use https.
 3. Optional files next to the manifest: `client-version.txt`, `news.json`, `changelog.json`, `addons.json` and the
-   `options/` folder for **cosmetic** patches and switchable fixes (an option group with an `On` and an empty `Off`
-   folder and `"order": ["On", "Off"]` is on by default and can be turned off) (see `server/examples/` and the top of `make-manifest.py`); patches the
+   `options/` folder for **cosmetic** patches and switchable fixes (an option group with an `On` folder and `"order": ["On", "Off"]` in its `group.json` is on by
+   default and can be turned off; `Off` needs no folder) (see `server/examples/` and the top of `make-manifest.py`); patches the
    game or the server need belong in `patches/`, which every player gets.
 4. Each time you add or change files, rebuild the manifest:
 

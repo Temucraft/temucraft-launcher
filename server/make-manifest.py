@@ -14,7 +14,8 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
         options/<Group>/<Option>/<path inside the WoW folder>            cosmetic patches only (darker nights...), installed
                                                                          when the player picks that option
                                       (e.g. options/Login screen/Classic/Data/patch-L.MPQ); options/<Group>/group.json
-                                      may hold {"description": "...", "optional": true, "order": ["Classic", ...]}
+                                      may hold {"description": "...", "optional": true, "order": ["Classic", ...]};
+                                      an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
         news.json, changelog.json     [{"date": "...", "title": "...", "text": "...", "link": "https://..."}]
         addons.json                   [{"name": "...", "description": "...", "repo": "owner/repo", "branch": "main",
@@ -33,7 +34,7 @@ import json
 import os
 import sys
 
-LOCALES = {"enUS", "enGB", "deDE", "frFR", "esES", "esMX", "ruRU", "koKR", "zhCN", "zhTW", "ptBR", "itIT"}
+LOCALES = {"enUS", "enGB", "enCN", "enTW", "deDE", "frFR", "esES", "esMX", "ruRU", "koKR", "zhCN", "zhTW", "ptBR", "itIT"}
 CACHE_NAME = ".manifest-cache.json"
 
 
@@ -132,9 +133,12 @@ def build(files_dir, realmlist, cache):
                 with open(os.path.join(gdir, "group.json")) as f:
                     info = json.load(f)
             names = sorted(o for o in os.listdir(gdir) if os.path.isdir(os.path.join(gdir, o)) and not o.startswith("."))
-            order = [o for o in info.get("order", []) if o in names] + [o for o in names if o not in info.get("order", [])]
+            # an option listed in "order" may have no folder: it installs nothing (e.g. "Off"; uploads skip empty folders)
+            order = list(info.get("order", [])) + [o for o in names if o not in info.get("order", [])]
             for option in order:
                 odir = os.path.join(gdir, option)
+                if not os.path.isdir(odir):
+                    continue
                 for path in walk(odir):
                     files.append(entry(files_dir, path, os.path.relpath(path, odir).replace(os.sep, "/"), "option", cache,
                                        group=group, option=option))
