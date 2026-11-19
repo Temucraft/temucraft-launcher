@@ -257,5 +257,28 @@
         </Border>
       </Panel>
     </DockPanel>
+
+    <!-- login: asked first, like a website's login prompt -->
+    <Grid Name="LoginOverlay" Background="#F20E0B14" IsVisible="False">
+      <Border Classes="panel" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,24">
+        <StackPanel Spacing="10">
+          <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+            <Image Source="/Assets/temucraft.png" Width="56" Height="56" />
+            <TextBlock Text="TEMUCRAFT" FontSize="30" FontWeight="Black" Foreground="#F2C14E" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock Classes="dim" HorizontalAlignment="Center" TextAlignment="Center"
+                     Text="Log in to get the game files. Your login comes from the server's owner." />
+          <TextBox Name="LoginUser" Watermark="Username" />
+          <TextBox Name="LoginPass" Watermark="Password" PasswordChar="•" />
+          <CheckBox Name="LoginRemember" Content="Remember me (Windows Credential Manager)" />
+          <TextBlock Name="LoginError" Foreground="#FF7A6A" TextWrapping="Wrap" IsVisible="False" />
+          <Grid ColumnDefinitions="*,8,Auto">
+            <Button Name="LoginButton" Content="Log in" IsDefault="True" HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center" Click="OnLogin" />
+            <Button Grid.Column="2" Content="Not now" Click="OnLoginLater" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
   </Panel>
 </Window>

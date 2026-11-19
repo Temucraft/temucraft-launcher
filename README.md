@@ -11,7 +11,9 @@ the repository or in the exe.
 
 - Logs in with each player's own username and password for the game files (HTTP basic auth, https only unless
   `ALLOW_HTTP=1`); the server also only accepts the addresses it knows. A wrong password and an address that isn't
-  allowed each get their own message. Without a login, the launcher opens Settings at the account box.
+  allowed each get their own message. The login is asked first, in its own window, like a website's login
+  prompt; the server checks it against the login set there. With "Remember me" it logs in by itself next time and
+  only asks again if the server refuses it. Nothing about the login is stored in `launcher.env`.
 - A new player picks an empty folder: PLAY turns into INSTALL and downloads the whole game there (the server's
   `base/`), then the server's files. "Install game files…" does the same for a folder picked there.
 - Reads `manifest.json`: every file with its size and SHA-256.

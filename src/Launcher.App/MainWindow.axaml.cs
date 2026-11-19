@@ -258,6 +258,11 @@ public partial class MainWindow : Window
             Status("Cancelled.");
             Log($"{what}: cancelled");
         }
+        catch (LoginFailedException e)
+        {
+            Logger.Warning($"{what}: {e.Message}");
+            ShowLogin(e.Message);   // wrong password, or an address the server doesn't know: ask again, saying why
+        }
         catch (Exception e)
         {
             Status(e.Message);
@@ -290,12 +295,46 @@ public partial class MainWindow : Window
     /// <summary>Every player has their own login for the game files (and the server only lets in known addresses).</summary>
     bool HaveLogin => _server is not null && !string.IsNullOrWhiteSpace(UsernameBox.Text) && !string.IsNullOrEmpty(PasswordBox.Text);
 
-    /// <summary>No login yet: opens Settings at the account box and says what to do.</summary>
-    void AskForLogin()
+    /// <summary>No login yet (or the server refused it): the login window, like a website's login prompt.</summary>
+    void AskForLogin(string? error = null) => ShowLogin(error);
+
+    void ShowLogin(string? error)
     {
-        OnTab(SettingsTab, new RoutedEventArgs());
-        StatusText.Text = "Enter your username and password for the game files under Settings, then press Connect.";
-        (string.IsNullOrWhiteSpace(UsernameBox.Text) ? UsernameBox : PasswordBox).Focus();
+        LoginUser.Text = UsernameBox.Text;
+        LoginPass.Text = error is null ? PasswordBox.Text : "";
+        LoginRemember.IsChecked = RememberBox.IsChecked;
+        LoginRemember.IsEnabled = CredentialStore.IsSupported;
+        LoginError.Text = error ?? "";
+        LoginError.IsVisible = error is not null;
+        LoginButton.IsEnabled = true;
+        LoginOverlay.IsVisible = true;
+        (string.IsNullOrWhiteSpace(LoginUser.Text) ? LoginUser : LoginPass).Focus();
+        StatusText.Text = "Log in to get the game files.";
+    }
+
+    async void OnLogin(object? sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(LoginUser.Text) || string.IsNullOrEmpty(LoginPass.Text))
+        {
+            LoginError.Text = "Enter your username and password.";
+            LoginError.IsVisible = true;
+            return;
+        }
+        UsernameBox.Text = LoginUser.Text.Trim();
+        PasswordBox.Text = LoginPass.Text;
+        RememberBox.IsChecked = LoginRemember.IsChecked;
+        LoginButton.IsEnabled = false;
+        LoginError.Text = "Logging in…";
+        LoginError.IsVisible = true;
+        LoginOverlay.IsVisible = false;   // a refused login brings it back with the reason
+        SaveSettings();
+        await CheckAsync(download: false);
+    }
+
+    void OnLoginLater(object? sender, RoutedEventArgs e)
+    {
+        LoginOverlay.IsVisible = false;
+        StatusText.Text = "Not logged in: you can play, but updates need your login (Settings, or press UPDATE).";
     }
 
     /// <summary>What to install, read from the window (call on the window's thread).</summary>
