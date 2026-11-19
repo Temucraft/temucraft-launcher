@@ -1,0 +1,7 @@
+{
+  "installAddons":      { "value": true,  "enforce": false },
+  "clearCache":         { "value": true,  "enforce": false },
+  "reopenAfterGame":    { "value": true,  "enforce": false },
+  "rememberWindow":     { "value": false, "enforce": false },
+  "backupBeforeUpdate": { "value": true,  "enforce": false }
+}

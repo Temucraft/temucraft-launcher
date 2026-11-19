@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Launcher.App.MainWindow"
-        Title="Temucraft Launcher" Width="980" Height="640" MinWidth="820" MinHeight="560"
+        Title="Temucraft Launcher" Icon="/Assets/temucraft.ico" Width="980" Height="640" MinWidth="820" MinHeight="560"
         Background="#0E0B14">
   <Window.Styles>
     <Style Selector="Button.tab">
@@ -64,6 +64,7 @@
       <!-- header -->
       <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Image Source="/Assets/temucraft.png" Width="44" Height="44" Margin="0,0,10,0" VerticalAlignment="Center" />
           <TextBlock Text="TEMUCRAFT" FontSize="30" FontWeight="Black" Foreground="#F2C14E" VerticalAlignment="Center" />
           <TextBlock Name="ServerText" Classes="dim" VerticalAlignment="Center" Margin="12,6,0,0" FontSize="12" />
         </StackPanel>
@@ -71,8 +72,9 @@
           <Button Name="NewsTab" Classes="tab selected" Content="NEWS" Click="OnTab" Tag="0" />
           <Button Name="TweaksTab" Classes="tab" Content="TWEAKS" Click="OnTab" Tag="1" />
           <Button Name="AddonsTab" Classes="tab" Content="ADDONS" Click="OnTab" Tag="2" />
-          <Button Name="ModsTab" Classes="tab" Content="MODS" Click="OnTab" Tag="3" />
+          <Button Name="ModsTab" Classes="tab" Content="OPTIONS" Click="OnTab" Tag="3" />
           <Button Name="SettingsTab" Classes="tab" Content="SETTINGS" Click="OnTab" Tag="4" />
+          <Button Name="LauncherTab" Classes="tab" Content="LAUNCHER" Click="OnTab" Tag="5" />
         </StackPanel>
         <TextBlock Grid.Column="2" Name="AccountText" Foreground="#E8E2D0" VerticalAlignment="Center" />
       </Grid>
@@ -121,6 +123,8 @@
               <Button Content="Restore defaults" Click="OnDefaultTweaks" />
               <TextBlock Classes="dim" VerticalAlignment="Center" Text="Highlighted options are recommended. Changes are written to WTF\Config.wtf; close the game first." />
             </StackPanel>
+            <TextBlock DockPanel.Dock="Top" Name="TweaksHint" Classes="dim" IsVisible="False" Margin="0,0,0,8"
+                       Text="These are read from your game's WTF\Config.wtf: pick your WoW folder under Settings, or install the game files there first." />
             <ScrollViewer><StackPanel Name="TweaksList" /></ScrollViewer>
           </DockPanel>
         </Border>
@@ -163,8 +167,8 @@
         <Border Name="ModsPage" Classes="panel" IsVisible="False">
           <ScrollViewer>
             <StackPanel>
-              <TextBlock Classes="title" Text="COSMETIC PATCHES" />
-              <TextBlock Classes="dim" Text="Looks only, never gameplay: darker nights, login screens, model packs and the like. Pick what you like; it is installed (or removed) at the next update." />
+              <TextBlock Classes="title" Text="OPTIONS" />
+              <TextBlock Classes="dim" Text="Fixes and extras from the server, never gameplay. The fixes are on by default; turn off any you don't want. Changes are installed (or removed) at the next update." />
               <StackPanel Name="OptionsList" Margin="0,8,0,0" Spacing="10" />
               <TextBlock Classes="section" Text="UNTRACKED PATCHES" />
               <TextBlock Classes="dim" Text="Patches in Data that neither the client nor the server hand out. They can break the game; removing moves them to the launcher's backup folder." />
@@ -178,34 +182,32 @@
           <ScrollViewer>
             <StackPanel>
               <TextBlock Classes="title" Text="SETTINGS" />
-              <TextBlock Classes="section" Text="ACCOUNT (the website login)" />
+              <StackPanel Name="AccountSection">
+              <TextBlock Classes="section" Text="ACCOUNT (the login for the server's game files)" />
               <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
                 <TextBox Name="UsernameBox" Watermark="Username" />
                 <TextBox Grid.Column="2" Name="PasswordBox" Watermark="Password" PasswordChar="•" />
                 <CheckBox Grid.Row="1" Name="RememberBox" Content="Remember password (Windows Credential Manager)" />
+                <Button Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" Content="Connect" Click="OnConnect" Margin="0,4,0,0" />
               </Grid>
+              <TextBlock Classes="dim" Margin="0,4,0,0" Text="Your own login from the server's owner. The server also only accepts the addresses it knows, so ask them to add yours if it says your address isn't allowed." />
+              </StackPanel>
 
               <TextBlock Classes="section" Text="WORLD OF WARCRAFT 3.3.5a FOLDER" />
               <Grid ColumnDefinitions="*,8,Auto,8,Auto">
                 <TextBox Name="WowFolderBox" Watermark="C:\Games\World of Warcraft" />
                 <Button Grid.Column="2" Content="Browse…" Click="OnBrowseWow" />
-                <Button Grid.Column="4" Name="ClientButton" Content="Install game files…" Click="OnDownloadClient" IsVisible="False" />
+                <Button Grid.Column="4" Name="ClientButton" Content="Install game files…" Click="OnDownloadClient" />
               </Grid>
+              <TextBlock Classes="dim" Margin="0,4,0,0" Text="No game yet? Press Install game files… and pick an empty folder: the whole client is downloaded there." />
 
-              <TextBlock Classes="section" Text="LOCALES" />
-              <TextBlock Classes="dim" Text="The server's locale files, for each language you want." />
+              <TextBlock Classes="section" Text="LANGUAGES" />
+              <TextBlock Classes="dim" Text="The game languages to install." />
               <WrapPanel Name="LocalePanel" Margin="0,4,0,0" />
 
-              <TextBlock Classes="section" Text="GENERAL" />
+              <TextBlock Classes="section" Text="GAME" />
               <CheckBox Name="AddonsBox" Content="Install the addons the server needs" IsChecked="True" />
               <CheckBox Name="ClearCacheBox" Content="Clean the client's Cache (WDB) on each launch" IsChecked="True" />
-              <CheckBox Name="ReopenBox" Content="Reopen the launcher after WoW closes" IsChecked="True" />
-              <CheckBox Name="RememberWindowBox" Content="Remember position and size of the launcher window" />
-              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
-                <TextBlock VerticalAlignment="Center" Text="Launcher background:" />
-                <Button Content="Choose picture…" Click="OnPickBackground" />
-                <Button Content="Default" Click="OnDefaultBackground" />
-              </StackPanel>
 
               <TextBlock Classes="section" Text="BACKUPS" />
               <TextBlock Classes="dim" Text="Your settings, macros, key bindings and addons (WTF and Interface\AddOns)." />
@@ -221,13 +223,34 @@
                 <Button Content="Import macros and key bindings…" Click="OnImportMacros" />
               </StackPanel>
 
-              <TextBlock Classes="section" Text="TROUBLESHOOTING" />
+              <TextBlock Classes="section" Text="GAME FILES" />
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Content="Verify game files" Click="OnVerify" />
                 <Button Name="UpdateButton" Content="Check for updates" Click="OnUpdate" />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
+
+        <!-- 5 launcher -->
+        <Border Name="LauncherPage" Classes="panel" IsVisible="False">
+          <ScrollViewer>
+            <StackPanel>
+              <TextBlock Classes="title" Text="LAUNCHER" />
+              <CheckBox Name="ReopenBox" Content="Reopen the launcher after WoW closes" IsChecked="True" />
+              <CheckBox Name="RememberWindowBox" Content="Remember position and size of the launcher window" />
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+                <TextBlock VerticalAlignment="Center" Text="Launcher background:" />
+                <Button Content="Choose picture…" Click="OnPickBackground" />
+                <Button Content="Default" Click="OnDefaultBackground" />
+              </StackPanel>
+              <TextBlock Name="LauncherVersionText" Classes="dim" Margin="0,10,0,0" />
+
+              <TextBlock Classes="section" Text="LOG" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Content="Open log file" Click="OnOpenLog" />
               </StackPanel>
-              <TextBox Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="140" Margin="0,8,0,0"
+              <TextBox Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="220" Margin="0,8,0,0"
                        FontFamily="Consolas, Cascadia Mono, monospace" FontSize="12" />
             </StackPanel>
           </ScrollViewer>

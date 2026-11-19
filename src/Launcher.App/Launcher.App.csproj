@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>TemucraftLauncher</AssemblyName>
     <Version>1.2.0</Version>
+    <ApplicationIcon>Assets\temucraft.ico</ApplicationIcon>
     <RootNamespace>Launcher.App</RootNamespace>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
@@ -18,6 +19,10 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
     <!-- Avalonia's Linux D-Bus dependency; 0.21.3 fixes CVE-2026-39959 (GHSA-xrw6-gwf8-vvr9) -->
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
   <ItemGroup>

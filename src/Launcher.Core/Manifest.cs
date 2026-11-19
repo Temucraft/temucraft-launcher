@@ -25,6 +25,18 @@ public sealed class Manifest
     /// <summary>Paths (relative to the WoW folder) to delete, such as patches that were renamed.</summary>
     public List<string> Obsolete { get; set; } = [];
 
+    /// <summary>
+    /// The server's say over the launcher's settings (launcher-policy.json next to the manifest): per setting a value
+    /// and whether it is enforced. Enforced settings are set by the server and the player can't change them; the
+    /// others stay the player's choice. Keys: installAddons, clearCache, reopenAfterGame, rememberWindow,
+    /// backupBeforeUpdate.
+    /// </summary>
+    public Dictionary<string, PolicySetting> Policy { get; set; } = [];
+
+    /// <summary>The enforced value of a setting, or null when the player decides.</summary>
+    public bool? Enforced(string setting) =>
+        Policy.FirstOrDefault(p => p.Key.Equals(setting, StringComparison.OrdinalIgnoreCase)).Value is { Enforce: true } s ? s.Value : null;
+
     static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -52,6 +64,12 @@ public sealed class Manifest
              .Select(f => f.Locale!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
 }
 
+public sealed class PolicySetting
+{
+    public bool Value { get; set; }
+    public bool Enforce { get; set; }
+}
+
 public enum FileCategory
 {
     /// <summary>Always installed: the server's patches.</summary>
@@ -74,6 +92,8 @@ public sealed class OptionGroup
     public List<string> Options { get; set; } = [];
     /// <summary>True when "none" is allowed (no files of this group installed).</summary>
     public bool Optional { get; set; }
+    /// <summary>Set by the server: everyone gets the first option (or none when optional), whatever they picked.</summary>
+    public bool Enforce { get; set; }
 }
 
 public sealed class ManifestFile

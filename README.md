@@ -9,8 +9,11 @@ the repository or in the exe.
 
 ## What it does
 
-- Logs in with the Apache username and password (HTTP basic auth, https only unless `ALLOW_HTTP=1`). A wrong
-  password and an address that isn't whitelisted each get their own message.
+- Logs in with each player's own username and password for the game files (HTTP basic auth, https only unless
+  `ALLOW_HTTP=1`); the server also only accepts the addresses it knows. A wrong password and an address that isn't
+  allowed each get their own message. Without a login, the launcher opens Settings at the account box.
+- A new player picks an empty folder: PLAY turns into INSTALL and downloads the whole game there (the server's
+  `base/`), then the server's files. "Install game files…" does the same for a folder picked there.
 - Reads `manifest.json`: every file with its size and SHA-256.
 - Compares your files with it and downloads what's missing or different. Downloads resume after a dropped
   connection, are checked against their SHA-256 and only then put in place, so a broken download never replaces a
@@ -23,7 +26,7 @@ the repository or in the exe.
 - Play: clears the client's `Cache` folder (optional) and starts `Wow.exe`.
 - The password can be saved in Windows Credential Manager; nothing secret is written to a file.
 
-The window has five pages:
+The window has six pages:
 
 - **News**: the server's news and changelog (`news.json`, `changelog.json` next to the manifest).
 - **Tweaks**: client settings written to `WTF\Config.wtf` (auto-loot, FPS caps, windowed mode, render and clutter
@@ -35,12 +38,20 @@ The window has five pages:
   lives in a sub folder of a bigger repository sets `"path"` (e.g. `"path": "client/AddOns"`): only its own files are
   downloaded, through GitHub's file list, instead of the whole repository (the zip is the fallback when GitHub's API
   can't be used).
-- **Mods**: cosmetic patches only (`options/<Group>/<Option>/...`: darker nights, login screens, model packs...), one
-  pick per group; everything the game needs goes in `patches/` and is always installed;
-  untracked patches in Data that neither the client nor the server hand out, with remove.
-- **Settings**: account, game folder, locales, reopen the launcher after WoW closes, remember the
-  window, launcher background picture, backups (WTF and AddOns zipped before each update and on request, restore),
-  macros and key bindings export/import, verify game files, the log.
+- **Options**: the server's switchable fixes and cosmetic patches (`options/<Group>/<Option>/...`), one pick per group;
+  everything the game needs goes in `patches/` and is always installed; untracked patches in Data that neither the
+  client nor the server hand out, with remove.
+- **Settings**: account, game folder (and installing the game into an empty one), languages, game settings (the
+  server's addons, clearing the Cache), backups (WTF and AddOns zipped before each update and on request, restore),
+  macros and key bindings export/import, verify game files.
+- **Launcher**: the launcher's own settings (reopen after WoW closes, remember the window, background picture), its
+  version and the log.
+
+**The server decides what it wants to.** `launcher-policy.json` next to the manifest gives each setting a value and
+`"enforce"`: an enforced setting is set by the server and greyed out; the others stay the player's choice. Settings:
+`installAddons`, `clearCache`, `reopenAfterGame`, `rememberWindow`, `backupBeforeUpdate` (see
+`server/examples/launcher-policy.json`). An option group's `group.json` can say `"enforce": true` too: everyone then
+gets its first option.
 
 ## The log
 

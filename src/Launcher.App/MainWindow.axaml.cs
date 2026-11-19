@@ -60,6 +60,7 @@ public partial class MainWindow : Window
             PasswordBox.Text = CredentialStore.Load();
         RememberBox.IsEnabled = CredentialStore.IsSupported;
         WowFolderBox.Text = _settings.WowFolder;
+        WowFolderBox.TextChanged += (_, _) => { ShowPlayState(); LoadTweaks(); };
         AddonsBox.IsChecked = _settings.InstallAddons;
         ClearCacheBox.IsChecked = _settings.ClearCacheOnPlay;
         ReopenBox.IsChecked = _settings.ReopenAfterGame;
@@ -78,16 +79,21 @@ public partial class MainWindow : Window
         BuildTweaks();
         RefreshInstalledAddons();
         RefreshBackups();
+        ShowPlayState();
         // closing must never fail: anything that goes wrong while saving is logged and the window still closes
         Closing += (_, _) => { SaveSettings(); _work?.Cancel(); };
         Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
         {
-            // with a remembered login, look for updates right away (nothing is downloaded until Update)
-            if (_server is not null && !string.IsNullOrEmpty(PasswordBox.Text) && GameFolder.LooksLikeClient(WowFolderBox.Text ?? ""))
+            LauncherVersionText.Text = $"Temucraft Launcher {LauncherInfo.Version}";
+            // with a login, connect right away: news, addons and options show even before a game is installed
+            // (nothing is downloaded until Update)
+            if (_server is null)
+                Status("launcher.env is missing next to the launcher: get it from the server's owner.");
+            else if (HaveLogin)
                 await CheckAsync(download: false);
             else
-                Status("Set your account and WoW folder under Settings.");
+                AskForLogin();
         };
     }
 
@@ -164,8 +170,8 @@ public partial class MainWindow : Window
     void OnTab(object? sender, RoutedEventArgs e)
     {
         int page = int.Parse((string)((Button)sender!).Tag!);
-        Control[] pages = [NewsPage, TweaksPage, AddonsPage, ModsPage, SettingsPage];
-        Button[] tabs = [NewsTab, TweaksTab, AddonsTab, ModsTab, SettingsTab];
+        Control[] pages = [NewsPage, TweaksPage, AddonsPage, ModsPage, SettingsPage, LauncherPage];
+        Button[] tabs = [NewsTab, TweaksTab, AddonsTab, ModsTab, SettingsTab, LauncherTab];
         for (int i = 0; i < pages.Length; i++)
         {
             pages[i].IsVisible = i == page;
@@ -263,12 +269,25 @@ public partial class MainWindow : Window
     bool NeedFolder()
     {
         if (GameFolder.LooksLikeClient(Folder)) return false;
-        Status("Pick your WoW 3.3.5a folder under Settings (the one with Wow.exe and Data).");
+        Status(Folder.Length == 0
+            ? "Pick your WoW folder under Settings, or an empty folder to install the game into."
+            : "There's no game in your WoW folder yet: press INSTALL to download it there.");
         return true;
     }
 
     /// <summary>A server connection with the login typed in the window (call on the window's thread).</summary>
     ServerClient NewClient() => new(_server!, UsernameBox.Text?.Trim() ?? "", PasswordBox.Text ?? "");
+
+    /// <summary>Every player has their own login for the game files (and the server only lets in known addresses).</summary>
+    bool HaveLogin => _server is not null && !string.IsNullOrWhiteSpace(UsernameBox.Text) && !string.IsNullOrEmpty(PasswordBox.Text);
+
+    /// <summary>No login yet: opens Settings at the account box and says what to do.</summary>
+    void AskForLogin()
+    {
+        OnTab(SettingsTab, new RoutedEventArgs());
+        StatusText.Text = "Enter your username and password for the game files under Settings, then press Connect.";
+        (string.IsNullOrWhiteSpace(UsernameBox.Text) ? UsernameBox : PasswordBox).Focus();
+    }
 
     /// <summary>What to install, read from the window (call on the window's thread).</summary>
     InstallChoice Choice() =>
@@ -292,6 +311,8 @@ public partial class MainWindow : Window
         {
             ShowLocales(manifest.Locales);
             ClientButton.IsVisible = manifest.Files.Any(f => f.Category == FileCategory.Base);
+            ApplyPolicy(manifest);
+            RefreshMods();
             VersionText.Text = manifest.ClientVersion.Length > 0 ? $"Version: {manifest.ClientVersion}" : "";
             WarningBanner.IsVisible = !launcherOk;
             WarningText.Text = launcherOk ? "" :
@@ -303,6 +324,27 @@ public partial class MainWindow : Window
         });
         if (!launcherOk) Log("Self-check: this launcher differs from the server's copy");
         return manifest;
+    }
+
+    /// <summary>
+    /// The server's enforced settings: set and greyed out, so the player can't change them. Settings the server
+    /// doesn't enforce stay the player's choice.
+    /// </summary>
+    void ApplyPolicy(Manifest manifest)
+    {
+        (string Key, CheckBox Box)[] settings =
+        [
+            ("installAddons", AddonsBox), ("clearCache", ClearCacheBox), ("reopenAfterGame", ReopenBox),
+            ("rememberWindow", RememberWindowBox), ("backupBeforeUpdate", BackupBox),
+        ];
+        foreach ((string key, CheckBox box) in settings)
+        {
+            bool? enforced = manifest.Enforced(key);
+            box.IsEnabled = enforced is null;
+            if (enforced is bool value) box.IsChecked = value;
+            ToolTip.SetTip(box, enforced is null ? null : "Set by the server");
+        }
+        SaveSettings();
     }
 
     static void ShowNews(StackPanel list, IReadOnlyList<NewsItem> items)
@@ -337,7 +379,15 @@ public partial class MainWindow : Window
     /// <summary>Reads the manifest and either only reports what is out of date or installs it.</summary>
     async Task CheckAsync(bool download)
     {
-        if (NeedFolder() || _server is null || Busy) return;
+        if (_server is null || Busy) return;
+        if (!HaveLogin) { AskForLogin(); return; }
+        bool haveGame = GameFolder.LooksLikeClient(Folder);
+        if (download && NoGameYet)
+        {
+            if (await InstallGameFilesAsync(Folder)) await CheckAsync(download: true);
+            return;
+        }
+        if (download && NeedFolder()) return;
         // everything the work needs from the window, read here on the window's thread
         InstallChoice choice = Choice();
         string folder = choice.WowFolder;
@@ -346,6 +396,18 @@ public partial class MainWindow : Window
         {
             using ServerClient _ = client;
             Manifest manifest = await FetchManifestAsync(client, token);
+            if (manifest.Enforced("installAddons") is bool addonsEnforced) choice = choice with { Addons = addonsEnforced };
+            if (manifest.Enforced("backupBeforeUpdate") is bool backupEnforced) _settings.BackupBeforeUpdate = backupEnforced;
+            if (!haveGame)
+            {
+                // connected, but no game yet: the tabs are filled in; the game files come from Install game files…
+                Status(Folder.Length > 0
+                    ? "Connected. There's no game in your WoW folder yet: press INSTALL to download it there."
+                    : "Connected. Pick your WoW folder under Settings, or an empty folder to install the game into.");
+                await Dispatcher.UIThread.InvokeAsync(ShowPlayState);
+                await Dispatcher.UIThread.InvokeAsync(RefreshMods);
+                return;
+            }
             IReadOnlyList<PlannedFile> outdated = await PlanAsync(manifest, choice, token);
             List<CatalogAddon> required = _catalog.Where(a => a.Required && choice.Addons).ToList();
             await RefreshCommitsAsync(required, token);
@@ -381,8 +443,9 @@ public partial class MainWindow : Window
 
     void ShowPlayState()
     {
-        PlayButton.Content = _pendingFiles > 0 ? "UPDATE" : "PLAY";
-        PlayButton.Classes.Set("update", _pendingFiles > 0);
+        bool install = NoGameYet && _server is not null;
+        PlayButton.Content = install ? "INSTALL" : _pendingFiles > 0 ? "UPDATE" : "PLAY";
+        PlayButton.Classes.Set("update", install || _pendingFiles > 0);
     }
 
     async Task InstallAsync(ServerClient client, IReadOnlyList<PlannedFile> outdated, string? wowFolder, CancellationToken token)
@@ -415,6 +478,8 @@ public partial class MainWindow : Window
 
     async void OnUpdate(object? sender, RoutedEventArgs e) => await CheckAsync(download: true);
 
+    async void OnConnect(object? sender, RoutedEventArgs e) => await CheckAsync(download: false);
+
     async void OnVerify(object? sender, RoutedEventArgs e)
     {
         if (Busy) { Status($"Wait for {_job} to finish (or press Cancel)."); return; }
@@ -433,7 +498,14 @@ public partial class MainWindow : Window
         });
         string? folder = picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
         if (folder is null || Busy) return;
+        if (await InstallGameFilesAsync(folder)) await CheckAsync(download: true);
+    }
 
+    /// <summary>Downloads the full client (the server's base files) into a folder, then makes it the WoW folder.</summary>
+    async Task<bool> InstallGameFilesAsync(string folder)
+    {
+        if (Busy) return false;
+        if (!HaveLogin) { AskForLogin(); return false; }
         ServerClient client = NewClient();
         bool done = await RunAsync("Game files", async token =>
         {
@@ -448,19 +520,31 @@ public partial class MainWindow : Window
             try { outdated = await UpdatePlanner.OutdatedAsync(wanted, cache, new Progress<string>(Status), token); }
             finally { cache.Save(); }
             await InstallAsync(client, outdated, folder, token);
-            Status("Game files installed. Press UPDATE to finish.");
+            Status("Game files installed; now the Temucraft files…");
         });
         if (done)
         {
             WowFolderBox.Text = folder;
+            SaveSettings();
             _pendingFiles = 1;
             ShowPlayState();
+            LoadTweaks();
         }
+        return done;
     }
+
+    /// <summary>The WoW folder box names a folder without a game (empty or not made yet): offer to install there.</summary>
+    bool NoGameYet => Folder.Length > 0 && !GameFolder.LooksLikeClient(Folder);
 
     // ------------------------------------------------------------------------------------------- play
     async void OnPlay(object? sender, RoutedEventArgs e)
     {
+        if (NoGameYet && _server is not null)
+        {
+            // an empty folder is picked: the whole game goes there, then the Temucraft files
+            if (await InstallGameFilesAsync(Folder)) await CheckAsync(download: true);
+            return;
+        }
         if (NeedFolder()) return;
         if (_pendingFiles > 0 && _server is not null)
         {
@@ -499,8 +583,11 @@ public partial class MainWindow : Window
         if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path)
         {
             WowFolderBox.Text = path;
-            if (!GameFolder.LooksLikeClient(path)) Status("That folder has no Wow.exe and Data folder.");
-            else { SaveSettings(); LoadTweaks(); RefreshInstalledAddons(); }
+            SaveSettings();
+            LoadTweaks();
+            RefreshInstalledAddons();
+            ShowPlayState();
+            Status(GameFolder.LooksLikeClient(path) ? "Game folder set." : "No game in that folder yet: press INSTALL to download it there.");
         }
     }
 
@@ -547,14 +634,15 @@ public partial class MainWindow : Window
             _tweakControls[t.CVar] = control;
         }
         TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
-        _laaBox = new CheckBox { Content = "Large Address Aware — lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
+        _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
         LoadTweaks();
     }
 
     void LoadTweaks()
     {
-        if (!GameFolder.LooksLikeClient(Folder)) return;
+        TweaksHint.IsVisible = !GameFolder.LooksLikeClient(Folder);
+        if (TweaksHint.IsVisible) return;
         ConfigWtf config = ConfigWtf.Load(Folder);
         foreach (Tweak t in Tweaks.All)
             SetTweak(t, config.Get(t.CVar) ?? t.Default);
@@ -796,7 +884,8 @@ public partial class MainWindow : Window
             panel.Children.Add(new TextBlock { Text = group.Name, FontWeight = FontWeight.SemiBold });
             if (group.Description.Length > 0) panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12 });
             List<string> items = [.. (group.Optional ? new[] { "(none)" } : []), .. group.Options];
-            ComboBox box = new() { ItemsSource = items, MinWidth = 260 };
+            ComboBox box = new() { ItemsSource = items, MinWidth = 260, IsEnabled = !group.Enforce };
+            if (group.Enforce) ToolTip.SetTip(box, "Set by the server");
             string? chosen = UpdatePlanner.ChosenOption(_manifest!, _settings.Options, group.Name);
             box.SelectedItem = chosen ?? (group.Optional ? "(none)" : items.FirstOrDefault());
             box.SelectionChanged += (_, _) =>

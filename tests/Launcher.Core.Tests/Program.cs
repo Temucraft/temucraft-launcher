@@ -39,6 +39,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("The same file twice in an update is downloaded once and copied", SameFileDownloadedOnce),
     ("A locale file another installed locale already has is copied, not downloaded", LocaleFileCopiedFromOtherLocale),
     ("A copy source that changed is not used", ChangedSourceIsDownloaded),
+    ("The server's policy enforces settings and option groups", PolicyEnforces),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -635,6 +636,21 @@ static async Task ChangedSourceIsDownloaded()
     UpdateInstaller.Result result = await UpdateInstaller.InstallAsync(client, [new PlannedFile(File1("b.bin", data), target)], cache, wow);
     Assert(result.Downloaded == 1 && result.Copied == 0, $"{result}");
     Assert(File.ReadAllBytes(target).SequenceEqual(data), "wrong content installed");
+}
+
+static Task PolicyEnforces()
+{
+    Manifest m = Manifest.Parse("""
+        {"files": [], "policy": {"installAddons": {"value": true, "enforce": true}, "clearCache": {"value": false, "enforce": false}},
+         "optionGroups": [{"name": "DXVK", "options": ["On", "Off"], "enforce": true},
+                          {"name": "Night sky", "options": ["On", "Off"]}]}
+        """);
+    Assert(m.Enforced("installAddons") == true && m.Enforced("INSTALLADDONS") == true, "enforced setting not read");
+    Assert(m.Enforced("clearCache") is null && m.Enforced("rememberWindow") is null, "a setting the server doesn't enforce was enforced");
+    Dictionary<string, string> picks = new() { ["DXVK"] = "Off", ["Night sky"] = "Off" };
+    Assert(UpdatePlanner.ChosenOption(m, picks, "DXVK") == "On", "the player turned off an enforced option");
+    Assert(UpdatePlanner.ChosenOption(m, picks, "Night sky") == "Off", "the player's own pick was ignored");
+    return Task.CompletedTask;
 }
 
 /// <summary>A tiny https server on 127.0.0.1 with a made-up self-signed certificate, answering every request with "ok".</summary>

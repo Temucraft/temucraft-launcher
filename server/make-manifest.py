@@ -17,6 +17,8 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
                                       may hold {"description": "...", "optional": true, "order": ["Classic", ...]};
                                       an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
+        launcher-policy.json          the server's say over launcher settings: {"installAddons": {"value": true,
+                                      "enforce": true}, ...}; options/<Group>/group.json may say "enforce": true too
         news.json, changelog.json     [{"date": "...", "title": "...", "text": "...", "link": "https://..."}]
         addons.json                   [{"name": "...", "description": "...", "repo": "owner/repo", "branch": "main",
                                         "folders": ["Addon"], "required": true}]
@@ -143,10 +145,16 @@ def build(files_dir, realmlist, cache):
                     files.append(entry(files_dir, path, os.path.relpath(path, odir).replace(os.sep, "/"), "option", cache,
                                        group=group, option=option))
             groups.append({"name": group, "description": info.get("description", ""), "options": order,
-                           "optional": bool(info.get("optional", False))})
+                           "optional": bool(info.get("optional", False)), "enforce": bool(info.get("enforce", False))})
 
     manifest = {"version": 1, "realmlist": realmlist, "clientVersion": "", "optionGroups": groups,
-                "files": files, "obsolete": []}
+                "files": files, "obsolete": [], "policy": {}}
+    # launcher-policy.json: {"installAddons": {"value": true, "enforce": true}, ...}; enforced settings can't be changed
+    policy_file = os.path.join(files_dir, "launcher-policy.json")
+    if os.path.isfile(policy_file):
+        with open(policy_file) as f:
+            manifest["policy"] = {k: {"value": bool(v.get("value")), "enforce": bool(v.get("enforce"))}
+                                  for k, v in json.load(f).items() if isinstance(v, dict)}
     version_file = os.path.join(files_dir, "client-version.txt")
     if os.path.isfile(version_file):
         with open(version_file) as f:

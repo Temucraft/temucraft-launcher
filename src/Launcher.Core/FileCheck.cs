@@ -127,9 +127,9 @@ public static class UpdatePlanner
     /// <summary>The option the player picked in a group (the first option when nothing was picked and it isn't optional).</summary>
     public static string? ChosenOption(Manifest manifest, IReadOnlyDictionary<string, string>? options, string group)
     {
-        if (options is not null && options.TryGetValue(group, out string? picked))
-            return picked.Length == 0 ? null : picked;
         OptionGroup? info = manifest.OptionGroups.FirstOrDefault(g => g.Name == group);
+        if (info is not { Enforce: true } && options is not null && options.TryGetValue(group, out string? picked))
+            return picked.Length == 0 ? null : picked;
         return info is null || info.Optional ? null : info.Options.FirstOrDefault();
     }
 
