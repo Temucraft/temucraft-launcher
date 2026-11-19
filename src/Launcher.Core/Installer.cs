@@ -24,7 +24,7 @@ public static class UpdateInstaller
             if (await TryCopyAsync(planned, cache, wowFolder, token) is { } source)
             {
                 onFile?.Invoke(planned, before, true);
-                Logger.Info($"Copied {planned.File.Path} from {source} (the same file, no download needed)");
+                Logger.Info($"Copied {planned.File.Path} ({copied + downloaded + 1}/{outdated.Count}) from {source} (the same file, no download needed)");
                 copied++;
                 bytesCopied += planned.File.Size;
             }
@@ -33,7 +33,7 @@ public static class UpdateInstaller
                 onFile?.Invoke(planned, before, false);
                 await client.DownloadAsync(planned.File, planned.Target, progress?.Invoke(planned, before), token);
                 cache.Remember(planned.Target, planned.File.Sha256);
-                Logger.Info($"Installed {planned.File.Path}");
+                Logger.Info($"Installed {planned.File.Path} ({copied + downloaded + 1}/{outdated.Count}, {Words.Size(planned.File.Size)})");
                 downloaded++;
                 bytesDownloaded += planned.File.Size;
             }

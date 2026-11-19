@@ -50,6 +50,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Text files are read and the launcher's words translated", Translating),
     ("Themes mix a mode and a theme; the server can enforce them", ThemeMixing),
     ("Settings copy to text and import back", SettingsCopy),
+    ("Speeds, sizes, counts, update hours and the download cap", SpeedsAndSizes),
     ("Changelog tags are found and coloured", NewsTags),
     ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
 ];
@@ -829,6 +830,42 @@ static Task Translating()
     Assert(Translation.Pick("frFR", "enUS", deAT, have) == "frFR", "the player's pick wins");
     Assert(Translation.Pick("", "de", ptPT, have) == "deDE", "short code");
     Assert(Translation.Pick("", "", ptPT, have) == "enUS", "a language the game doesn't have: English");
+    return Task.CompletedTask;
+}
+
+static Task SpeedsAndSizes()
+{
+    Assert(Words.Files(1) == "1 file" && Words.Files(188) == "188 files" && Words.Files(0) == "0 files", "plurals");
+    Assert(Words.Size(17029L * 1048576 + 314573) == "16.6 GB (17029.3 MB)", "GB: " + Words.Size(17029L * 1048576 + 314573));
+    Assert(Words.Size(5 * 1048576) == "5.0 MB" && Words.Size(2000) == "2 KB", "MB/KB: " + Words.Size(2000));
+    Assert(Words.ShortSize(3L * 1073741824) == "3.0 GB", "short");
+    Assert(SpeedLimit.Format(5.6 * 1048576, false) == "5.6 MB/s" && SpeedLimit.Format(1_000_000, true) == "8.0 Mbit/s", "speeds: " + SpeedLimit.Format(1_000_000, true));
+    Assert(SpeedLimit.TimeLeft(600L * 1048576, 1048576) == "10 min left" && SpeedLimit.TimeLeft(30, 1) == "30 s left" && SpeedLimit.TimeLeft(5, 0) == "", "time left");
+    Assert(SpeedLimit.EffectiveKBps(false, 500, 0) == 0, "unlimited by default");
+    Assert(SpeedLimit.EffectiveKBps(true, 500, 0) == 500 && SpeedLimit.EffectiveKBps(true, 5000, 1000) == 1000 && SpeedLimit.EffectiveKBps(false, 5000, 1000) == 1000, "player and server caps");
+    Assert(SpeedLimit.EffectiveKBps(true, 500, -1) == 500, "-1 is no cap");
+    Assert(SpeedLimit.Suggest(10 * 1048576, 0) == 8100 && SpeedLimit.Suggest(10 * 1048576, 2000) == 2000 && SpeedLimit.Suggest(1000, 0) == 100, "suggestion: " + SpeedLimit.Suggest(10 * 1048576, 0));
+    SpeedLimit.Set(1000);
+    Assert(SpeedLimit.Delay(1024 * 1024) > TimeSpan.Zero, "waits once over the limit");
+    SpeedLimit.Set(0);
+    Assert(SpeedLimit.Delay(100 * 1024 * 1024) == TimeSpan.Zero, "no limit, no wait");
+    Assert(UpdateHours.Inside(3, 2, 5) && !UpdateHours.Inside(5, 2, 5) && UpdateHours.Inside(23, 22, 4) && UpdateHours.Inside(1, 22, 4) && !UpdateHours.Inside(12, 22, 4) && UpdateHours.Inside(9, 0, 0), "hours");
+    Manifest m = new()
+    {
+        Files =
+        [
+            new() { Path = "Data/common.MPQ", Size = 100, Category = FileCategory.Base },
+            new() { Path = "Data/patch-A.MPQ", Size = 10, Category = FileCategory.Patch },
+            new() { Path = "Data/deDE/a.MPQ", Size = 7, Category = FileCategory.Locale, Locale = "deDE" },
+            new() { Path = "Data/patch-9.MPQ", Size = 3, Category = FileCategory.Option, Group = "Night sky", Option = "On" },
+            new() { Path = "Interface/AddOns/X/x.lua", Size = 1, Category = FileCategory.Addon },
+        ],
+        OptionGroups = [new() { Name = "Night sky", Options = ["On", "Off"] }],
+    };
+    Assert(InstallSizes.Of(m, FileCategory.Base) == 100 && InstallSizes.Locale(m, "dede") == 7 && InstallSizes.Option(m, "Night sky", "On") == 3, "parts");
+    Assert(InstallSizes.Total(m, new InstallChoice("/w", ["deDE"], true, "/w", new Dictionary<string, string> { ["Night sky"] = "On" })) == 121, "total with everything");
+    Assert(InstallSizes.Total(m, new InstallChoice("/w", [], false, null, new Dictionary<string, string> { ["Night sky"] = "Off" })) == 10, "just the needed files");
+    Assert(InstallSizes.FreeSpace(Path.GetTempPath()) > 0, "free space");
     return Task.CompletedTask;
 }
 

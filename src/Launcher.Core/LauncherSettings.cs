@@ -154,6 +154,22 @@ public sealed class UserSettings
     /// <summary>The server's last say over the look, so the next start looks right straight away.</summary>
     public Themes.ServerLook ServerLook { get; set; } = new();
     public bool BackupBeforeUpdate { get; set; } = true;
+    /// <summary>Downloads: the player's speed limit (KB/s, used when <see cref="LimitDownloads"/>) and speeds shown in bits.</summary>
+    public bool LimitDownloads { get; set; }
+    public long DownloadLimitKBps { get; set; } = 4000;
+    public bool SpeedInBits { get; set; }
+    /// <summary>Update by itself when the launcher opens (and later, while it is open), optionally only between two hours.</summary>
+    public bool AutoUpdate { get; set; }
+    public bool AutoUpdateHoursOnly { get; set; }
+    public int AutoUpdateFrom { get; set; } = 2;
+    public int AutoUpdateTo { get; set; } = 5;
+    /// <summary>When the game starts: "keep" (stay open), "minimize", "hide" (until the game closes, with a tray icon), "exit".</summary>
+    public string OnGameLaunch { get; set; } = "hide";
+    /// <summary>The window's X: "exit" or "tray" (keep running in the system tray).</summary>
+    public string OnClose { get; set; } = "exit";
+    /// <summary>The page at start: "news" or "last" (the last one used, <see cref="LastPage"/>).</summary>
+    public string StartPage { get; set; } = "news";
+    public int LastPage { get; set; }
     /// <summary>The Tweaks page's preset: "server", "recommended", "default" or "custom" ("" = not chosen yet).</summary>
     public string TweakPreset { get; set; } = "";
     /// <summary>True once the player picked a preset or changed a tweak themselves (then nothing is filled in for them).</summary>

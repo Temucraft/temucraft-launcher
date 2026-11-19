@@ -261,6 +261,35 @@ public static class SelfCheck
 {
     public static string? CurrentExe => Environment.ProcessPath;
 
+    /// <summary>The newest changelog entry about the launcher ("Launcher 1.3.0"), to show what a new launcher brings.</summary>
+    public static NewsItem? WhatsNew(IEnumerable<NewsItem> changelog) =>
+        changelog.FirstOrDefault(i => i.Title.StartsWith("Launcher", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Downloads the server's launcher next to this one (checked against the manifest's SHA-256), then swaps them:
+    /// the running exe is renamed to .old (Windows allows renaming a running program, not replacing it) and the new
+    /// one takes its name. The caller starts it and closes. The .old file is removed at the next start.
+    /// </summary>
+    public static async Task<string> UpdateAsync(ServerClient client, Manifest manifest, IProgress<(long Done, long Total)>? progress, CancellationToken token)
+    {
+        if (manifest.Launcher is null || CurrentExe is null) throw new InvalidOperationException("The server has no launcher to update to.");
+        string exe = CurrentExe, fresh = exe + ".new", old = exe + ".old";
+        await client.DownloadAsync(manifest.Launcher, fresh, progress, token);
+        if (File.Exists(old)) File.Delete(old);
+        File.Move(exe, old);
+        try { File.Move(fresh, exe); }
+        catch { File.Move(old, exe); throw; }   // put the running one back if the new one can't take its place
+        return exe;
+    }
+
+    /// <summary>Removes the launcher an update left behind (.old) and any half-downloaded new one.</summary>
+    public static void CleanUp()
+    {
+        if (CurrentExe is null) return;
+        foreach (string leftover in new[] { CurrentExe + ".old", CurrentExe + ".new.part" })
+            try { if (File.Exists(leftover)) File.Delete(leftover); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
     public static async Task<bool> MatchesAsync(Manifest manifest, CancellationToken token = default)
     {
         if (manifest.Launcher is null || CurrentExe is null || !File.Exists(CurrentExe))

@@ -83,6 +83,7 @@ recommendation (and as the value outright where the launcher has no box for it).
 | `requiredLocales` | e.g. `["deDE"]` | extra languages everyone gets (players can still add more) |
 | `news`, `changelog` | `{"show": true, "entries": 20, "more": 20}` | whether the panel shows (the other one then takes the whole page), how many entries at first, and how many "Load more" adds; `-1` makes it "Load all". The launcher keeps the last ones it got, so they show at once on the next start. |
 | `tweaks` | `{"<CVar>": {...}}` | any `Config.wtf` value by its name, the Tweaks page's or any other (e.g. `farclip`, `maxFPS`); enforced ones are written to `Config.wtf` after every update and on Save, others show as the recommendation ("Use recommended"). DXVK's settings (`d3d9.maxFrameRate`, `d3d9.samplerAnisotropy`, `d3d9.presentInterval`, `dxvk.hud`) go to `dxvk.conf`; Awesome WotLK's (`nameplateDistance`, `cameraFov`) to `Config.wtf`. The Tweaks page only shows those while that option is on. |
+| `downloadLimit` | KB/s, e.g. `2000` | the most each player may download at; `0` or `-1` (the default) is no cap. Players can still set a lower limit of their own. |
 | `theme` | e.g. `"temucraft"`, `"wotlk"` | the launcher's default theme (see Themes below) |
 | `themeMode` | `"dark"` or `"light"` | the default mode |
 
@@ -90,6 +91,24 @@ Names the launcher doesn't know are skipped and noted in its log, so a newer pol
 `launcher-policy.json` may hold `//` and `/* */` comments; `make-manifest.py` removes them. See
 `server/examples/launcher-policy.json`. An option group's `group.json` can say `"enforce": true` too: everyone
 then gets its first option.
+
+## Installing, downloads and launcher updates
+
+**Installing.** A player without the game presses INSTALL and gets a window to pick the folder and what to install:
+the game, the server's needed files, each language, each option and the addons, each with its size, plus the total
+against the free space on that drive.
+
+**Downloads** are at full speed unless the player sets a limit (Launcher page) or the server caps them
+(`downloadLimit`). "Test my speed" measures the speed to the server for a few seconds and suggests a limit (80% of it).
+The status line shows each file as "(12/188)", the speed and the time left; sizes read as "16.6 GB (17029.3 MB)".
+
+**Automatic updates** (off by default): when the launcher opens and every 30 minutes, optionally only between two
+hours, and never while the game is running.
+
+**Launcher updates.** When the server hands out a different launcher (`publish.sh` puts the new one in the files
+folder), a banner recommends updating and shows the changelog's newest "Launcher ..." entry. "Update the launcher"
+downloads it (checked against the manifest), swaps it with the running one and restarts; "Later" hides the banner
+until the next start. It is never forced.
 
 ## Languages
 

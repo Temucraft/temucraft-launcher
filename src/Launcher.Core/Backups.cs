@@ -146,7 +146,7 @@ public static class Backups
 
     public sealed record Backup(string File, DateTime Created, long Size)
     {
-        public override string ToString() => $"{Created:dd-MM-yyyy HH:mm:ss}  ({Size / 1048576.0:F1} MB)  {Path.GetFileName(File)}";
+        public override string ToString() => $"{Created:dd-MM-yyyy HH:mm:ss}  ({Words.Size(Size)})  {Path.GetFileName(File)}";
     }
 
     public static IReadOnlyList<Backup> List() =>

@@ -44,6 +44,7 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// <item>requiredLocales: extra languages everyone gets (players may add more)</item>
 /// <item>tweaks: any Config.wtf value by its CVar name, the Tweaks page's or any other, e.g. "farclip"; DXVK's
 /// settings (d3d9.samplerAnisotropy...) go to dxvk.conf</item>
+/// <item>downloadLimit: the most KB/s each player may download at (0 or -1: no cap); players can set a lower limit</item>
 /// <item>theme: the launcher's theme ("temucraft", "wotlk"...) and themeMode: "dark" or "light"</item>
 /// </list>
 /// Names the launcher doesn't know are kept in <see cref="Unknown"/> (and logged), never an error.
@@ -51,7 +52,7 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 public sealed class LauncherPolicy
 {
     public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware"];
-    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog", "theme", "themeMode"];
+    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog", "theme", "themeMode", "downloadLimit"];
 
     /// <summary>How the News or Changelog panel shows (the "news" / "changelog" entries); shown, 20 then 20 more, by default.</summary>
     public FeedRule News { get; private set; } = FeedRule.Default;
@@ -106,6 +107,9 @@ public sealed class LauncherPolicy
     /// <summary>The server's default language, the language of its base client: enUS unless the server says. Always
     /// installed (ticked and greyed out).</summary>
     public string DefaultLocale => Setting("defaultLocale")?.Strings.FirstOrDefault() is { Length: 4 } locale ? locale : "enUS";
+
+    /// <summary>The server's download cap in KB/s; 0 = none (also for -1 or no setting).</summary>
+    public long DownloadLimitKBps => Setting("downloadLimit")?.Int is int kb and > 0 ? kb : 0;
 
     public IEnumerable<KeyValuePair<string, PolicyRule>> EnforcedTweaks => Tweaks.Where(t => t.Value.Enforce);
 

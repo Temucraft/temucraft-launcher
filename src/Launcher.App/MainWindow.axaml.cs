@@ -109,7 +109,19 @@ public partial class MainWindow : Window
         RefreshBackups();
         ShowPlayState();
         // closing must never fail: anything that goes wrong while saving is logged and the window still closes
-        Closing += (_, _) => { SaveSettings(); _work?.Cancel(); };
+        Closing += (_, e) =>
+        {
+            // "When closing the window: keep running in the tray" (unless the launcher is really quitting)
+            if (!_quitting && _settings.OnClose == "tray" && HideToTray()) { e.Cancel = true; return; }
+            SaveSettings();
+            _work?.Cancel();
+            _tray?.Dispose();
+        };
+        FillWindowSettings();
+        if (_settings.StartPage == "last" && _settings.LastPage is > 0 and <= 5)
+            OnTab(TabButton(_settings.LastPage), new RoutedEventArgs());
+        _autoUpdateTimer.Tick += async (_, _) => await AutoUpdateAsync();
+        _autoUpdateTimer.Start();
         Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
         {
@@ -120,7 +132,10 @@ public partial class MainWindow : Window
             if (_server is null)
                 Status("launcher.env is missing next to the launcher: get it from the server's owner.");
             else if (HaveLogin && Agreed)
+            {
                 await CheckAsync(download: false);
+                await AutoUpdateAsync();
+            }
             else
                 AskForLogin();
         };
@@ -210,7 +225,10 @@ public partial class MainWindow : Window
         if (page == 2) RefreshInstalledAddons();
         if (page == 3) RefreshMods();
         if (page == 4) RefreshBackups();
+        _settings.LastPage = page;
     }
+
+    Button TabButton(int page) => new[] { NewsTab, TweaksTab, AddonsTab, ModsTab, SettingsTab, LauncherTab }[Math.Clamp(page, 0, 5)];
 
     void ApplyBackground()
     {
@@ -240,7 +258,8 @@ public partial class MainWindow : Window
                 IsEnabled = !must,
             };
             // hover: the language's name (in the launcher's language and its own), and why it's locked
-            ToolTip.SetTip(box, GameFolder.LocaleName(locale) + (must ? "\n" + why : ""));
+            string size = _manifest is { } m && InstallSizes.Locale(m, locale) is > 0 and var bytes ? "\n" + Words.Size(bytes) : "";
+            ToolTip.SetTip(box, GameFolder.LocaleName(locale) + size + (must ? "\n" + Translation.T(why!) : ""));
             LocalePanel.Children.Add(box);
         }
     }
@@ -624,9 +643,7 @@ public partial class MainWindow : Window
             RefreshMods();
             ShowGatedTweaks();
             VersionText.Text = manifest.ClientVersion.Length > 0 ? $"Version: {manifest.ClientVersion}" : "";
-            WarningBanner.IsVisible = !launcherOk;
-            WarningText.Text = launcherOk ? "" :
-                "This launcher isn't the one the server hands out (it's older, or it was changed). Download the current launcher from the website.";
+            ShowLauncherUpdate(!launcherOk && manifest.Launcher is not null);
             // shown, and kept for the next start (before logging in, or when the server can't be reached)
             FeedCache feeds = new() { News = newsText ?? "", Changelog = changelogText ?? "", NewsRule = manifest.Rules.News,
                                       ChangelogRule = manifest.Rules.Changelog, Saved = DateTime.Now };
@@ -637,6 +654,336 @@ public partial class MainWindow : Window
         });
         if (!launcherOk) Log("Self-check: this launcher differs from the server's copy");
         return manifest;
+    }
+
+    // ------------------------------------------------------------------------------------------- downloads, updates, window
+    bool _quitting;      // closing for real (not to the tray)
+    bool _gameRunning;   // automatic updates wait while the game runs
+    bool _fillingWindowSettings;
+    TrayIcon? _tray;
+    readonly DispatcherTimer _autoUpdateTimer = new() { Interval = TimeSpan.FromMinutes(30) };
+
+    bool _windowSettingsHooked;
+
+    /// <summary>The Downloads, Updates and Window boxes from the player's settings.</summary>
+    void FillWindowSettings()
+    {
+        if (!_windowSettingsHooked)
+        {
+            _windowSettingsHooked = true;
+            LimitBox.IsCheckedChanged += OnDownloadSettingChanged;
+            BitsBox.IsCheckedChanged += OnDownloadSettingChanged;
+            LimitNumber.ValueChanged += OnDownloadSettingChanged;
+            AutoUpdateBox.IsCheckedChanged += OnUpdateSettingChanged;
+            HoursBox.IsCheckedChanged += OnUpdateSettingChanged;
+            FromBox.SelectionChanged += OnUpdateSettingChanged;
+            ToBox.SelectionChanged += OnUpdateSettingChanged;
+            GameLaunchBox.SelectionChanged += OnWindowSettingChanged;
+            CloseBox.SelectionChanged += OnWindowSettingChanged;
+            StartPageBox.SelectionChanged += OnWindowSettingChanged;
+            InstallFolderBox.TextChanged += (_, _) => { if (InstallOverlay.IsVisible && _manifest is { } m) ShowInstallTotal(m); };
+        }
+        _fillingWindowSettings = true;
+        try
+        {
+            LimitBox.IsChecked = _settings.LimitDownloads;
+            BitsBox.IsChecked = _settings.SpeedInBits;
+            ShowLimitNumber();
+            AutoUpdateBox.IsChecked = _settings.AutoUpdate;
+            HoursBox.IsChecked = _settings.AutoUpdateHoursOnly;
+            List<LookChoice> hours = [.. Enumerable.Range(0, 24).Select(h => new LookChoice(h.ToString(System.Globalization.CultureInfo.InvariantCulture), $"{h:00}:00"))];
+            FromBox.ItemsSource = hours;
+            ToBox.ItemsSource = hours.ToList();
+            FromBox.SelectedIndex = Math.Clamp(_settings.AutoUpdateFrom, 0, 23);
+            ToBox.SelectedIndex = Math.Clamp(_settings.AutoUpdateTo, 0, 23);
+            ShowHoursNote();
+            List<LookChoice> launch =
+            [
+                new("keep", Translation.T("Keep the launcher open")), new("minimize", Translation.T("Minimize the launcher")),
+                new("hide", Translation.T("Hide the launcher to the system tray")), new("exit", Translation.T("Close the launcher completely")),
+            ];
+            GameLaunchBox.ItemsSource = launch;
+            GameLaunchBox.SelectedItem = launch.FirstOrDefault(c => c.Value == _settings.OnGameLaunch) ?? launch[2];
+            List<LookChoice> close = [new("tray", Translation.T("Keep running in the system tray")), new("exit", Translation.T("Close the launcher completely"))];
+            CloseBox.ItemsSource = close;
+            CloseBox.SelectedItem = close.FirstOrDefault(c => c.Value == _settings.OnClose) ?? close[1];
+            List<LookChoice> start = [new("news", Translation.T("News")), new("last", Translation.T("The last page I used"))];
+            StartPageBox.ItemsSource = start;
+            StartPageBox.SelectedItem = start.FirstOrDefault(c => c.Value == _settings.StartPage) ?? start[0];
+        }
+        finally { _fillingWindowSettings = false; }
+    }
+
+    /// <summary>The limit box in KB/s, or in kbit/s with speeds in bits; never above the server's cap.</summary>
+    void ShowLimitNumber()
+    {
+        bool bits = _settings.SpeedInBits;
+        long cap = _policy.DownloadLimitKBps;
+        LimitUnit.Text = bits ? "kbit/s" : "KB/s";
+        LimitNumber.Maximum = cap > 0 ? cap * (bits ? 8 : 1) : 10_000_000;
+        LimitNumber.Value = Math.Min(_settings.DownloadLimitKBps, cap > 0 ? cap : long.MaxValue) * (bits ? 8 : 1);
+        LimitNumber.IsEnabled = _settings.LimitDownloads;
+        ServerCapNote.IsVisible = cap > 0;
+        ServerCapNote.Text = cap > 0 ? string.Format(Translation.T("This server caps downloads at {0}."), SpeedLimit.Format(cap * 1024, bits)) : "";
+    }
+
+    void ApplySpeedLimit()
+    {
+        long kb = SpeedLimit.EffectiveKBps(_settings.LimitDownloads, _settings.DownloadLimitKBps, _policy.DownloadLimitKBps);
+        SpeedLimit.Set(kb);
+        if (kb > 0) Log($"Download speed limit: {kb} KB/s");
+    }
+
+    void OnDownloadSettingChanged(object? sender, EventArgs e)
+    {
+        if (_fillingWindowSettings) return;
+        _settings.LimitDownloads = LimitBox.IsChecked == true;
+        bool bitsBefore = _settings.SpeedInBits;
+        _settings.SpeedInBits = BitsBox.IsChecked == true;
+        if (sender == LimitNumber && LimitNumber.Value is decimal v && v > 0)
+            _settings.DownloadLimitKBps = (long)Math.Max(1, Math.Round(v / (_settings.SpeedInBits ? 8 : 1)));
+        _fillingWindowSettings = true;
+        try { if (sender != LimitNumber || bitsBefore != _settings.SpeedInBits) ShowLimitNumber(); else LimitNumber.IsEnabled = _settings.LimitDownloads; }
+        finally { _fillingWindowSettings = false; }
+        ApplySpeedLimit();   // also for a download that is running now
+        SaveSettings();
+    }
+
+    void ShowHoursNote()
+    {
+        int from = _settings.AutoUpdateFrom, to = _settings.AutoUpdateTo;
+        int span = ((to - from) % 24 + 24) % 24;
+        HoursNote.Text = span == 0 ? Translation.T("(all day)") : string.Format(Translation.T("({0} hours)"), span);
+        FromBox.IsEnabled = ToBox.IsEnabled = HoursBox.IsChecked == true;
+        HoursBox.IsEnabled = AutoUpdateBox.IsChecked == true;
+    }
+
+    void OnUpdateSettingChanged(object? sender, EventArgs e)
+    {
+        if (_fillingWindowSettings) return;
+        _settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
+        _settings.AutoUpdateHoursOnly = HoursBox.IsChecked == true;
+        if (FromBox.SelectedIndex >= 0) _settings.AutoUpdateFrom = FromBox.SelectedIndex;
+        if (ToBox.SelectedIndex >= 0) _settings.AutoUpdateTo = ToBox.SelectedIndex;
+        ShowHoursNote();
+        SaveSettings();
+    }
+
+    // ------------------------------------------------------------------------------------------- speed test
+    long _suggestedKBps;
+
+    /// <summary>Downloads part of the server's biggest file for a few seconds (no limit) and suggests a limit that
+    /// leaves room for everything else on the connection.</summary>
+    async void OnSpeedTest(object? sender, RoutedEventArgs e)
+    {
+        if (_server is null || Busy) return;
+        if (!HaveLogin || !Agreed) { AskForLogin(); return; }
+        ServerClient client = NewClient();
+        Manifest? manifest = _manifest;
+        double bytesPerSecond = 0;
+        SpeedTestButton.IsEnabled = false;
+        SpeedTestText.Text = Translation.T("Testing…");
+        bool done = await RunAsync("Speed test", async token =>
+        {
+            using ServerClient _ = client;
+            manifest ??= await client.GetManifestAsync(token);
+            ManifestFile? big = manifest.Files.Where(f => f.Size > 0).MaxBy(f => f.Size);
+            if (big is null) throw new InvalidOperationException("The server has no file to test with.");
+            bytesPerSecond = await client.SpeedTestAsync(big, TimeSpan.FromSeconds(8), 200L * 1024 * 1024, token);
+        });
+        SpeedTestButton.IsEnabled = true;
+        if (!done || bytesPerSecond <= 0) { SpeedTestText.Text = ""; return; }
+        _suggestedKBps = SpeedLimit.Suggest(bytesPerSecond, _policy.DownloadLimitKBps);
+        SpeedTestText.Text = string.Format(Translation.T("Your speed to this server: {0}. Suggested limit: {1} (leaves room for games, calls and video)."),
+            SpeedLimit.Format(bytesPerSecond, _settings.SpeedInBits), SpeedLimit.Format(_suggestedKBps * 1024, _settings.SpeedInBits));
+        UseSuggestedButton.IsVisible = true;
+        Log($"Speed test: {SpeedLimit.Format(bytesPerSecond, false)} ({SpeedLimit.Format(bytesPerSecond, true)}); suggested limit {_suggestedKBps} KB/s");
+    }
+
+    void OnUseSuggestedLimit(object? sender, RoutedEventArgs e)
+    {
+        if (_suggestedKBps <= 0) return;
+        _settings.LimitDownloads = true;
+        _settings.DownloadLimitKBps = _suggestedKBps;
+        FillWindowSettings();
+        ApplySpeedLimit();
+        SaveSettings();
+        Status(Translation.T("The suggested limit is on. Turn off Limit download speed for full speed again."));
+    }
+
+    /// <summary>"Update by itself": when there is something new, within the chosen hours, never while the game runs or
+    /// another job is busy, and only with a login.</summary>
+    async Task AutoUpdateAsync()
+    {
+        if (!_settings.AutoUpdate || _gameRunning || Busy || _server is null || !HaveLogin || !Agreed || NoGameYet) return;
+        if (_settings.AutoUpdateHoursOnly && !UpdateHours.Inside(DateTime.Now.Hour, _settings.AutoUpdateFrom, _settings.AutoUpdateTo)) return;
+        if (_pendingFiles == 0) await CheckAsync(download: false);
+        if (_pendingFiles > 0 && !Busy && !_gameRunning)
+        {
+            Log("Updating by itself (automatic updates are on)");
+            await CheckAsync(download: true);
+        }
+    }
+
+    void OnWindowSettingChanged(object? sender, EventArgs e)
+    {
+        if (_fillingWindowSettings) return;
+        if (GameLaunchBox.SelectedItem is LookChoice launch) _settings.OnGameLaunch = launch.Value;
+        if (CloseBox.SelectedItem is LookChoice close) _settings.OnClose = close.Value;
+        if (StartPageBox.SelectedItem is LookChoice start) _settings.StartPage = start.Value;
+        SaveSettings();
+    }
+
+    /// <summary>Hides the window, with an icon in the system tray to bring it back (or quit). False where there is no tray.</summary>
+    bool HideToTray()
+    {
+        try
+        {
+            if (_tray is null)
+            {
+                NativeMenu menu = [];
+                NativeMenuItem open = new(Translation.T("Open the launcher")), quit = new(Translation.T("Quit"));
+                open.Click += (_, _) => BringBack();
+                quit.Click += (_, _) => { _quitting = true; BringBack(); Close(); };
+                menu.Add(open);
+                menu.Add(quit);
+                _tray = new TrayIcon { Icon = Icon, ToolTipText = "Temucraft Launcher", Menu = menu };
+                _tray.Clicked += (_, _) => BringBack();
+                TrayIcon.SetIcons(Application.Current!, [_tray]);
+            }
+            _tray.IsVisible = true;
+            Hide();
+            return true;
+        }
+        catch (Exception e)
+        {
+            Logger.Warning("No system tray here; minimizing instead", e);
+            WindowState = WindowState.Minimized;
+            return false;
+        }
+    }
+
+    void BringBack()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        if (_tray is not null) _tray.IsVisible = false;
+    }
+
+    /// <summary>Forgets which files were checked (the hash cache) and removes unfinished downloads (.part files).</summary>
+    void OnClearDownloadCache(object? sender, RoutedEventArgs e)
+    {
+        if (Busy) { Status(string.Format(Translation.T("Wait for {0} to finish (or press Cancel)."), _job)); return; }
+        int removed = 0;
+        try
+        {
+            if (File.Exists(_cacheFile)) { File.Delete(_cacheFile); removed++; }
+            if (GameFolder.LooksLikeClient(Folder) || Directory.Exists(Folder))
+                foreach (string part in Directory.EnumerateFiles(Folder, "*.part", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
+                {
+                    try { File.Delete(part); removed++; } catch (IOException) { }
+                }
+            SelfCheck.CleanUp();
+            Log($"Download cache cleared ({removed} file(s) removed)");
+            Status(Translation.T("Download cache cleared. The next update checks every file again."));
+        }
+        catch (Exception error)
+        {
+            Logger.Warning("Couldn't clear the download cache", error);
+            Status(error.Message);
+        }
+    }
+
+    /// <summary>A shortcut to the launcher on the desktop (Windows: .lnk, Linux: .desktop).</summary>
+    void OnDesktopShortcut(object? sender, RoutedEventArgs e)
+    {
+        string? exe = SelfCheck.CurrentExe;
+        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        if (exe is null || desktop.Length == 0) return;
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                string link = Path.Combine(desktop, "Temucraft Launcher.lnk");
+                string script = "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:TC_LINK);$s.TargetPath=$env:TC_EXE;" +
+                                "$s.WorkingDirectory=$env:TC_DIR;$s.IconLocation=$env:TC_EXE;$s.Save()";
+                ProcessStartInfo start = new("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script])
+                    { CreateNoWindow = true, UseShellExecute = false };
+                start.Environment["TC_LINK"] = link;
+                start.Environment["TC_EXE"] = exe;
+                start.Environment["TC_DIR"] = AppContext.BaseDirectory;
+                using Process? p = Process.Start(start);
+                p?.WaitForExit(15000);
+                if (!File.Exists(link)) throw new IOException("Windows didn't make the shortcut.");
+            }
+            else if (OperatingSystem.IsLinux())
+                File.WriteAllText(Path.Combine(desktop, "temucraft-launcher.desktop"),
+                    $"[Desktop Entry]\nType=Application\nName=Temucraft Launcher\nExec=\"{exe}\"\nPath={AppContext.BaseDirectory}\nTerminal=false\n");
+            else throw new PlatformNotSupportedException("Desktop shortcuts are made on Windows and Linux only.");
+            Status(Translation.T("Shortcut made on your desktop."));
+        }
+        catch (Exception error)
+        {
+            Logger.Warning("Couldn't make the desktop shortcut", error);
+            Status(error.Message);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------- launcher updates
+    bool _launcherLater;   // "Later" pressed: no banner again until the next start
+
+    /// <summary>The server hands out a different launcher (normally a newer one): a banner that recommends updating,
+    /// with what changed (the changelog's newest "Launcher ..." entry). Not forced: "Later" hides it until the next start.</summary>
+    void ShowLauncherUpdate(bool differs)
+    {
+        WarningBanner.IsVisible = differs && !_launcherLater;
+        LauncherUpdateButtons.IsVisible = differs;
+        if (!differs) { WhatsNewPanel.IsVisible = false; return; }
+        WarningText.Text = Translation.T("A new launcher is available. Updating is strongly recommended: it takes a few seconds and keeps your settings.");
+        NewsItem? news = null;
+        try { news = SelfCheck.WhatsNew(NewsItem.Parse(FeedCache.Load(_feedFile).Changelog)); }
+        catch (System.Text.Json.JsonException) { }
+        WhatsNewButton.IsVisible = news is not null;
+        if (news is not null) ShowNews(WhatsNewList, [news], new FeedRule(true, 1, 1));
+    }
+
+    void OnWhatsNew(object? sender, RoutedEventArgs e) => WhatsNewPanel.IsVisible = !WhatsNewPanel.IsVisible;
+
+    void OnLauncherLater(object? sender, RoutedEventArgs e)
+    {
+        _launcherLater = true;
+        WarningBanner.IsVisible = false;
+        Log("Launcher update put off until the next start");
+    }
+
+    async void OnUpdateLauncher(object? sender, RoutedEventArgs e)
+    {
+        if (_server is null || _manifest is null || Busy) return;
+        Manifest manifest = _manifest;
+        string? exe = null;
+        ServerClient client = NewClient();   // reads the login boxes: on the window's thread
+        bool done = await RunAsync("Launcher update", async token =>
+        {
+            using ServerClient _ = client;
+            Status("Downloading the new launcher…");
+            exe = await SelfCheck.UpdateAsync(client, manifest, new UiProgress<(long Done, long Total)>(p =>
+                Progress.Value = p.Total == 0 ? 1 : (double)p.Done / p.Total), token);
+        });
+        if (!done || exe is null) return;
+        Log("Launcher updated; starting the new one");
+        SaveSettings();
+        try
+        {
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory });
+            _quitting = true;
+            Close();
+        }
+        catch (Exception error)
+        {
+            Logger.Error("Couldn't start the new launcher", error);
+            Status(Translation.T("The new launcher is ready: close this one and open it again."));
+        }
     }
 
     /// <summary>
@@ -874,14 +1221,14 @@ public partial class MainWindow : Window
             List<CatalogAddon> required = _catalog.Where(a => a.Required && choice.Addons).ToList();
             await RefreshCommitsAsync(required, token);
             List<CatalogAddon> addonUpdates = required.Where(a => NeedsInstall(a, folder)).ToList();
-            Logger.Info($"{outdated.Count} file(s) and {addonUpdates.Count} required addon(s) out of date", toWindow: false);
+            Logger.Info($"{Words.Files(outdated.Count)} and {Words.Addons(addonUpdates.Count)} out of date", toWindow: false);
 
             if (!download)
             {
                 long size = outdated.Sum(p => p.File.Size);
                 int pending = outdated.Count + addonUpdates.Count;
                 Status(pending == 0 ? "Everything up to date!"
-                    : $"Update available! {pending} file(s), {size / 1048576.0:F1} MB to download.");
+                    : string.Format(Translation.T("Update available! {0}, {1} to download."), Words.Files(pending), Words.Size(size)));
                 await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = pending; ShowPlayState(); });
                 return;
             }
@@ -927,7 +1274,7 @@ public partial class MainWindow : Window
 
     void ShowPlayState()
     {
-        bool install = NoGameYet && _server is not null;
+        bool install = (NoGameYet || Folder.Length == 0) && _server is not null;
         PlayButton.Content = install ? "INSTALL" : _pendingFiles > 0 ? "UPDATE" : "PLAY";
         PlayButton.Classes.Set("update", install || _pendingFiles > 0);
     }
@@ -938,21 +1285,32 @@ public partial class MainWindow : Window
         try
         {
             long total = outdated.Sum(p => p.File.Size);
-            Log(outdated.Count == 0 ? "All server files are up to date" : $"{outdated.Count} file(s) to install, {total / 1048576.0:F1} MB");
+            Log(outdated.Count == 0 ? "All server files are up to date" : $"{Words.Files(outdated.Count)} to install, {Words.Size(total)}");
+            ApplySpeedLimit();
+            SpeedMeter meter = new();
+            int Index(PlannedFile planned) => outdated is List<PlannedFile> list ? list.IndexOf(planned) + 1 : outdated.ToList().IndexOf(planned) + 1;
             UpdateInstaller.Result result = await UpdateInstaller.InstallAsync(client, outdated, cache, wowFolder,
                 onFile: (planned, before, copy) => Dispatcher.UIThread.Post(() =>
                 {
                     Progress.Value = total == 0 ? 1 : (double)before / total;
-                    StatusText.Text = copy ? $"Copying {planned.File.Path} (already on your disk)" : $"Downloading {planned.File.Path}";
+                    StatusText.Text = string.Format(Translation.T(copy ? "Copying {0} ({1}/{2}) (already on your disk)" : "Downloading {0} ({1}/{2})"),
+                                                    planned.File.Path, Index(planned), outdated.Count);
                 }),
                 progress: (planned, before) => new UiProgress<(long Done, long Total)>(p =>
                 {
-                    Progress.Value = total == 0 ? 1 : (double)(before + p.Done) / total;
-                    StatusText.Text = $"Downloading {planned.File.Path}  {p.Done / 1048576.0:F1} / {p.Total / 1048576.0:F1} MB";
+                    long done = before + p.Done;
+                    Progress.Value = total == 0 ? 1 : (double)done / total;
+                    // this file and the whole update, the speed and the time left
+                    double speed = meter.Add(done);
+                    string rate = speed > 0 ? $"  ·  {SpeedLimit.Format(speed, _settings.SpeedInBits)}" : "";
+                    string left = SpeedLimit.TimeLeft(total - done, speed);
+                    StatusText.Text = string.Format(Translation.T("Downloading {0} ({1}/{2})"), planned.File.Path, Index(planned), outdated.Count)
+                                      + $"  {Words.ShortSize(p.Done)} / {Words.ShortSize(p.Total)}{rate}" + (left.Length > 0 ? $"  ·  {left}" : "");
+                    ToolTip.SetTip(Progress, $"{Words.ShortSize(done)} / {Words.Size(total)}");
                 }),
                 token: token);
             if (result.Copied > 0)
-                Log($"{result.Copied} file(s) ({result.BytesCopied / 1048576.0:F1} MB) copied from your own disk instead of downloaded");
+                Log($"{Words.Files(result.Copied)} ({Words.Size(result.BytesCopied)}) copied from your own disk instead of downloaded");
         }
         finally
         {
@@ -974,15 +1332,170 @@ public partial class MainWindow : Window
         await CheckAsync(download: true);
     }
 
-    async void OnDownloadClient(object? sender, RoutedEventArgs e)
+    async void OnDownloadClient(object? sender, RoutedEventArgs e) => await OpenInstallAsync();
+
+    // ------------------------------------------------------------------------------------------- install window
+    readonly HashSet<string> _installLocales = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, string> _installOptions = [];
+    bool _installAddons = true;
+
+    static string DefaultInstallFolder() => OperatingSystem.IsWindows()
+        ? @"C:\Games\Temucraft"
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Games", "Temucraft");
+
+    /// <summary>The install window: where to install, which languages, options and addons, and how big each part
+    /// and the whole install is (the game and the server's required files included), against the free space.</summary>
+    async Task OpenInstallAsync()
     {
-        IReadOnlyList<IStorageFolder> picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        if (_server is null || Busy) return;
+        if (!HaveLogin || !Agreed) { AskForLogin(); return; }
+        if (_manifest is null) await CheckAsync(download: false);
+        if (_manifest is not { } manifest) return;
+        if (!manifest.Files.Any(f => f.Category == FileCategory.Base))
         {
-            Title = "Folder for the game files",
-        });
-        string? folder = picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
-        if (folder is null || Busy) return;
-        if (await InstallGameFilesAsync(folder)) await CheckAsync(download: true);
+            Status(Translation.T("This server doesn't hand out the game itself: pick your WoW 3.3.5a folder under Settings."));
+            return;
+        }
+        InstallFolderBox.Text = Folder.Length > 0 && !GameFolder.LooksLikeClient(Folder) ? Folder : DefaultInstallFolder();
+        _installLocales.Clear();
+        foreach (string l in SelectedLocales().Concat(LockedLocales(Folder).Keys)) _installLocales.Add(l);
+        _installOptions.Clear();
+        foreach (OptionGroup g in manifest.OptionGroups)
+            if (UpdatePlanner.ChosenOption(manifest, _settings.Options, g.Name) is { } chosen) _installOptions[g.Name] = chosen;
+        _installAddons = AddonsBox.IsChecked == true;
+        BuildInstallParts(manifest);
+        InstallOverlay.IsVisible = true;
+    }
+
+    Grid PartRow(Control left, long bytes, bool strong = false)
+    {
+        Grid row = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 1) };
+        row.Children.Add(left);
+        TextBlock size = new() { Text = Words.Size(bytes), VerticalAlignment = VerticalAlignment.Center, Classes = { strong ? "text" : "soft" } };
+        Grid.SetColumn(size, 1);
+        row.Children.Add(size);
+        return row;
+    }
+
+    void BuildInstallParts(Manifest manifest)
+    {
+        InstallParts.Children.Clear();
+        InstallParts.Children.Add(PartRow(new TextBlock { Text = Translation.T("World of Warcraft 3.3.5a (the game)") }, InstallSizes.Of(manifest, FileCategory.Base), true));
+        InstallParts.Children.Add(PartRow(new TextBlock { Text = string.Format(Translation.T("{0} files (needed)"), _server?.Name is { Length: > 0 } n ? n : "Server") },
+                                          InstallSizes.Of(manifest, FileCategory.Patch), true));
+
+        Dictionary<string, string> locked = LockedLocales(Folder);
+        if (manifest.Locales.Count > 0)
+        {
+            InstallParts.Children.Add(new TextBlock { Text = Translation.T("LANGUAGES"), Classes = { "section" }, Margin = new Thickness(0, 10, 0, 2) });
+            foreach (string locale in manifest.Locales)
+            {
+                bool must = locked.ContainsKey(locale);
+                CheckBox box = new() { Content = $"{locale}  ·  {GameFolder.LocaleName(locale)}", IsChecked = must || _installLocales.Contains(locale), IsEnabled = !must };
+                if (must) ToolTip.SetTip(box, Translation.T(locked[locale]));
+                string code = locale;
+                box.IsCheckedChanged += (_, _) => { if (box.IsChecked == true) _installLocales.Add(code); else _installLocales.Remove(code); ShowInstallTotal(manifest); };
+                InstallParts.Children.Add(PartRow(box, InstallSizes.Locale(manifest, locale)));
+            }
+        }
+
+        if (manifest.OptionGroups.Count > 0)
+        {
+            InstallParts.Children.Add(new TextBlock { Text = Translation.T("OPTIONS"), Classes = { "section" }, Margin = new Thickness(0, 10, 0, 2) });
+            foreach (OptionGroup group in manifest.OptionGroups)
+            {
+                bool onOff = group.Options.SequenceEqual(["On", "Off"], StringComparer.OrdinalIgnoreCase);
+                string current = _installOptions.GetValueOrDefault(group.Name, "");
+                if (onOff || (group.Optional && group.Options.Count == 1))
+                {
+                    string on = group.Options[0], off = onOff ? group.Options[1] : "";
+                    CheckBox box;
+                    using (Look.Untranslated()) box = new CheckBox { Content = group.Name };
+                    box.IsChecked = current.Equals(on, StringComparison.OrdinalIgnoreCase);
+                    box.IsEnabled = !group.Enforce;
+                    ToolTip.SetTip(box, group.Description.Length > 0 ? group.Description : null);
+                    box.IsCheckedChanged += (_, _) => { _installOptions[group.Name] = box.IsChecked == true ? on : off; ShowInstallTotal(manifest); };
+                    InstallParts.Children.Add(PartRow(box, InstallSizes.Option(manifest, group.Name, on)));
+                }
+                else
+                {
+                    // a real choice: the group's name, then each option with its size
+                    using (Look.Untranslated()) InstallParts.Children.Add(new TextBlock { Text = group.Name, Margin = new Thickness(0, 4, 0, 0) });
+                    List<LookChoice> items = [.. (group.Optional ? new[] { new LookChoice("", Translation.T("(none)")) } : []),
+                                              .. group.Options.Select(o => new LookChoice(o, $"{o}  ({Words.ShortSize(InstallSizes.Option(manifest, group.Name, o))})"))];
+                    ComboBox combo = new() { ItemsSource = items, MinWidth = 260, IsEnabled = !group.Enforce };
+                    combo.SelectedItem = items.FirstOrDefault(c => c.Value.Equals(current, StringComparison.OrdinalIgnoreCase)) ?? items[0];
+                    Grid row = PartRow(combo, InstallSizes.Option(manifest, group.Name, current));
+                    combo.SelectionChanged += (_, _) =>
+                    {
+                        string picked = (combo.SelectedItem as LookChoice)?.Value ?? "";
+                        _installOptions[group.Name] = picked;
+                        if (row.Children[1] is TextBlock size) size.Text = Words.Size(InstallSizes.Option(manifest, group.Name, picked));
+                        ShowInstallTotal(manifest);
+                    };
+                    InstallParts.Children.Add(row);
+                }
+            }
+        }
+
+        long addons = InstallSizes.Of(manifest, FileCategory.Addon);
+        if (addons > 0)
+        {
+            InstallParts.Children.Add(new TextBlock { Text = Translation.T("ADDONS"), Classes = { "section" }, Margin = new Thickness(0, 10, 0, 2) });
+            CheckBox box = new() { Content = Translation.T("Install the addons the server needs"), IsChecked = _installAddons, IsEnabled = AddonsBox.IsEnabled };
+            box.IsCheckedChanged += (_, _) => { _installAddons = box.IsChecked == true; ShowInstallTotal(manifest); };
+            InstallParts.Children.Add(PartRow(box, addons));
+        }
+        ShowInstallTotal(manifest);
+    }
+
+    InstallChoice InstallPlan(string folder) =>
+        new(folder, _installLocales.ToList(), _installAddons, folder, new Dictionary<string, string>(_installOptions));
+
+    void ShowInstallTotal(Manifest manifest)
+    {
+        string folder = InstallFolderBox.Text?.Trim() ?? "";
+        long total = InstallSizes.Total(manifest, InstallPlan(folder.Length > 0 ? folder : DefaultInstallFolder()));
+        InstallTotal.Text = Words.Size(total);
+        long? free = folder.Length > 0 ? InstallSizes.FreeSpace(folder) : null;
+        bool fits = free is null || free.Value >= total;
+        InstallFree.Text = free is null ? "" : string.Format(Translation.T(fits ? "Free on that drive: {0}" : "Not enough space: that drive has {0} free"), Words.Size(free.Value));
+        InstallFree.Classes.Set("dim", fits);
+        InstallFree.Foreground = fits ? null : (IBrush?)this.FindResource("T.bad");
+        InstallGoButton.IsEnabled = fits && folder.Length > 0;
+    }
+
+    async void OnInstallBrowse(object? sender, RoutedEventArgs e)
+    {
+        IReadOnlyList<IStorageFolder> picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Folder for the game files" });
+        if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } folder)
+        {
+            InstallFolderBox.Text = folder;
+            if (_manifest is { } m) ShowInstallTotal(m);
+        }
+    }
+
+    void OnInstallCancel(object? sender, RoutedEventArgs e) => InstallOverlay.IsVisible = false;
+
+    async void OnInstallGo(object? sender, RoutedEventArgs e)
+    {
+        string folder = InstallFolderBox.Text?.Trim() ?? "";
+        if (folder.Length == 0 || _manifest is null) return;
+        if (GameFolder.LooksLikeClient(folder))
+        {
+            Status(Translation.T("That folder already has the game: it is now your WoW folder."));
+            WowFolderBox.Text = folder;
+        }
+        // the choices become the player's settings, then the game and the server's files are installed
+        _settings.Locales = _installLocales.ToList();
+        foreach ((string group, string option) in _installOptions) _settings.Options[group] = option;
+        if (AddonsBox.IsEnabled) AddonsBox.IsChecked = _installAddons;
+        WowFolderBox.Text = folder;
+        ShowLocales(_manifest.Locales);
+        RefreshMods();
+        SaveSettings();
+        InstallOverlay.IsVisible = false;
+        if (GameFolder.LooksLikeClient(folder) || await InstallGameFilesAsync(folder)) await CheckAsync(download: true);
     }
 
     /// <summary>Downloads the full client (the server's base files) into a folder, then makes it the WoW folder.</summary>
@@ -1023,10 +1536,10 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------------------------------- play
     async void OnPlay(object? sender, RoutedEventArgs e)
     {
-        if (NoGameYet && _server is not null)
+        if ((NoGameYet || Folder.Length == 0) && _server is not null)
         {
-            // an empty folder is picked: the whole game goes there, then the Temucraft files
-            if (await InstallGameFilesAsync(Folder)) await CheckAsync(download: true);
+            // no game yet: the install window (where, what, how big)
+            await OpenInstallAsync();
             return;
         }
         if (NeedFolder()) return;
@@ -1042,14 +1555,18 @@ public partial class MainWindow : Window
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
             Process? game = GameFolder.Start(Folder);
             Log("Started the game");
-            if (game is not null && ReopenBox.IsChecked == true)
+            if (game is null) return;
+            switch (_settings.OnGameLaunch)
             {
-                Hide();
-                await game.WaitForExitAsync();
-                Show();
-                Activate();
-                Log($"The game closed (exit code {game.ExitCode})");
+                case "exit": _quitting = true; Close(); return;
+                case "minimize": WindowState = WindowState.Minimized; break;
+                case "hide": HideToTray(); break;
             }
+            _gameRunning = true;
+            await game.WaitForExitAsync();
+            _gameRunning = false;
+            Log($"The game closed (exit code {game.ExitCode})");
+            if (_settings.OnGameLaunch is "minimize" or "hide" && ReopenBox.IsChecked == true) BringBack();
         }
         catch (Exception error)
         {
@@ -1525,7 +2042,7 @@ public partial class MainWindow : Window
         {
             await RefreshCommitsAsync(_catalog.Where(a => IsInstalled(a, folder)), token);
             int updates = _catalog.Count(a => IsInstalled(a, folder) && NeedsInstall(a, folder));
-            Status(updates == 0 ? "All addons are up to date." : $"{updates} addon update(s) available.");
+            Status(updates == 0 ? "All addons are up to date." : string.Format(Translation.T("Updates available for {0}."), Words.Addons(updates)));
             await Dispatcher.UIThread.InvokeAsync(RefreshCatalog);
         });
     }
@@ -1569,6 +2086,16 @@ public partial class MainWindow : Window
                 if (group.Description.Length > 0)
                     panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
             }
+            // how big each choice is ("On" / "Off" groups: only the size of On)
+            List<string> sized = [.. group.Options.Where(o => InstallSizes.Option(_manifest!, group.Name, o) > 0)];
+            if (sized.Count > 0)
+                panel.Children.Add(new TextBlock
+                {
+                    Classes = { "dim" }, FontSize = 11, TextWrapping = TextWrapping.Wrap,
+                    Text = sized.Count == 1 && group.Options.Count <= 2
+                        ? Words.Size(InstallSizes.Option(_manifest!, group.Name, sized[0]))
+                        : string.Join("  ·  ", sized.Select(o => $"{o}: {Words.ShortSize(InstallSizes.Option(_manifest!, group.Name, o))}")),
+                });
             string? chosen = UpdatePlanner.ChosenOption(_manifest!, _settings.Options, group.Name);
 
             void Pick(string value, string shown)
@@ -1718,7 +2245,7 @@ public partial class MainWindow : Window
             DefaultExtension = "zip",
         });
         if (file?.TryGetLocalPath() is not { } path) return;
-        try { Status($"Exported {Backups.ExportMacros(Folder, path)} file(s)."); }
+        try { Status(string.Format(Translation.T("Exported {0}."), Words.Files(Backups.ExportMacros(Folder, path)))); }
         catch (Exception error) { Status(error.Message); Logger.Error("Exporting macros", error); }
     }
 
@@ -1731,7 +2258,7 @@ public partial class MainWindow : Window
             FileTypeFilter = [new FilePickerFileType("Zip") { Patterns = ["*.zip"] }],
         });
         if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
-        try { Status($"Imported {Backups.ImportMacros(Folder, path)} file(s). Close the game first if it was running."); RefreshBackups(); }
+        try { Status(string.Format(Translation.T("Imported {0}. Close the game first if it was running."), Words.Files(Backups.ImportMacros(Folder, path)))); RefreshBackups(); }
         catch (Exception error) { Status(error.Message); Logger.Error("Importing macros", error); }
     }
 

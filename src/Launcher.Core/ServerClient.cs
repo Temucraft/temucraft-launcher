@@ -138,11 +138,13 @@ public sealed class ServerClient : IDisposable
                 FileShare.None, 1 << 20, useAsync: true);
             byte[] buffer = new byte[1 << 20];
             int read;
-            while ((read = await ReadWithTimeoutAsync(body, buffer, token)) > 0)
+            // with a speed limit, small reads so the waits stay short and the progress smooth
+            while ((read = await ReadWithTimeoutAsync(body, buffer.AsMemory(0, SpeedLimit.BytesPerSecond > 0 ? 64 * 1024 : buffer.Length), token)) > 0)
             {
                 await output.WriteAsync(buffer.AsMemory(0, read), token);
                 have += read;
                 progress?.Report((have, file.Size));
+                await SpeedLimit.WaitAsync(read, token);
             }
         }
 
@@ -156,8 +158,38 @@ public sealed class ServerClient : IDisposable
         File.Move(part, target, overwrite: true);
     }
 
+    /// <summary>Measures the download speed: reads the start of <paramref name="file"/> for at most
+    /// <paramref name="time"/> or <paramref name="maxBytes"/> (no speed limit) and returns bytes per second.
+    /// The first half second is left out (the connection still speeding up).</summary>
+    public async Task<double> SpeedTestAsync(ManifestFile file, TimeSpan time, long maxBytes, CancellationToken token)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, FileUri(file));
+        request.Headers.Range = new RangeHeaderValue(0, Math.Min(file.Size, maxBytes) - 1);
+        using HttpResponseMessage response = await SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+        ThrowForStatus(response);
+        await using Stream body = await response.Content.ReadAsStreamAsync(token);
+        byte[] buffer = new byte[256 * 1024];
+        System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+        long total = 0, warm = 0;
+        double warmSeconds = 0;
+        using CancellationTokenSource stop = CancellationTokenSource.CreateLinkedTokenSource(token);
+        stop.CancelAfter(time);
+        try
+        {
+            int read;
+            while (total < maxBytes && (read = await body.ReadAsync(buffer, stop.Token)) > 0)
+            {
+                total += read;
+                if (warmSeconds == 0 && clock.Elapsed.TotalSeconds >= 0.5) { warm = total; warmSeconds = clock.Elapsed.TotalSeconds; }
+            }
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested) { }   // time is up
+        double seconds = clock.Elapsed.TotalSeconds - warmSeconds;
+        return seconds > 0.2 ? (total - warm) / seconds : total / Math.Max(clock.Elapsed.TotalSeconds, 0.001);
+    }
+
     // A connection that stops sending for a minute is dropped, so the download can be resumed
-    static async Task<int> ReadWithTimeoutAsync(Stream body, byte[] buffer, CancellationToken token)
+    static async Task<int> ReadWithTimeoutAsync(Stream body, Memory<byte> buffer, CancellationToken token)
     {
         using CancellationTokenSource stall = CancellationTokenSource.CreateLinkedTokenSource(token);
         stall.CancelAfter(TimeSpan.FromMinutes(1));

@@ -161,7 +161,7 @@ public static class AddonFolder
     static async Task<IReadOnlyList<AddonFile>> FromZipAsync(HttpClient http, CatalogAddon addon, CancellationToken token)
     {
         byte[] zipBytes = await http.GetByteArrayAsync(addon.ZipUrl, token);
-        Logger.Info($"{addon.Name}: downloaded the repository zip ({zipBytes.Length / 1048576.0:F1} MB)", toWindow: false);
+        Logger.Info($"{addon.Name}: downloaded the repository zip ({Words.Size(zipBytes.Length)})", toWindow: false);
         ZipArchive zip = new(new MemoryStream(zipBytes), ZipArchiveMode.Read);
         // GitHub zips have one top folder (repo-branch)
         string prefix = zip.Entries.FirstOrDefault()?.FullName.Split('/')[0] + "/" + Root(addon);
@@ -194,7 +194,7 @@ public static class AddonFolder
             .Select(e => e.GetProperty("path").GetString()!)
             .Where(p => p.StartsWith(root, StringComparison.Ordinal))
             .ToList();
-        Logger.Info($"{addon.Name}: {paths.Count} file(s) below {root} at {commit[..Math.Min(7, commit.Length)]}", toWindow: false);
+        Logger.Info($"{addon.Name}: {Words.Files(paths.Count)} below {root} at {commit[..Math.Min(7, commit.Length)]}", toWindow: false);
         return Pick(addon, paths.Select(p => (p[root.Length..], (Func<CancellationToken, Task<byte[]>>)(t =>
             http.GetByteArrayAsync($"https://raw.githubusercontent.com/{addon.Repo}/{commit}/" +
                                    string.Join('/', p.Split('/').Select(Uri.EscapeDataString)), t)))).ToList());
@@ -221,7 +221,7 @@ public static class AddonFolder
                 string target = PathRules.Resolve(staging, file.Relative);
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
                 await File.WriteAllBytesAsync(target, await file.Read(token), token);
-                if (++done % 10 == 0 || done == total) status?.Report($"{addon.Name}: {done}/{total} file(s)");
+                if (++done % 10 == 0 || done == total) status?.Report($"{addon.Name}: {done} / {Words.Files(total)}");
             }
             string final = System.IO.Path.Combine(root, name);
             if (Directory.Exists(final)) Directory.Delete(final, true);
