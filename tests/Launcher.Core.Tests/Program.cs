@@ -51,6 +51,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Themes mix a mode and a theme; the server can enforce them", ThemeMixing),
     ("Settings copy to text and import back", SettingsCopy),
     ("Speeds, sizes, counts, update hours and the download cap", SpeedsAndSizes),
+    ("Settings, key bindings and macros are shared between accounts", SharingSettings),
     ("Changelog tags are found and coloured", NewsTags),
     ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
 ];
@@ -832,6 +833,33 @@ static Task Translating()
     Assert(Translation.Pick("frFR", "enUS", deAT, have) == "frFR", "the player's pick wins");
     Assert(Translation.Pick("", "de", ptPT, have) == "deDE", "short code");
     Assert(Translation.Pick("", "", ptPT, have) == "enUS", "a language the game doesn't have: English");
+    return Task.CompletedTask;
+}
+
+static Task SharingSettings()
+{
+    string wow = Directory.CreateTempSubdirectory().FullName;
+    string a = Path.Combine(wow, "WTF", "Account", "MAIN"), b = Path.Combine(wow, "WTF", "Account", "ALT");
+    string ca = Path.Combine(a, "Realm", "Hero"), cb = Path.Combine(b, "Realm", "Alt");
+    foreach (string d in new[] { ca, cb, Path.Combine(a, "SavedVariables"), Path.Combine(b, "SavedVariables"), Path.Combine(wow, "WTF", "Account", "SavedVariables") })
+        Directory.CreateDirectory(d);
+    void Write(string path, string text, int minutesAgo) { File.WriteAllText(path, text); File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-minutesAgo)); }
+    Write(Path.Combine(a, "config-cache.wtf"), "SET autoLootDefault \"1\"", 1);   // newest
+    Write(Path.Combine(b, "config-cache.wtf"), "SET autoLootDefault \"0\"", 60);
+    Write(Path.Combine(b, "macros-cache.txt"), "alt macros", 5);                  // only on ALT: goes to MAIN
+    Write(Path.Combine(a, "SavedVariables", "Bagnon.lua"), "x = 1", 1);
+    Write(Path.Combine(ca, "bindings-cache.wtf"), "hero binds", 1);
+    Write(Path.Combine(cb, "bindings-cache.wtf"), "alt binds", 30);
+    int backups = 0;
+    var first = SharedSettings.Sync(wow, addonSettings: false, characters: false, () => backups++);
+    Assert(File.ReadAllText(Path.Combine(b, "config-cache.wtf")).Contains("\"1\""), "the newest config wins");
+    Assert(File.ReadAllText(Path.Combine(a, "macros-cache.txt")) == "alt macros", "a file only one account has reaches the others");
+    Assert(!File.Exists(Path.Combine(b, "SavedVariables", "Bagnon.lua")) && File.ReadAllText(Path.Combine(cb, "bindings-cache.wtf")) == "alt binds", "addons and characters only when asked");
+    Assert(first.Copied == 2 && backups == 1 && first.Accounts.SequenceEqual(["ALT", "MAIN"]), $"copied {first.Copied}, backups {backups}, accounts {string.Join(",", first.Accounts)}");
+    var second = SharedSettings.Sync(wow, addonSettings: true, characters: true, () => backups++);
+    Assert(File.ReadAllText(Path.Combine(b, "SavedVariables", "Bagnon.lua")) == "x = 1" && File.ReadAllText(Path.Combine(cb, "bindings-cache.wtf")) == "hero binds", "addons and characters");
+    Assert(second.Copied == 2 && backups == 2, "only the new ones: " + second.Copied);
+    Assert(SharedSettings.Sync(wow, true, true, () => backups++).Copied == 0 && backups == 2, "nothing left to copy, no backup");
     return Task.CompletedTask;
 }
 

@@ -110,6 +110,14 @@ folder), a banner recommends updating and shows the changelog's newest "Launcher
 downloads it (checked against the manifest), swaps it with the running one and restarts; "Later" hides the banner
 until the next start. It is never forced.
 
+## Shared settings between accounts
+
+On the Game files page, "Keep my settings, key bindings and macros the same on all my accounts on this PC" copies the
+newest `config-cache.wtf` (auto loot and the other account settings), `bindings-cache.wtf` and `macros-cache.txt` of
+each account in `WTF\Account` over the older ones, before the game starts and after it closes (a backup is made
+first). It can also share addon settings (`SavedVariables`) and each character's own key bindings and macros. The
+server can do the same between PCs: `mod-temucraft-account-wide` (`Temucraft.AccountWide.Settings.*`).
+
 ## Languages
 
 The launcher's own text comes in the languages the 3.3.5a client has: English (enUS), German (deDE), French (frFR),

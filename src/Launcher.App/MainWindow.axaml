@@ -282,6 +282,14 @@
                   <CheckBox Name="AddonsBox" Content="Install the addons the server needs" IsChecked="True" />
                   <CheckBox Name="ClearCacheBox" Content="Clean the client's Cache (WDB) on each launch" IsChecked="True" />
 
+                  <TextBlock Classes="section" Text="SHARED SETTINGS" />
+                  <CheckBox Name="ShareBox"><TextBlock TextWrapping="Wrap" Text="Keep my settings (like auto loot), key bindings and macros the same on all my accounts on this PC" /></CheckBox>
+                  <CheckBox Name="ShareAddonsBox" Margin="24,0,0,0" Content="Also addon settings" />
+                  <CheckBox Name="ShareCharsBox" Margin="24,0,0,0"><TextBlock TextWrapping="Wrap" Text="Also between my characters (their own key bindings and macros)" /></CheckBox>
+                  <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap"
+                             Text="The newest copy wins, before the game starts and after it closes; a backup is made first. The server can do the same between PCs." />
+                  <Button Content="Share now" Click="OnShareNow" Margin="0,6,0,0" />
+
                   <TextBlock Classes="section" Text="BACKUPS" />
                   <TextBlock Classes="dim" Text="Your settings, macros, key bindings and addons (WTF and Interface\AddOns)." />
                   <CheckBox Name="BackupBox" Content="Back up before every update" IsChecked="True" />

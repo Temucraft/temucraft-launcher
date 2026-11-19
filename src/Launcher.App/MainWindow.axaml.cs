@@ -126,6 +126,7 @@ public partial class MainWindow : Window
         Opened += async (_, _) =>
         {
             LauncherVersionText.Text = $"Temucraft Launcher {LauncherInfo.Version}";
+            ShareSettings(Folder);   // the game may have been played with the launcher closed
             ShowPrivacy();
             // with a login, connect right away: news, addons and options show even before a game is installed
             // (nothing is downloaded until Update)
@@ -686,6 +687,9 @@ public partial class MainWindow : Window
             GameLaunchBox.SelectionChanged += OnWindowSettingChanged;
             CloseBox.SelectionChanged += OnWindowSettingChanged;
             StartPageBox.SelectionChanged += OnWindowSettingChanged;
+            ShareBox.IsCheckedChanged += OnShareSettingChanged;
+            ShareAddonsBox.IsCheckedChanged += OnShareSettingChanged;
+            ShareCharsBox.IsCheckedChanged += OnShareSettingChanged;
             InstallFolderBox.TextChanged += (_, _) => { if (InstallOverlay.IsVisible && _manifest is { } m) ShowInstallTotal(m); };
         }
         _fillingWindowSettings = true;
@@ -694,6 +698,10 @@ public partial class MainWindow : Window
             LimitBox.IsChecked = _settings.LimitDownloads;
             BitsBox.IsChecked = _settings.SpeedInBits;
             ShowLimitNumber();
+            ShareBox.IsChecked = _settings.ShareAccounts;
+            ShareAddonsBox.IsChecked = _settings.ShareAddonSettings;
+            ShareCharsBox.IsChecked = _settings.ShareCharacters;
+            ShareAddonsBox.IsEnabled = ShareCharsBox.IsEnabled = _settings.ShareAccounts;
             AutoUpdateBox.IsChecked = _settings.AutoUpdate;
             HoursBox.IsChecked = _settings.AutoUpdateHoursOnly;
             List<LookChoice> hours = [.. Enumerable.Range(0, 24).Select(h => new LookChoice(h.ToString(System.Globalization.CultureInfo.InvariantCulture), $"{h:00}:00"))];
@@ -788,6 +796,47 @@ public partial class MainWindow : Window
         if (ToBox.SelectedIndex >= 0) _settings.AutoUpdateTo = ToBox.SelectedIndex;
         ShowHoursNote();
         SaveSettings();
+    }
+
+    // ------------------------------------------------------------------------------------------- shared settings
+    void OnShareSettingChanged(object? sender, EventArgs e)
+    {
+        if (_fillingWindowSettings) return;
+        _settings.ShareAccounts = ShareBox.IsChecked == true;
+        _settings.ShareAddonSettings = ShareAddonsBox.IsChecked == true;
+        _settings.ShareCharacters = ShareCharsBox.IsChecked == true;
+        ShareAddonsBox.IsEnabled = ShareCharsBox.IsEnabled = _settings.ShareAccounts;
+        SaveSettings();
+    }
+
+    /// <summary>Copies the newest settings, key bindings and macros to the other accounts (and characters); quiet
+    /// unless something changed. Backs up WTF first.</summary>
+    void ShareSettings(string folder, bool force = false)
+    {
+        if ((!_settings.ShareAccounts && !force) || !GameFolder.LooksLikeClient(folder)) return;
+        try
+        {
+            SharedSettings.Result result = SharedSettings.Sync(folder, _settings.ShareAddonSettings, _settings.ShareCharacters,
+                () => Backups.Create(folder, "before-sharing-settings", includeAddons: false, keep: _settings.BackupsToKeep));
+            if (result.Copied > 0)
+            {
+                Log($"Shared settings: {Words.Files(result.Copied)} copied between {result.Accounts.Count} account(s): {string.Join(", ", result.Files.Take(10))}");
+                Status(string.Format(Translation.T("Settings shared: {0} brought up to date."), Words.Files(result.Copied)));
+            }
+            else if (force) Status(Translation.T("Settings are already the same everywhere."));
+        }
+        catch (Exception error)
+        {
+            Logger.Warning("Couldn't share the settings between accounts (is the game running?)", error);
+            if (force) Status(error.Message);
+        }
+    }
+
+    void OnShareNow(object? sender, RoutedEventArgs e)
+    {
+        if (NeedFolder()) return;
+        ShareSettings(Folder, force: true);
+        RefreshBackups();
     }
 
     // ------------------------------------------------------------------------------------------- speed test
@@ -1605,6 +1654,7 @@ public partial class MainWindow : Window
         {
             if (ClearCacheBox.IsChecked == true) GameFolder.ClearCache(Folder);
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
+            ShareSettings(Folder);
             Process? game = GameFolder.Start(Folder);
             Log("Started the game");
             if (game is null) return;
@@ -1618,6 +1668,7 @@ public partial class MainWindow : Window
             await game.WaitForExitAsync();
             _gameRunning = false;
             Log($"The game closed (exit code {game.ExitCode})");
+            ShareSettings(Folder);
             if (_settings.OnGameLaunch is "minimize" or "hide" && ReopenBox.IsChecked == true) BringBack();
         }
         catch (Exception error)

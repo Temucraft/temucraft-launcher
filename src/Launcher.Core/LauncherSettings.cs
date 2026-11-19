@@ -156,6 +156,11 @@ public sealed class UserSettings
     public bool BackupBeforeUpdate { get; set; } = true;
     /// <summary>Downloads: the player's speed limit (KB/s, used when <see cref="LimitDownloads"/>) and speeds shown in bits.</summary>
     public bool LimitDownloads { get; set; }
+    /// <summary>Keep account settings, key bindings and macros the same on every account on this PC (and addon
+    /// settings, and between characters, when those are on too). See <see cref="SharedSettings"/>.</summary>
+    public bool ShareAccounts { get; set; }
+    public bool ShareAddonSettings { get; set; }
+    public bool ShareCharacters { get; set; }
     public long DownloadLimitKBps { get; set; } = 4000;
     public bool SpeedInBits { get; set; }
     /// <summary>Update by itself when the launcher opens (and later, while it is open), optionally only between two hours.</summary>
