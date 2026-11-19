@@ -466,6 +466,116 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Copies what this PC sends, as "Title: value" lines, e.g. to paste into a message to the server's owner.</summary>
+    // ------------------------------------------------------------------------------------------- copy / import settings
+    static readonly (string Key, string Name)[] LauncherSwitches =
+        [("installAddons", "AddonsBox"), ("clearCache", "ClearCacheBox"), ("reopenAfterGame", "ReopenBox"),
+         ("rememberWindow", "RememberWindowBox"), ("backupBeforeUpdate", "BackupBox")];
+
+    CheckBox Switch(string name) => this.FindControl<CheckBox>(name)!;
+
+    /// <summary>The Tweaks boxes and the launcher's own choices as text (no login, folder or install ID).</summary>
+    string SettingsAsText()
+    {
+        List<KeyValuePair<string, string>> tweaks = [];
+        foreach (Tweak t in Tweaks.All)
+            if (BoxValue(t, _tweakControls.GetValueOrDefault(t.CVar)) is { } value) tweaks.Add(new(t.CVar, value));
+        foreach (string cvar in _serverTweaks)
+            if (_tweakControls.GetValueOrDefault(cvar) is TextBox { Text: { Length: > 0 } text }) tweaks.Add(new(cvar, text.Trim()));
+        if (_laaBox is not null) tweaks.Add(new("largeAddressAware", _laaBox.IsChecked == true ? "1" : "0"));
+        List<KeyValuePair<string, string>> launcher =
+        [
+            new("theme", Look.Theme), new("mode", Look.Mode), new("language", _settings.Language is { Length: > 0 } l ? l : "auto"),
+            .. LauncherSwitches.Select(s => new KeyValuePair<string, string>(s.Key, Switch(s.Name).IsChecked == true ? "1" : "0")),
+            new("backupsToKeep", _settings.BackupsToKeep.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new("locales", string.Join(",", SelectedLocales())),
+            .. _settings.Options.OrderBy(o => o.Key).Select(o => new KeyValuePair<string, string>("options." + o.Key, o.Value)),
+        ];
+        return SettingsText.Write(tweaks, launcher);
+    }
+
+    async void OnCopySettings(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+        try
+        {
+            await clipboard.SetTextAsync(SettingsAsText());
+            Status("Settings copied: paste them in a message, or press Import settings on the other PC.");
+        }
+        catch (Exception error) { Logger.Warning("Couldn't copy to the clipboard", error); }
+    }
+
+    /// <summary>Fills in settings from the clipboard. Settings the server enforces stay as the server says; the tweaks
+    /// are filled in and still need Save (so they can be looked at first).</summary>
+    async void OnImportSettings(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+        string? text;
+        try { text = await clipboard.GetTextAsync(); }
+        catch (Exception error) { Logger.Warning("Couldn't read the clipboard", error); return; }
+        if (SettingsText.Parse(text) is not var (tweaks, launcher))
+        {
+            Status("The clipboard has no launcher settings: copy them with Copy settings first.");
+            return;
+        }
+        int count = 0;
+        // tweaks: into the boxes (enforced ones are locked again right after)
+        _fillingTweaks = true;
+        try
+        {
+            foreach ((string cvar, string value) in tweaks)
+            {
+                if (cvar.Equals("largeAddressAware", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (_laaBox is { IsEnabled: true }) { _laaBox.IsChecked = value == "1"; count++; }
+                    continue;
+                }
+                if (!_tweakControls.TryGetValue(cvar, out Control? control) || !control.IsEnabled) continue;
+                SetTweak(cvar, value);
+                count++;
+            }
+            LockEnforcedTweaks();
+        }
+        finally { _fillingTweaks = false; }
+        _settings.TweakPresetChosen = true;
+        MarkPreset(MatchingPreset());
+
+        // the launcher's own choices
+        foreach ((string key, string name) in LauncherSwitches)
+            if (launcher.TryGetValue(key, out string? on) && Switch(name) is { IsEnabled: true } box) { box.IsChecked = on == "1"; count++; }
+        if (launcher.TryGetValue("backupsToKeep", out string? keep) && int.TryParse(keep, out int k) && k > 0 && _policy.Setting("backupsToKeep") is not { Enforce: true })
+        { _settings.BackupsToKeep = k; count++; }
+        foreach ((string key, string value) in launcher.Where(l => l.Key.StartsWith("options.", StringComparison.OrdinalIgnoreCase)))
+        {
+            string group = key["options.".Length..];
+            if (_manifest?.OptionGroups.FirstOrDefault(g => g.Name.Equals(group, StringComparison.OrdinalIgnoreCase)) is { Enforce: true }) continue;
+            _settings.Options[group] = value;
+            count++;
+        }
+        if (launcher.TryGetValue("locales", out string? locales))
+        {
+            _settings.Locales = locales.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(l => l.Length == 4).ToList();
+            ShowLocales(_manifest?.Locales ?? []);
+            count++;
+        }
+        if (launcher.TryGetValue("theme", out string? theme)) _settings.Theme = theme;
+        if (launcher.TryGetValue("mode", out string? mode)) _settings.ThemeMode = mode;
+        if (launcher.TryGetValue("language", out string? language) && language.Length > 0 && language != _settings.Language)
+        {
+            _settings.Language = language;
+            Look.UseLanguage(_settings.Language, _server?.Language);
+            LanguageNote.IsVisible = true;
+        }
+        Look.UseTheme(_settings);
+        ShowTagLegend();
+        FillLookBoxes();
+        RefreshMods();
+        ShowGatedTweaks();
+        SaveSettings();
+        _pendingFiles = Math.Max(_pendingFiles, launcher.Keys.Any(k => k.StartsWith("options.") || k == "locales") ? 1 : 0);
+        ShowPlayState();
+        Status($"{count} setting(s) imported. Press Save on the Tweaks page to write the game settings.");
+    }
+
     async void OnCopyValues(object? sender, RoutedEventArgs e)
     {
         if (_server is not { Collect.Count: > 0 } || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;

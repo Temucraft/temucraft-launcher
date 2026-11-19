@@ -165,6 +165,11 @@
                         ToolTip.Tip="Back to the launcher's defaults" />
                 <TextBlock Name="PresetCustom" Text="Custom" Foreground="{DynamicResource T.accent}" VerticalAlignment="Center" Margin="6,0,0,0" IsVisible="False"
                            ToolTip.Tip="Your own values: none of the presets" />
+                <Border Width="1" Background="{DynamicResource T.border}" Margin="4,2" />
+                <Button Name="CopySettingsButton" Content="Copy settings" Click="OnCopySettings"
+                        ToolTip.Tip="Your tweaks and launcher settings as text, to paste on another PC or send to a friend" />
+                <Button Content="Import settings" Click="OnImportSettings"
+                        ToolTip.Tip="Fill in settings copied with Copy settings (from the clipboard)" />
               </StackPanel>
               <TextBlock Classes="dim" TextWrapping="Wrap">
                 <Run Text="Highlighted" Foreground="{DynamicResource T.good}" FontWeight="SemiBold" />
@@ -300,6 +305,12 @@
                 <TextBlock Grid.Row="2" Text="Mode:" VerticalAlignment="Center" Margin="0,6,0,0" />
                 <ComboBox Grid.Row="2" Grid.Column="2" Name="ModeBox" HorizontalAlignment="Stretch" Margin="0,6,0,0" SelectionChanged="OnThemePicked" />
               </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                <Button Name="CopySettingsButton2" Content="Copy settings" Click="OnCopySettings"
+                        ToolTip.Tip="Your tweaks and launcher settings as text, to paste on another PC or send to a friend" />
+                <Button Content="Import settings" Click="OnImportSettings"
+                        ToolTip.Tip="Fill in settings copied with Copy settings (from the clipboard)" />
+              </StackPanel>
               <TextBlock Name="LanguageNote" Classes="dim" FontSize="12" Margin="0,4,0,0" IsVisible="False"
                          Text="The new language shows fully after restarting the launcher." />
               <TextBlock Name="LauncherVersionText" Classes="dim" Margin="0,10,0,0" />

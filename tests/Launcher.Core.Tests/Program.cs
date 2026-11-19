@@ -49,6 +49,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("DXVK settings go to dxvk.conf, the rest to Config.wtf", DxvkTweaks),
     ("Text files are read and the launcher's words translated", Translating),
     ("Themes mix a mode and a theme; the server can enforce them", ThemeMixing),
+    ("Settings copy to text and import back", SettingsCopy),
     ("Changelog tags are found and coloured", NewsTags),
     ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
 ];
@@ -828,6 +829,22 @@ static Task Translating()
     Assert(Translation.Pick("frFR", "enUS", deAT, have) == "frFR", "the player's pick wins");
     Assert(Translation.Pick("", "de", ptPT, have) == "deDE", "short code");
     Assert(Translation.Pick("", "", ptPT, have) == "enUS", "a language the game doesn't have: English");
+    return Task.CompletedTask;
+}
+
+static Task SettingsCopy()
+{
+    string text = SettingsText.Write([new("farclip", "1277"), new("dxvk.hud", "fps")],
+                                     [new("theme", "wotlk"), new("options.Night sky", "On"), new("locales", "enUS,deDE"), new("evil", "a\nb")]);
+    Assert(text.StartsWith(SettingsText.Header), "header");
+    var parsed = SettingsText.Parse(text);
+    Assert(parsed is not null, "parsed");
+    var (tweaks, launcher) = parsed!.Value;
+    Assert(tweaks["farclip"] == "1277" && tweaks["dxvk.hud"] == "fps" && tweaks.Count == 2, "tweaks");
+    Assert(launcher["theme"] == "wotlk" && launcher["options.Night sky"] == "On" && launcher["locales"] == "enUS,deDE", "launcher: " + string.Join(",", launcher.Keys));
+    Assert(launcher["evil"] == "ab", "no new lines inside a value");
+    Assert(SettingsText.Parse("hello world") is null && SettingsText.Parse("") is null, "not settings");
+    Assert(SettingsText.Parse("[tweaks]\r\nmaxFPS = 60\r\n[future]\r\nx = 1") is { } p && p.Tweaks["maxFPS"] == "60" && p.Launcher.Count == 0, "windows lines, unknown section");
     return Task.CompletedTask;
 }
 
