@@ -117,7 +117,7 @@ public static class Tweaks
         new("Display", "Render distance", "farclip", TweakKind.Number, "777", "1277", "How far terrain is drawn. [Default: 777] [Max: 1277]", 177, 1277, true),
         new("Display", "Ground clutter distance", "groundEffectDist", TweakKind.Number, "70", "140", "How far grass and small plants are drawn. [Default: 70] [Max: 140]", 0, 140),
         new("Display", "Ground clutter density", "groundEffectDensity", TweakKind.Number, "16", "64", "How thick the ground clutter is. [Default: 16] [Max: 256]", 16, 256),
-        new("Display", "Spell detail", "spellEffectLevel", TweakKind.Number, "2", "2", "Amount of spell effects. [0-2]", 0, 2),
+        new("Display", "Spell detail", "spellEffectLevel", TweakKind.Number, "2", "2", "Amount of spell effects; higher shows more. [Default: 2]", 0, 10),
         new("Camera", "Camera distance", "cameraDistanceMax", TweakKind.Number, "15", "50", "Maximum zoom out distance. [Default: 15] [Max: 50]", 15, 50, true),
         new("Camera", "Camera distance factor", "cameraDistanceMaxFactor", TweakKind.Number, "1", "2", "Multiplies the zoom out distance. [Default: 1] [Max: 4]", 1, 4, true),
         new("Camera", "Smooth camera", "cameraSmoothStyle", TweakKind.Number, "0", "0", "Camera follow style. [0 never, 1 smart, 2 always, 4 when moving]", 0, 4),
