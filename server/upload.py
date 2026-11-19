@@ -233,13 +233,14 @@ def put(client, sftp, path, target, size, already, openssh=None):
                 out.write(block)
                 done += len(block)
                 now = time.monotonic()
-                if now - last >= 2 or done == size:
+                if size >= 8 << 20 and (now - last >= 2 or done == size):   # progress only for big files
                     last = now
                     speed = (done - start) / max(now - began, 0.001)
                     left = (size - done) / speed if speed > 0 else 0
                     print(f"\r    {done / 1048576:9.1f} / {size / 1048576:.1f} MB  {speed / 1048576:5.2f} MB/s"
                           f"  {int(left // 3600)}h{int(left % 3600 // 60):02d}m left   ", end="", flush=True)
-        print()
+        if size >= 8 << 20:
+            print()
         if not start:
             return
         local_sha, remote_sha = sha256_local(path), sha256_remote(client, temp)
@@ -252,8 +253,11 @@ def put(client, sftp, path, target, size, already, openssh=None):
 def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None):
     sftp = client.open_sftp()
     if openssh and not dry:
-        print("Sending with the system's sftp (OpenSSH).")
+        print("Sending big files with the system's sftp (OpenSSH), small ones over the open connection.")
+    print(f"Listing what's already on the server in {remote}...", flush=True)
     have = remote_files(sftp, remote)
+    print(f"  {len(have)} file(s) there. Comparing with {local}...", flush=True)
+    checked = 0
     made, sent, total = set(), 0, 0
     local_set = set()
     for root, dirs, files in os.walk(local):
@@ -268,6 +272,7 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
             if rel in skip:
                 continue
             local_set.add(rel)
+            checked += 1
             st = os.stat(path)
             if have.get(rel) == (st.st_size, int(st.st_mtime)):
                 continue
@@ -293,7 +298,8 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
             if not dry:
                 sftp.remove(posixpath.join(remote, rel))
     sftp.close()
-    print(f"{sent} file(s) uploaded ({total / 1048576:.1f} MB), {removed} deleted" + (" [dry run]" if dry else ""))
+    print(f"{checked} file(s) checked: {sent} uploaded ({total / 1048576:.1f} MB), {checked - sent} already up to date,"
+          f" {removed} deleted" + (" [dry run]" if dry else ""))
 
 
 def manifest(client, env, dry):
@@ -301,6 +307,7 @@ def manifest(client, env, dry):
     if not files_dir:
         sys.exit("upload.env has no REMOTE_FILES_DIR.")
     tool = env.get("REMOTE_MANIFEST_TOOL", posixpath.join(files_dir, "..", "make-manifest.py"))
+    print("Rebuilding manifest.json on the server (new or changed files are hashed)...", flush=True)
     command = f"python3 {shlex.quote(tool)} {shlex.quote(files_dir)}"
     if env.get("REALMLIST"):
         command += f" --realmlist {shlex.quote(env['REALMLIST'])}"
