@@ -46,6 +46,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Only real MACs and useful local addresses are reported", ClientInfoFilters),
     ("News dates read as 18th of November 2026 (18/11/2026), numbered per day", NewsDates),
     ("Website links and the header switches are read from launcher.env", NavAndHeader),
+    ("Realm status: address from NAV or the policy, counts read, player map link", RealmStatusBlock),
     ("DXVK settings go to dxvk.conf, the rest to Config.wtf", DxvkTweaks),
     ("Text files are read and the launcher's words translated", Translating),
     ("Themes mix a mode and a theme; the server can enforce them", ThemeMixing),
@@ -63,6 +64,39 @@ List<(string Name, Func<Task> Body)> tests =
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
 static string HexOf(char c) => new(c, 64);
+
+static async Task RealmStatusBlock()
+{
+    IReadOnlyList<NavLink> nav = ServerSettings.ParseNav("Register|https://reg.example.com:4000/signup; Database|https://db.example.com/aowow/index.php?home");
+    Check(RealmStatus.Website(nav)?.ToString() == "https://db.example.com/aowow/", "website from the Database link: " + RealmStatus.Website(nav));
+    Check(RealmStatus.Website(ServerSettings.ParseNav("Register|https://reg.example.com:4000/"))?.ToString() == "https://reg.example.com:4000/", "first link without a site name");
+    Check(RealmStatus.Website([]) is null, "no links, no website");
+
+    LauncherPolicy none = LauncherPolicy.From(null);
+    Check(RealmStatus.StatusUrl(none, nav)?.ToString() == "https://db.example.com/aowow/?realm-status=data", "default address: " + RealmStatus.StatusUrl(none, nav));
+    LauncherPolicy set = LauncherPolicy.From(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(
+        """{"realmStatusUrl":{"value":"https://site.example.com/?realm-status=data"},"playerMapUrl":"https://site.example.com/map","reportBugUrl":{"value":"https://bugs.example.com/"}}"""));
+    Check(set.Unknown.Count == 0 && set.Setting("reportBugUrl") is not null, "link settings are known: " + string.Join(",", set.Unknown));
+    Check(RealmStatus.StatusUrl(set, nav)?.ToString() == "https://site.example.com/?realm-status=data", "policy address");
+    LauncherPolicy off = LauncherPolicy.From(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>("""{"realmStatusUrl":{"value":false}}"""));
+    Check(RealmStatus.StatusUrl(off, nav) is null, "false turns the block off");
+
+    string json = """
+    {"generated":1,"cacheSeconds":30,"realms":[{"id":1,"name":"Temucraft","online":true,"players":12,"alliance":5,"horde":7,"peak":57,"peakTime":1790000000,"startedAt":1,"uptime":93720,"classes":{"1":3},"races":{},"levels":[0,1,2,0,0,0,0,0,9]},
+     {"id":2,"name":"PTR","online":false,"players":0,"alliance":0,"horde":0,"peak":3,"peakTime":0,"startedAt":0,"uptime":0,"classes":{},"races":{},"levels":[]}],
+     "names":{"classes":{"1":"Warrior"},"races":{}},"mapEnabled":true,"mapUrl":"https://db.example.com/aowow/?player-map"}
+    """;
+    FakeServer server = new(new Dictionary<string, byte[]> { ["aowow/"] = System.Text.Encoding.UTF8.GetBytes(json) });
+    RealmStatus status = await RealmStatus.FetchAsync(new Uri("https://db.example.com/aowow/?realm-status=data"), null, server);
+    Check(status.Realms.Count == 2 && status.Realms[0] is { Name: "Temucraft", Online: true, Players: 12, Peak: 57, Alliance: 5, Horde: 7, Uptime: 93720 }
+          && !status.Realms[1].Online, string.Join(" | ", status.Realms));
+    Check(RealmStatus.Duration(93720) == "1d 2h" && RealmStatus.Duration(3720) == "1h 2m" && RealmStatus.Duration(0) == "-", "durations");
+    Uri statusUrl = new("https://db.example.com/aowow/?realm-status=data");
+    Check(RealmStatus.PlayerMapUrl(none, nav, status, statusUrl)?.ToString() == "https://db.example.com/aowow/?player-map", "map link from the website");
+    Check(RealmStatus.PlayerMapUrl(set, nav, status, statusUrl)?.ToString() == "https://site.example.com/map", "map link from the policy");
+    Check(RealmStatus.PlayerMapUrl(none, nav, RealmStatus.Parse("""{"realms":[],"mapEnabled":false}"""), statusUrl) is null, "map turned off on the website");
+    Check(RealmStatus.PlayerMapUrl(none, nav, RealmStatus.Parse("""{"realms":[]}"""), statusUrl)?.ToString() == "https://db.example.com/aowow/?player-map", "map link built");
+}
 
 static Task OptionGroups()
 {

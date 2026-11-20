@@ -32,5 +32,7 @@
   "downloadLimit": { "_comment": "The most KB/s each player may download at (0 or -1 = no cap). Players can still pick a lower limit.", "value": 0 },
   "theme": { "_comment": "temucraft, vanilla, tbc, wotlk, cata, mop, wod, legion, bfa, shadowlands, dragonflight, tww or midnight", "value": "temucraft", "enforce": false },
   "themeMode": { "_comment": "dark or light", "value": "dark", "enforce": false },
-  "reportBugUrl": { "_comment": "Where the bug icon next to Play sends players (it copies a report to paste there). Leave out for the launcher's GitHub issues.", "value": "https://github.com/Temucraft/temucraft-launcher/issues/new" }
+  "reportBugUrl": { "_comment": "Where the bug icon next to Play sends players (it copies a report to paste there). Leave out for the launcher's GitHub issues.", "value": "https://github.com/Temucraft/temucraft-launcher/issues/new" },
+  "realmStatusUrl": { "_comment": "The realm status over the news (online, players, peak, uptime): the website's ?realm-status=data. Leave out to use the NAV link of launcher.env named like Database (else the first) with ?realm-status=data; false hides it.", "value": "https://db.example.com/?realm-status=data" },
+  "playerMapUrl": { "_comment": "The Player map link next to the realm status. Leave out to use the map address the website sends; false hides it.", "value": "https://db.example.com/?player-map" }
 }

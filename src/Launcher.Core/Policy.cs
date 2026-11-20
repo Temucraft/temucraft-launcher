@@ -56,6 +56,9 @@ public sealed class LauncherPolicy
     public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware"];
     public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog", "theme", "themeMode", "downloadLimit", "launcherUpdate"];
 
+    /// <summary>Web addresses the launcher opens or reads: the bug report page, the realm status block and the player map.</summary>
+    public static readonly string[] Links = ["reportBugUrl", "realmStatusUrl", "playerMapUrl"];
+
     /// <summary>How the News or Changelog panel shows (the "news" / "changelog" entries); shown, 20 then 20 more, by default.</summary>
     public FeedRule News { get; private set; } = FeedRule.Default;
     public FeedRule Changelog { get; private set; } = FeedRule.Default;
@@ -83,7 +86,7 @@ public sealed class LauncherPolicy
                     else if (Rule(cvar.Value) is { } rule && rule.CVarText is not null) rules.Tweaks[cvar.Name] = rule;
                     else rules.Unknown.Add("tweaks." + cvar.Name);
             }
-            else if (Known.Contains(key, StringComparer.OrdinalIgnoreCase) && Rule(value) is { } rule)
+            else if ((Known.Contains(key, StringComparer.OrdinalIgnoreCase) || Links.Contains(key, StringComparer.OrdinalIgnoreCase)) && Rule(value) is { } rule)
                 rules.Settings[key] = rule;
             else
                 rules.Unknown.Add(key);

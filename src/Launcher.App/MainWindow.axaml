@@ -190,6 +190,15 @@
         </StackPanel>
       </Border>
 
+      <!-- realm status from the website (?realm-status=data), shown with the news page -->
+      <Border DockPanel.Dock="Top" Name="RealmPanel" Classes="card" IsVisible="False" BorderThickness="1" CornerRadius="4" Padding="12,6" Margin="0,0,0,8">
+        <Grid ColumnDefinitions="*,Auto">
+          <WrapPanel Name="RealmList" Orientation="Horizontal" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Name="PlayerMapButton" Classes="link" Content="Player map" Click="OnPlayerMap" VerticalAlignment="Center"
+                  IsVisible="False" ToolTip.Tip="Who is online and where, on the website" />
+        </Grid>
+      </Border>
+
       <Panel>
         <!-- 0 news -->
         <Grid Name="NewsPage" ColumnDefinitions="*,12,*">

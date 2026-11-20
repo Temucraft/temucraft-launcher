@@ -87,6 +87,9 @@ recommendation (and as the value outright where the launcher has no box for it).
 | `downloadLimit` | KB/s, e.g. `2000` | the most each player may download at; `0` or `-1` (the default) is no cap. Players can still set a lower limit of their own. |
 | `theme` | e.g. `"temucraft"`, `"wotlk"` | the launcher's default theme (see Themes below) |
 | `themeMode` | `"dark"` or `"light"` | the default mode |
+| `reportBugUrl` | a web address | where the bug icon next to Play sends players (the launcher's GitHub issues when not set) |
+| `realmStatusUrl` | a web address, or `false` | the realm status over the news (online or offline, players, peak, uptime): the website's `?realm-status=data`. Not set: the NAV link named like Database / AoWoW / Website (else the first) with `?realm-status=data`; `false` hides it |
+| `playerMapUrl` | a web address, or `false` | the "Player map" link next to the realm status; not set: the map address the website sends (`?player-map`) |
 
 Names the launcher doesn't know are skipped and noted in its log, so a newer policy never breaks an older launcher.
 `launcher-policy.json` may hold `"_comment"` notes (on the file, on a setting or in `tweaks`); `make-manifest.py` removes them and the launcher skips them. Plain JSON, so editors don't complain. See
