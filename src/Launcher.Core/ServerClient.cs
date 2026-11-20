@@ -56,13 +56,26 @@ public sealed class ServerClient : IDisposable
 
     public async Task<Manifest> GetManifestAsync(CancellationToken token = default)
     {
-        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        using HttpResponseMessage response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(_base, "manifest.json")),
-            HttpCompletionOption.ResponseContentRead, timeout.Token);
-        ThrowForStatus(response);
-        Logger.Debug($"manifest.json: {(int)response.StatusCode}");
-        return Manifest.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+        // the file list is large (about 2,000 files): slow connections get 90 seconds a try and three tries
+        for (int attempt = 1; ; attempt++)
+        {
+            using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(90));
+            try
+            {
+                using HttpResponseMessage response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(_base, "manifest.json")),
+                    HttpCompletionOption.ResponseContentRead, timeout.Token);
+                ThrowForStatus(response);
+                Logger.Debug($"manifest.json: {(int)response.StatusCode}");
+                return Manifest.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+            }
+            catch (Exception error) when (attempt < 3 && !token.IsCancellationRequested
+                                          && error is OperationCanceledException or HttpRequestException or IOException)
+            {
+                Logger.Warning($"Couldn't get the file list (try {attempt} of 3); trying again", error);
+                await Task.Delay(TimeSpan.FromSeconds(2 * attempt), token);
+            }
+        }
     }
 
     /// <summary>A small text file next to the manifest (news.json, addons.json...); null when the server has none.</summary>
