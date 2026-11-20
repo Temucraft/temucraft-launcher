@@ -137,6 +137,8 @@
           <ProgressBar Name="Progress" Minimum="0" Maximum="1" Height="6" Foreground="{DynamicResource T.section}" Margin="0,4,12,0" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6" Margin="0,0,12,0">
+          <Button Name="UpdateInfoButton" Classes="link" Foreground="{DynamicResource T.accent}" IsVisible="False" Click="OnUpdateInfo"
+                  Content="ⓘ Update info" ToolTip.Tip="Every file the update downloads, changes or removes" />
           <Button Name="DownloadsButton" Classes="link" Foreground="{DynamicResource T.accent}" IsVisible="False" Click="OnDownloads"
                   ToolTip.Tip="Every file the updates installed: new or changed, how far along, and when it finished" />
           <Button Name="UntrackedButton" Classes="link" Foreground="{DynamicResource T.accent}" IsVisible="False" Click="OnUntracked" />
@@ -463,6 +465,36 @@
       </DockPanel>
      </Border>
     </Border>
+
+    <!-- update info: every change an update makes, before it starts -->
+    <Grid Name="UpdateInfoOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
+      <Border Background="{DynamicResource T.background}" Width="720" MaxHeight="640" Margin="20" CornerRadius="6"
+              HorizontalAlignment="Center" VerticalAlignment="Center">
+       <Border Classes="panel" CornerRadius="6" Padding="24,18">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="title" Text="UPDATE INFO" FontSize="24" />
+            <Button Grid.Column="1" Content="X" Click="OnUpdateInfoClose" Padding="8,2" VerticalAlignment="Top" />
+          </Grid>
+          <StackPanel DockPanel.Dock="Top" Spacing="2">
+            <TextBlock Text="INSTALL LOCATION:" FontWeight="SemiBold" Foreground="{DynamicResource T.text}" />
+            <TextBlock Name="UpdateInfoFolder" Foreground="{DynamicResource T.accent}" TextWrapping="Wrap" />
+            <TextBlock Classes="dim" FontSize="12" Text="The WoW folder picked under Game files." />
+            <TextBlock Name="UpdateInfoSummary" FontWeight="SemiBold" Foreground="{DynamicResource T.text}" Margin="0,12,0,0" />
+            <TextBlock Classes="dim" Text="These changes are in the update:" Margin="0,0,0,6" />
+          </StackPanel>
+          <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+            <CheckBox Name="UpdateInfoSkip" Content="Don't ask again (Update info stays one click away)" />
+            <Button Grid.Column="1" Name="UpdateInfoContinue" Classes="play" Content="Continue" Click="OnUpdateInfoContinue"
+                    FontSize="16" Padding="22,8" />
+          </Grid>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,14,0">
+            <StackPanel Name="UpdateInfoList" />
+          </ScrollViewer>
+        </DockPanel>
+       </Border>
+      </Border>
+    </Grid>
 
     <!-- installing the game: where, what, and how big each part and the whole is -->
     <Grid Name="InstallOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">

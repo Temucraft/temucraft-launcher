@@ -1447,7 +1447,8 @@ public partial class MainWindow : Window
                 int pending = outdated.Count + addonUpdates.Count;
                 Status(pending == 0 ? "Everything up to date!"
                     : string.Format(Translation.T("Update available! {0}, {1} to download."), Words.Files(pending), Words.Size(size)));
-                await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = pending; ShowPlayState(); });
+                PendingUpdate described = DescribeUpdate(folder, manifest, outdated, addonUpdates);
+                await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = pending; SetPendingUpdate(described); ShowPlayState(); });
                 return;
             }
 
@@ -1473,7 +1474,7 @@ public partial class MainWindow : Window
             ApplyEnforcedToGame(folder);
             ApplyLoginScenes(folder);
             Status("Everything up to date!");
-            await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
+            await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; SetPendingUpdate(null); ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
         });
     }
 
@@ -1812,6 +1813,8 @@ public partial class MainWindow : Window
         if (NeedFolder()) return;
         if (_pendingFiles > 0 && _server is not null)
         {
+            // first what the update will change, unless the player said not to ask
+            if (!_settings.SkipUpdateInfo && _pendingUpdate is not null) { ShowUpdateInfo(fromUpdate: true); return; }
             await CheckAsync(download: true);
             return;
         }

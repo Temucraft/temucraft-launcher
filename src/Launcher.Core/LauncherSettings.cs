@@ -156,6 +156,8 @@ public sealed class UserSettings
     /// <summary>The server's last say over the look, so the next start looks right straight away.</summary>
     public Themes.ServerLook ServerLook { get; set; } = new();
     public bool BackupBeforeUpdate { get; set; } = true;
+    /// <summary>Update starts at once instead of showing Update info first.</summary>
+    public bool SkipUpdateInfo { get; set; }
     /// <summary>Downloads: the player's speed limit (KB/s, used when <see cref="LimitDownloads"/>) and speeds shown in bits.</summary>
     public bool LimitDownloads { get; set; }
     /// <summary>Keep account settings, key bindings and macros the same on every account on this PC (and addon
