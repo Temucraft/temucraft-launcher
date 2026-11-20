@@ -144,15 +144,16 @@ public static class Look
         if (Application.Current is not { } app) return;
         Mode = mode;
         Theme = theme;
-        Dictionary<string, string> colours = Themes.Resolve(_modes!.GetValueOrDefault(mode), _themes!.FirstOrDefault(t => t.Id == theme), mode,
-                                                            _modes!.GetValueOrDefault("dark"));
+        Themes.Theme? themeFile = _themes!.FirstOrDefault(t => t.Id == theme);
+        Dictionary<string, string> colours = Themes.Resolve(_modes!.GetValueOrDefault(mode), themeFile, mode, _modes!.GetValueOrDefault("dark"));
         foreach ((string key, string value) in colours)
-            app.Resources["T." + key] = new SolidColorBrush(Color.Parse(value));
+            app.Resources["T." + key] = MakeBrush(value);
+        ApplyStyle(app, Themes.ResolveStyle(_modes!.GetValueOrDefault(mode), themeFile, mode), colours);
         app.RequestedThemeVariant = mode == "light" ? ThemeVariant.Light : ThemeVariant.Dark;
         // the switches, check boxes and sliders in the theme's colour
         if (colours.TryGetValue("accent", out string? accent))
         {
-            Color c = Color.Parse(accent);
+            Color c = Color.Parse(Themes.FirstColour(accent));
             app.Resources["SystemAccentColor"] = c;
             for (int i = 1; i <= 3; i++)
             {
@@ -160,6 +161,63 @@ public static class Look
                 app.Resources[$"SystemAccentColorLight{i}"] = Shade(c, 1 + 0.15 * i);
             }
         }
+    }
+
+    /// <summary>A plain colour, or a top to bottom gradient for "#111 > #222".</summary>
+    static IBrush MakeBrush(string value)
+    {
+        string[] stops = Themes.Stops(value);
+        if (stops.Length <= 1) return new SolidColorBrush(Color.Parse(stops.Length == 1 ? stops[0] : value));
+        LinearGradientBrush brush = new() { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative) };
+        for (int i = 0; i < stops.Length; i++)
+            brush.GradientStops.Add(new GradientStop(Color.Parse(stops[i]), i / (double)(stops.Length - 1)));
+        return brush;
+    }
+
+    /// <summary>The fonts built into the launcher (Assets/Fonts, open font licence), by family name.</summary>
+    static readonly string[] BundledFonts = ["Cinzel", "Marcellus"];
+
+    /// <summary>
+    /// The theme's style lines as resources: "T.texture" (over the window), the panel texture (replaces "T.panel"),
+    /// "T.titleFont", "T.radius", "T.borderWidth", "T.frameShadow" (the outer frame) and "T.sectionPadding".
+    /// </summary>
+    static void ApplyStyle(Application app, Dictionary<string, string> style, Dictionary<string, string> colours)
+    {
+        double strength = Themes.Number(style["textureStrength"]) ?? 0.5;
+        app.Resources["T.texture"] = Texture(style["texture"], strength, null) ?? Brushes.Transparent;
+        if (colours.TryGetValue("panel", out string? panel)
+            && Texture(style["panelTexture"], Themes.Number(style["panelTextureStrength"]) ?? 0.3,
+                       Color.Parse(Themes.FirstColour(panel))) is { } panelTexture)
+            app.Resources["T.panel"] = panelTexture;
+
+        List<string> fonts = [];
+        foreach (string name in style["titleFont"].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            fonts.Add(BundledFonts.FirstOrDefault(b => b.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } bundled
+                ? $"avares://TemucraftLauncher/Assets/Fonts#{bundled}" : name);
+        app.Resources["T.titleFont"] = fonts.Count > 0 ? new FontFamily(string.Join(", ", fonts)) : FontFamily.Default;
+
+        double radius = Themes.Number(style["radius"]) ?? 0, width = Themes.Number(style["borderWidth"]) ?? 1;
+        app.Resources["T.radius"] = new CornerRadius(radius);
+        app.Resources["T.borderWidth"] = new Thickness(width);
+        // the outer frame: a solid ring drawn as a shadow just outside the border, then a soft drop shadow
+        string frame = colours.TryGetValue("frame", out string? f) ? Themes.FirstColour(f) : "#00000000";
+        app.Resources["T.frameShadow"] = Color.Parse(frame).A == 0
+            ? new BoxShadows()
+            : BoxShadows.Parse($"0 0 0 3 {frame}, 0 6 16 0 #80000000");
+        string bar = colours.TryGetValue("sectionBar", out string? b) ? Themes.FirstColour(b) : "#00000000";
+        app.Resources["T.sectionPadding"] = Color.Parse(bar).A == 0 ? new Thickness(0) : new Thickness(8, 3, 8, 3);
+    }
+
+    /// <summary>A drawn texture by name, or a picture from the "themes" folder next to the launcher.</summary>
+    static IBrush? Texture(string name, double strength, Color? baseColour)
+    {
+        if (!Themes.IsImageFile(name)) return DrawnTextures.Brush(name, strength, baseColour);
+        try
+        {
+            string file = Path.Combine(Folder("themes"), name);
+            return File.Exists(file) ? DrawnTextures.Tiled(new Avalonia.Media.Imaging.Bitmap(file)) : null;
+        }
+        catch (Exception e) { Logger.Warning($"Couldn't read the theme picture {name}", e); return null; }
     }
 
     /// <summary>A fixed colour (news tags, {+better} values) made darker in light mode so it reads on white.</summary>

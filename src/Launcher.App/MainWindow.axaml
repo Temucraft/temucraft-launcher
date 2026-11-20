@@ -9,6 +9,7 @@
       <Setter Property="Foreground" Value="{DynamicResource T.text}" />
       <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontFamily" Value="{DynamicResource T.titleFont}" />
       <Setter Property="Padding" Value="8,6" />
     </Style>
     <Style Selector="Button.tab.selected">
@@ -19,17 +20,23 @@
     <Style Selector="Border.panel">
       <Setter Property="Background" Value="{DynamicResource T.panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource T.border}" />
-      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderThickness" Value="{DynamicResource T.borderWidth}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource T.radius}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource T.frameShadow}" />
       <Setter Property="Padding" Value="16" />
     </Style>
     <Style Selector="TextBlock.title">
       <Setter Property="Foreground" Value="{DynamicResource T.accent}" />
       <Setter Property="FontSize" Value="18" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontFamily" Value="{DynamicResource T.titleFont}" />
       <Setter Property="Margin" Value="0,0,0,10" />
     </Style>
     <Style Selector="TextBlock.section">
       <Setter Property="Foreground" Value="{DynamicResource T.section}" />
+      <Setter Property="Background" Value="{DynamicResource T.sectionBar}" />
+      <Setter Property="Padding" Value="{DynamicResource T.sectionPadding}" />
+      <Setter Property="FontFamily" Value="{DynamicResource T.titleFont}" />
       <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Margin" Value="0,14,0,6" />
@@ -41,6 +48,10 @@
     <Style Selector="Button.play">
       <Setter Property="Background" Value="{DynamicResource T.play}" />
       <Setter Property="Foreground" Value="{DynamicResource T.playText}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource T.playBorder}" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="CornerRadius" Value="{DynamicResource T.radius}" />
+      <Setter Property="FontFamily" Value="{DynamicResource T.titleFont}" />
       <Setter Property="FontSize" Value="20" />
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="Width" Value="150" />
@@ -49,6 +60,15 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.play.update">
+      <Setter Property="Background" Value="{DynamicResource T.update}" />
+    </Style>
+    <!-- keep the theme's PLAY colours (and gradient) under the mouse; the frame lights up instead -->
+    <Style Selector="Button.play:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource T.play}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource T.accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource T.playText}" />
+    </Style>
+    <Style Selector="Button.play.update:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource T.update}" />
     </Style>
     <Style Selector="Button.preset">
@@ -95,6 +115,8 @@
   </Window.Styles>
 
   <Panel>
+    <!-- the theme's drawn texture (stone, mist...), under the player's own picture -->
+    <Border Background="{DynamicResource T.texture}" IsHitTestVisible="False" />
     <Image Name="BackgroundImage" Stretch="UniformToFill" Opacity="0.55" />
     <Border Background="{DynamicResource T.shade}" />
 
@@ -104,7 +126,8 @@
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Image Source="/Assets/temucraft.png" Width="44" Height="44" Margin="0,0,10,0" VerticalAlignment="Center" />
           <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="TEMUCRAFT" FontSize="30" FontWeight="Black" Foreground="{DynamicResource T.accent}" LineHeight="32" />
+            <TextBlock Text="TEMUCRAFT" FontSize="30" FontWeight="Black" Foreground="{DynamicResource T.accent}" LineHeight="32"
+                       FontFamily="{DynamicResource T.titleFont}" />
             <TextBlock Name="ServerText" Classes="dim" FontSize="11" Margin="2,0,0,0" />
           </StackPanel>
         </StackPanel>

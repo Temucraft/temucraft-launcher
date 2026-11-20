@@ -936,6 +936,43 @@ static Task ThemeMixing()
     Assert(Themes.Pick("dark", "temucraft", new("wotlk", false, "light", false), have) == ("dark", "temucraft"), "the player's pick");
     Assert(Themes.Pick("dark", "temucraft", new("wotlk", true, "light", false), have) == ("dark", "wotlk"), "the server enforces its theme");
     Assert(Themes.Pick("", "nope", new("missing", false), have) == ("dark", "temucraft"), "unknown themes are skipped");
+
+    // gradients and style lines (the classic, pandaria and draenor themes use them)
+    Themes.Theme classic = Themes.FromYaml("classic", "name: Classic\nsectionBar: \"#4A6E94 > #1A2C46\"\ndark.play: \"#C8321A > #8A1608 > #5A0A02\"\n"
+        + "panel: \"#111 > #222\"\ntexture: stone\nlight.texture: parchment\ntitleFont: \"Cinzel, Georgia, serif\"\nradius: \"2\"\nborderWidth: \"9\"\n"
+        + "panelTexture: ../../evil.png\ntextureStrength: \"0.4\"");
+    Assert(Themes.Stops("#4A6E94 > #1A2C46").Length == 2 && Themes.Stops("#4A6E94").Length == 1, "stops");
+    Assert(Themes.Stops("#4A6E94 >").Length == 0 && Themes.Stops("red > #000000").Length == 0 && !Themes.IsBrush("> #000000"), "bad gradients");
+    Assert(Themes.FirstColour("#C8321A > #8A1608") == "#C8321A", "first colour");
+    Dictionary<string, string> c = Themes.Resolve(dark, classic, "dark", dark);
+    Assert(c["sectionBar"] == "#4A6E94 > #1A2C46" && c["play"] == "#C8321A > #8A1608 > #5A0A02" && !c.ContainsKey("panel"), "gradients: " + string.Join(",", c));
+    Dictionary<string, string> sd = Themes.ResolveStyle(dark, classic, "dark"), sl = Themes.ResolveStyle(light, classic, "light");
+    Assert(sd["texture"] == "stone" && sl["texture"] == "parchment" && sd["titleFont"] == "Cinzel, Georgia, serif" && sd["radius"] == "2", "style: " + string.Join(",", sd));
+    Assert(sd["borderWidth"] == "1" && sd["panelTexture"] == "none" && sd["textureStrength"] == "0.4", "style limits: " + string.Join(",", sd));
+    Assert(Themes.ResolveStyle(dark, wotlk, "dark")["texture"] == "none" && Themes.ResolveStyle(null, null, "dark").Count == Themes.StyleKeys.Count, "style defaults");
+    Assert(Themes.IsImageFile("marble.png") && !Themes.IsImageFile("../marble.png") && !Themes.IsImageFile("C:marble.png") && !Themes.IsImageFile("marble.exe"), "theme pictures");
+
+    // the built-in themes: every line is a known colour or style line with a value that fits
+    string? themesDir = null;
+    for (DirectoryInfo? up = new(AppContext.BaseDirectory); up is not null && themesDir is null; up = up.Parent)
+        if (Directory.Exists(Path.Combine(up.FullName, "src", "Launcher.App", "Themes"))) themesDir = Path.Combine(up.FullName, "src", "Launcher.App", "Themes");
+    Assert(themesDir is not null, "found the themes folder");
+    foreach (string file in Directory.GetFiles(themesDir!, "*.yml"))
+    {
+        Themes.Theme t = Themes.FromYaml(Path.GetFileNameWithoutExtension(file), File.ReadAllText(file));
+        foreach ((string key, string value) in t.Lines)
+        {
+            string bare = key.StartsWith("dark.") ? key[5..] : key.StartsWith("light.") ? key[6..] : key;
+            bool ok = Themes.Keys.Contains(bare) ? Themes.IsBrush(value)
+                : Themes.StyleKeys.ContainsKey(bare) && Themes.ResolveStyle(null, Themes.FromYaml("x", $"{bare}: \"{value}\""), "dark")[bare] == value;
+            Assert(ok, $"{Path.GetFileName(file)}: {key}: {value}");
+        }
+    }
+    foreach (string mode in Themes.Modes)
+    {
+        Themes.Theme m = Themes.FromYaml(mode, File.ReadAllText(Path.Combine(themesDir!, mode + ".yml")));
+        Assert(Themes.Keys.All(m.Lines.ContainsKey), $"{mode}.yml sets every colour");
+    }
     return Task.CompletedTask;
 }
 

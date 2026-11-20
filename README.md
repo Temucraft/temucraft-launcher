@@ -167,6 +167,28 @@ The files are in `src/Launcher.App/Themes/`: `dark.yml` and `light.yml` set ever
 `order`, colours for both modes (`accent: "#3BA7E3"`) and colours for one mode (`light.accent: "#24678C"`). A
 `themes` folder next to the launcher adds more themes or replaces the built-in ones.
 
+Three themes recall the old game websites: **Classic (2006)** (dark stone, blue steel heading bars, gold links, a red
+PLAY button; Light mode is parchment with blue links), **Pandaria (2013)** (misty jade sky, warm wood panels, orange
+gold links, a jade PLAY button) and **Draenor (2015)** (red sky with embers, very dark brown panels, orange links, an
+iron red PLAY button). They use a few extra lines a theme may set:
+
+| Line | Values | What it does |
+|------|--------|--------------|
+| any colour | `"#4A6E94 > #2A4466 > #1A2C46"` | a top to bottom gradient instead of one colour |
+| `sectionBar` | colour | a bar behind section headings (see-through in `dark.yml`/`light.yml`: no bar) |
+| `frame` | colour | a second, outer frame around panels |
+| `playBorder` | colour | the rim of the PLAY and UPDATE buttons |
+| `texture` | `none`, `stone`, `parchment`, `mist`, `ember`, `wood` or `marble.png` | drawn over the window background |
+| `textureStrength` | `0` to `1` | how strong that texture is |
+| `panelTexture`, `panelTextureStrength` | same | a texture inside the panels, in the panel colour |
+| `titleFont` | `"Cinzel, Georgia, serif"` | fonts for titles, headings, tabs and PLAY |
+| `radius`, `borderWidth` | `0` to `16`, `0` to `4` | corners and frame width of panels |
+
+The textures are drawn by the launcher from noise (no picture files). A picture name (`marble.png`) is read from the
+`themes` folder next to the launcher. Cinzel and Marcellus are built in (`Assets/Fonts`, SIL Open Font Licence, the
+licence files sit next to them); other names are looked up on the PC. Every line also works with `dark.` or `light.`
+in front.
+
 ## The log
 
 Everything the launcher does goes to `%AppData%\TemucraftLauncher\launcher.log` (Settings > Open log): each line has
