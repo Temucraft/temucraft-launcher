@@ -46,6 +46,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         LoadDownloadHistory();
         Logger.Written += ShowLogLine;
+        Logger.Written += ToastOnError;
         _settings = UserSettings.Load(_settingsFile);
         if (_settings.InstallId.Length == 0) _settings.InstallId = Guid.NewGuid().ToString("N");
 
@@ -132,6 +133,7 @@ public partial class MainWindow : Window
         Opened += async (_, _) =>
         {
             LauncherVersionText.Text = $"Temucraft Launcher {LauncherInfo.Version}";
+            ReportBugButton.Content = $"🐞 v{LauncherInfo.Version}";
             ShareSettings(Folder);   // the game may have been played with the launcher closed
             ShowPrivacy();
             // with a login, connect right away: news, addons and options show even before a game is installed
@@ -671,6 +673,7 @@ public partial class MainWindow : Window
             feeds.Save(_feedFile);
             RefreshCatalog();
             RefreshUntrackedButton();
+            MaybeAskConfigPreset();
         });
         if (!launcherOk) Log("Self-check: this launcher differs from the server's copy");
         bool firstCheck = !_launcherChecked;
@@ -1310,6 +1313,7 @@ public partial class MainWindow : Window
         catch (System.Text.Json.JsonException e) { Logger.Warning("The news or changelog isn't valid JSON", e); }
         ShowNews(NewsList, newsItems, feeds.NewsRule);
         ShowNews(ChangelogList, changelogItems, feeds.ChangelogRule);
+        TryShowWhatsNew(feeds.Changelog);
     }
 
     static void ShowNews(StackPanel list, IReadOnlyList<NewsItem> items, FeedRule? rule = null, int? shown = null)
@@ -1877,6 +1881,20 @@ public partial class MainWindow : Window
         if (changed > 0) Log($"Turned {changed} needed addon(s) back on");
     }
 
+    const string DefaultReportBugUrl = "https://github.com/Temucraft/temucraft-launcher/issues/new";
+
+    /// <summary>The bug icon: the diagnostics report on the clipboard, then the server's bug report page (GitHub when it has none).</summary>
+    void OnReportBug(object? sender, RoutedEventArgs e)
+    {
+        OnCopyDiagnostics(sender, e);
+        // the server's page for bug reports, or the launcher's GitHub issues
+        string url = _policy.Setting("reportBugUrl") is { Value.ValueKind: System.Text.Json.JsonValueKind.String } rule
+                     && Uri.TryCreate(rule.Value.GetString(), UriKind.Absolute, out Uri? link) && link.Scheme is "https" or "http"
+            ? link.ToString() : DefaultReportBugUrl;
+        OpenUrl(url);
+        Toast(Translation.T("A bug report is on your clipboard: paste it in the page that just opened."));
+    }
+
     async void OnCopyDiagnostics(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
@@ -2173,10 +2191,12 @@ public partial class MainWindow : Window
         catch (Exception e) { Logger.Warning("Large Address Aware", e); }
         // a fresh game (none of these set yet) starts on the server's recommendation, or the defaults; a game with its
         // own settings keeps them and shows whichever preset they match
+        _savedBoxes = CurrentBoxes();   // what the game has now: Apply / Discard show when the boxes differ
         bool fresh = Tweaks.All.Where(t => t.File == "config" && t.Requires is null).All(t => config.Get(t.CVar) is null);
         if (fresh && !_settings.TweakPresetChosen) FillPreset(_policy.Tweaks.Count > 0 ? "server" : "default");
         LockEnforcedTweaks();
         MarkPreset(MatchingPreset());
+        UpdateTweaksDirty();
     }
 
     // ------------------------------------------------------------------------------------- presets
@@ -2235,7 +2255,7 @@ public partial class MainWindow : Window
             IBrush? field = (IBrush?)this.FindResource("T.field"), soft = (IBrush?)this.FindResource("T.textSoft"),
                     accent = (IBrush?)this.FindResource("T.accent");
             Avalonia.Controls.Documents.InlineCollection inlines = [];
-            inlines.Add(new Avalonia.Controls.Documents.Run(Translation.T("Press Save to keep these changes:")));
+            inlines.Add(new Avalonia.Controls.Documents.Run(Translation.T("Press Apply to keep these changes:")));
             foreach ((string name, string oldValue, string newValue) in changes)
             {
                 inlines.Add(new Avalonia.Controls.Documents.LineBreak());
@@ -2247,6 +2267,7 @@ public partial class MainWindow : Window
             PresetChanges.Inlines = inlines;
         }
         PresetChanges.IsVisible = true;
+        UpdateTweaksDirty();
     }
 
     /// <summary>The preset the boxes match (server first), or "custom".</summary>
@@ -2285,6 +2306,7 @@ public partial class MainWindow : Window
         if (_fillingTweaks) return;
         _settings.TweakPresetChosen = true;
         MarkPreset(MatchingPreset());
+        UpdateTweaksDirty();
     }
 
     /// <summary>Tweaks the server enforces: shown with the server's value and greyed out.</summary>

@@ -144,7 +144,11 @@
           <Button Name="UntrackedButton" Classes="link" Foreground="{DynamicResource T.accent}" IsVisible="False" Click="OnUntracked" />
           <Button Name="CancelButton" Content="Cancel" IsVisible="False" Click="OnCancel" />
         </StackPanel>
-        <Button Grid.Column="2" Name="PlayButton" Classes="play" Content="PLAY" Click="OnPlay" />
+        <StackPanel Grid.Column="2">
+          <Button Name="PlayButton" Classes="play" Content="PLAY" Click="OnPlay" />
+          <Button Name="ReportBugButton" Classes="link" HorizontalAlignment="Right" FontSize="12" Margin="0,4,0,0" Click="OnReportBug"
+                  ToolTip.Tip="Report bug: copies a short report about your game files and the last log lines to paste in your message" />
+        </StackPanel>
       </Grid>
 
       <Border DockPanel.Dock="Top" Name="WarningBanner" IsVisible="False" Background="{DynamicResource T.warning}" CornerRadius="4" Padding="10,6" Margin="0,0,0,8">
@@ -189,12 +193,11 @@
               <TextBlock Classes="dim" Text="The game's own settings (WTF\Config.wtf), and those of DXVK and Awesome WotLK while they are on." />
             </StackPanel>
             <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,10,0,0">
+              <Grid ColumnDefinitions="*,Auto">
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Save" Click="OnSaveTweaks" />
-                <Border Width="1" Background="{DynamicResource T.border}" Margin="4,2" />
                 <Button Name="PresetServer" Classes="preset" Content="Server recommended" Click="OnServerTweaks" />
                 <Button Name="PresetRecommended" Classes="preset" Content="Recommended" Click="OnRecommendedTweaks" />
-                <Button Name="PresetDefault" Classes="preset" Content="Default" Click="OnDefaultTweaks"
+                <Button Name="PresetDefault" Classes="preset" Content="Restore defaults" Click="OnDefaultTweaks"
                         ToolTip.Tip="Back to the launcher's defaults" />
                 <TextBlock Name="PresetCustom" Text="Custom" Foreground="{DynamicResource T.accent}" VerticalAlignment="Center" Margin="6,0,0,0" IsVisible="False"
                            ToolTip.Tip="Your own values: none of the presets" />
@@ -203,11 +206,20 @@
                         ToolTip.Tip="Your tweaks and launcher settings as text, to paste on another PC or send to a friend" />
                 <Button Content="Import settings" Click="OnImportSettings"
                         ToolTip.Tip="Fill in settings copied with Copy settings (from the clipboard)" />
+                <Button Content="Change config preset" Click="OnChangeConfigPreset"
+                        ToolTip.Tip="Performance or Fidelity: many graphics settings at once, and the mods that go with them" />
               </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+                <Button Name="DiscardTweaksButton" Content="✕ Discard" Click="OnDiscardTweaks" IsVisible="False" Foreground="#E57373"
+                        ToolTip.Tip="Go back to the values in your game's Config.wtf" />
+                <Button Name="ApplyTweaksButton" Content="✓ Apply" Click="OnSaveTweaks" IsVisible="False" Foreground="{DynamicResource T.good}" FontWeight="SemiBold"
+                        ToolTip.Tip="Write the changes to WTF\Config.wtf (close the game first)" />
+              </StackPanel>
+              </Grid>
               <TextBlock Name="PresetChanges" Classes="dim" FontSize="12" TextWrapping="Wrap" IsVisible="False" />
               <TextBlock Classes="dim" TextWrapping="Wrap">
                 <Run Text="Highlighted" Foreground="{DynamicResource T.good}" FontWeight="SemiBold" />
-                <Run Text=" options are the launcher's recommended ones. Changes are written to WTF\Config.wtf when you press Save; close the game first." />
+                <Run Text=" options are the launcher's recommended ones. Changes are written to WTF\Config.wtf when you press Apply; close the game first." />
               </TextBlock>
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Name="TweaksHint" Classes="dim" IsVisible="False" Margin="0,0,0,8"
@@ -496,6 +508,86 @@
       </Border>
     </Grid>
 
+    <!-- what's new: once after the launcher updated -->
+    <Grid Name="StartupNewsOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
+      <Border Background="{DynamicResource T.background}" Width="760" MaxHeight="660" Margin="20" CornerRadius="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+       <Border Classes="panel" CornerRadius="6" Padding="0">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource T.border}" BorderThickness="0,0,0,1" Padding="24,18">
+            <TextBlock Classes="title" Text="WHAT'S NEW" FontSize="28" Margin="0" />
+          </Border>
+          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource T.border}" BorderThickness="0,1,0,0" Padding="24,12">
+            <Button Classes="link" Content="→  Continue" FontSize="16" HorizontalAlignment="Right" Click="OnWhatsNewContinue" />
+          </Border>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,14,24,14">
+            <StackPanel>
+              <TextBlock Name="StartupNewsVersion" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource T.text}" Margin="0,0,0,6" />
+              <StackPanel Name="StartupNewsList" />
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+       </Border>
+      </Border>
+    </Grid>
+
+    <!-- first start: a configuration preset -->
+    <Grid Name="ConfigPresetOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
+      <Border Background="{DynamicResource T.background}" Width="760" Margin="20" CornerRadius="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+       <Border Classes="panel" CornerRadius="6" Padding="0">
+        <StackPanel>
+          <Border BorderBrush="{DynamicResource T.border}" BorderThickness="0,0,0,1" Padding="24,18">
+            <TextBlock Classes="title" Text="SELECT CONFIGURATION PRESET" FontSize="28" Margin="0" />
+          </Border>
+          <StackPanel Margin="24,16,24,20" Spacing="14">
+            <TextBlock TextWrapping="Wrap" FontSize="15" Foreground="{DynamicResource T.text}"
+                       Text="Choose a preset to apply to your game's settings. It also turns on the mods that go with it." />
+            <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,14,Auto,14,Auto">
+              <Button Classes="link" Content="✕  Skip preset" FontSize="16" Foreground="{DynamicResource T.text}" Click="OnConfigPresetSkip" />
+              <TextBlock Grid.Column="1" Classes="dim" FontSize="14" VerticalAlignment="Center"
+                         Text="Keep all your current settings and mods." />
+              <Button Grid.Row="2" Classes="link" Content="▷▷  Performance" FontSize="16" Foreground="#C8D45A" Tag="performance" Click="OnConfigPresetPick" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <TextBlock Classes="dim" FontSize="14" MaxWidth="480" VerticalAlignment="Center"
+                           Text="Fewer effects, more frames. Best for raids, or when the game stutters or freezes." />
+                <Button Classes="link" Content="ⓘ" FontSize="16" Tag="performance" Click="OnConfigPresetInfo" ToolTip.Tip="Included settings" VerticalAlignment="Center" />
+              </StackPanel>
+              <Button Grid.Row="4" Classes="link" Content="✦  Fidelity" FontSize="16" Foreground="#F07050" Tag="fidelity" Click="OnConfigPresetPick" />
+              <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <TextBlock Classes="dim" FontSize="14" VerticalAlignment="Center" Text="The best looks and the most detail." />
+                <Button Classes="link" Content="ⓘ" FontSize="16" Tag="fidelity" Click="OnConfigPresetInfo" ToolTip.Tip="Included settings" VerticalAlignment="Center" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </StackPanel>
+       </Border>
+      </Border>
+    </Grid>
+
+    <!-- what a preset sets -->
+    <Grid Name="IncludedOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
+      <Border Background="{DynamicResource T.background}" Width="680" MaxHeight="560" Margin="20" CornerRadius="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+       <Border Classes="panel" CornerRadius="6" Padding="0">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+            <Border BorderBrush="{DynamicResource T.border}" BorderThickness="0,0,0,1" Padding="24,18" Grid.ColumnSpan="2">
+              <TextBlock Classes="title" Text="INCLUDED SETTINGS" FontSize="26" Margin="0" />
+            </Border>
+            <Button Grid.Column="1" Content="X" Click="OnIncludedClose" Padding="8,2" Margin="0,14,16,0" VerticalAlignment="Top" />
+          </Grid>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,12,24,16">
+            <StackPanel Spacing="4">
+              <TextBlock Name="IncludedTitle" Classes="section" Margin="0,0,0,4" />
+              <TextBlock Text="MODS:" FontWeight="SemiBold" FontSize="16" Foreground="{DynamicResource T.text}" />
+              <TextBlock Name="IncludedMods" Margin="8,0,0,6" Foreground="{DynamicResource T.text}" />
+              <TextBlock Text="CONFIG.WTF SETTINGS:" FontWeight="SemiBold" FontSize="16" Foreground="{DynamicResource T.text}" />
+              <SelectableTextBlock Name="IncludedSettings" Margin="8,0,0,0" FontFamily="Consolas, Cascadia Mono, monospace" Foreground="{DynamicResource T.text}" LineHeight="24" />
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+       </Border>
+      </Border>
+    </Grid>
+
     <!-- installing the game: where, what, and how big each part and the whole is -->
     <Grid Name="InstallOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
       <Border Classes="panel" Width="720" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20" CornerRadius="6">
@@ -561,5 +653,7 @@
         </ScrollViewer>
       </Border>
     </Grid>
+    <!-- error popups -->
+    <StackPanel Name="ToastHost" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" Spacing="6" Width="340" />
   </Panel>
 </Window>

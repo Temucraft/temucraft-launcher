@@ -158,6 +158,10 @@ public sealed class UserSettings
     public bool BackupBeforeUpdate { get; set; } = true;
     /// <summary>Update starts at once instead of showing Update info first.</summary>
     public bool SkipUpdateInfo { get; set; }
+    /// <summary>The launcher version whose What's new was seen.</summary>
+    public string LastSeenLauncherVersion { get; set; } = "";
+    /// <summary>The first-start preset question was answered (or skipped).</summary>
+    public bool ConfigPresetAsked { get; set; }
     /// <summary>Downloads: the player's speed limit (KB/s, used when <see cref="LimitDownloads"/>) and speeds shown in bits.</summary>
     public bool LimitDownloads { get; set; }
     /// <summary>Keep account settings, key bindings and macros the same on every account on this PC (and addon

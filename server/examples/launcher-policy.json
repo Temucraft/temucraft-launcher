@@ -31,5 +31,6 @@
   "changelog": { "_comment": "Changelog page: same as news", "show": true, "entries": 20, "more": 20 },
   "downloadLimit": { "_comment": "The most KB/s each player may download at (0 or -1 = no cap). Players can still pick a lower limit.", "value": 0 },
   "theme": { "_comment": "temucraft, vanilla, tbc, wotlk, cata, mop, wod, legion, bfa, shadowlands, dragonflight, tww or midnight", "value": "temucraft", "enforce": false },
-  "themeMode": { "_comment": "dark or light", "value": "dark", "enforce": false }
+  "themeMode": { "_comment": "dark or light", "value": "dark", "enforce": false },
+  "reportBugUrl": { "_comment": "Where the bug icon next to Play sends players (it copies a report to paste there). Leave out for the launcher's GitHub issues.", "value": "https://github.com/Temucraft/temucraft-launcher/issues/new" }
 }
