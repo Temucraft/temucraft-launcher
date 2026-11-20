@@ -122,6 +122,8 @@ public partial class MainWindow : Window
             OnTab(TabButton(_settings.LastPage), new RoutedEventArgs());
         _autoUpdateTimer.Tick += async (_, _) => await AutoUpdateAsync();
         _autoUpdateTimer.Start();
+        _launcherTimer.Tick += async (_, _) => await CheckLauncherAsync();
+        _launcherTimer.Start();
         Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
         {
@@ -667,7 +669,9 @@ public partial class MainWindow : Window
             RefreshUntrackedButton();
         });
         if (!launcherOk) Log("Self-check: this launcher differs from the server's copy");
-        if (!launcherOk && manifest.Launcher is not null && manifest.Rules.LauncherUpdateFirst)
+        bool firstCheck = !_launcherChecked;
+        _launcherChecked = true;
+        if (!launcherOk && manifest.Launcher is not null && manifest.Rules.LauncherUpdateFirst && firstCheck)
         {
             // the server wants the new launcher first: get it now, then start it (nothing else runs before)
             Status("Updating the launcher first…");
@@ -1072,7 +1076,28 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------------------------------- launcher updates
-    bool _launcherLater;   // "Later" pressed: no banner again until the next start
+    bool _launcherLater;     // "Later" pressed: no banner again for that launcher
+    string _laterSha = "";   // the server's launcher when "Later" was pressed
+    bool _launcherChecked;   // the first check of this run is done (only that one installs a new launcher by itself)
+    readonly DispatcherTimer _launcherTimer = new() { Interval = TimeSpan.FromMinutes(30) };
+
+    /// <summary>While the launcher is open: every 30 minutes, whether the server has a new launcher (a banner asks).</summary>
+    async Task CheckLauncherAsync()
+    {
+        if (Busy || _server is null || !HaveLogin || !Agreed || !_launcherChecked) return;
+        try
+        {
+            using ServerClient client = NewClient();
+            Manifest manifest = await client.GetManifestAsync();
+            if (manifest.Launcher is null || await SelfCheck.MatchesAsync(manifest)) return;
+            _manifest ??= manifest;
+            if (_manifest.Launcher?.Sha256 != manifest.Launcher.Sha256) _manifest = manifest;
+            if (_launcherLater && _laterSha != manifest.Launcher.Sha256) _launcherLater = false;   // a newer one since "Later"
+            Log("A new launcher is on the server");
+            ShowLauncherUpdate(true);
+        }
+        catch (Exception error) { Logger.Warning("Couldn't check for a new launcher", error); }
+    }
 
     /// <summary>The server hands out a different launcher (normally a newer one): a banner that recommends updating,
     /// with what changed (the changelog's newest "Launcher ..." entry). Not forced: "Later" hides it until the next start.</summary>
@@ -1094,6 +1119,7 @@ public partial class MainWindow : Window
     void OnLauncherLater(object? sender, RoutedEventArgs e)
     {
         _launcherLater = true;
+        _laterSha = _manifest?.Launcher?.Sha256 ?? "";
         WarningBanner.IsVisible = false;
         Log("Launcher update put off until the next start");
     }
@@ -1101,6 +1127,7 @@ public partial class MainWindow : Window
     async void OnUpdateLauncher(object? sender, RoutedEventArgs e)
     {
         if (_server is null || _manifest is null || Busy) return;
+        if (_gameRunning) { Status(Translation.T("Close the game first, then update the launcher.")); return; }
         Manifest manifest = _manifest;
         string? exe = null;
         ServerClient client = NewClient();   // reads the login boxes: on the window's thread
@@ -1907,10 +1934,11 @@ public partial class MainWindow : Window
             {
                 Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
                 row.Children.Add(new TextBlock { Text = cvar, VerticalAlignment = VerticalAlignment.Center, Classes = { "text" } });
-                TextBox box = new() { Width = 132, HorizontalAlignment = HorizontalAlignment.Left };
+                TextBox box = new() { Width = 132, HorizontalAlignment = HorizontalAlignment.Left,
+                                      Watermark = $"Server recommends: {_policy.Tweaks[cvar].CVarText}" };
                 Grid.SetColumn(box, 1);
                 row.Children.Add(box);
-                TextBlock note = new() { Text = "A Config.wtf value the server sets.", Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+                TextBlock note = new() { Text = "Set by the server. Empty uses the game's own value.", Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
                 Grid.SetColumn(note, 2);
                 row.Children.Add(note);
                 TweaksList.Children.Add(row);
