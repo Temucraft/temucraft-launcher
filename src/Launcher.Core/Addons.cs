@@ -26,6 +26,12 @@ public sealed class CatalogAddon
     public bool Recommended { get; set; }
     /// <summary>Installed once by default (debugging tools such as BugSack and idTip); the player can remove it.</summary>
     public bool Default { get; set; }
+    /// <summary>Made or changed for 3.3.5 / Temucraft by us (shown first, with a Temucraft label).</summary>
+    public bool Temucraft { get; set; }
+
+    /// <summary>Marked in the catalog, or from one of our own repositories (the plain archive of old addons aside).</summary>
+    public bool IsTemucraft => Temucraft
+        || (Repo.StartsWith("Temucraft/", StringComparison.OrdinalIgnoreCase) && !Repo.Equals("Temucraft/addon-archive", StringComparison.OrdinalIgnoreCase));
 
     public string Url => $"https://github.com/{Repo}";
     public string ReadmeUrl => $"https://raw.githubusercontent.com/{Repo}/{Branch}/README.md";

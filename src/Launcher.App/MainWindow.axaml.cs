@@ -2498,33 +2498,64 @@ public partial class MainWindow : Window
         }
         AddCategory("", "All", found.Count);
         if (found.Any(a => a.Required)) AddCategory("\u0001", "Needed", found.Count(a => a.Required));
+        if (found.Any(a => a.IsTemucraft)) AddCategory("\u0003", "Temucraft", found.Count(a => a.IsTemucraft));
         if (found.Any(a => a.Recommended)) AddCategory("\u0002", "Recommended", found.Count(a => a.Recommended));
         foreach (var group in found.Where(a => a.Category.Length > 0).GroupBy(a => a.Category, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key))
             AddCategory(group.Key, group.Key, group.Count());
 
         List<CatalogAddon> shown = [.. found.Where(a => _catalogCategory.Length == 0
-            || (_catalogCategory == "\u0001" ? a.Required : _catalogCategory == "\u0002" ? a.Recommended : a.Category.Equals(_catalogCategory, StringComparison.OrdinalIgnoreCase)))];
+            || (_catalogCategory == "\u0001" ? a.Required : _catalogCategory == "\u0002" ? a.Recommended : _catalogCategory == "\u0003" ? a.IsTemucraft
+                : a.Category.Equals(_catalogCategory, StringComparison.OrdinalIgnoreCase)))];
         if (shown.Count == 0)
         {
             CatalogList.Children.Add(new TextBlock { Text = "No addons match.", Classes = { "dim" } });
             return;
         }
         string heading = "";
-        foreach (CatalogAddon addon in shown.OrderByDescending(a => a.Required).ThenBy(a => a.Name.TrimStart('_', '!', ' ', '-'), StringComparer.OrdinalIgnoreCase))
+        // needed first, then ours (made or changed for 3.3.5 / Temucraft), then A to Z
+        string GroupOf(CatalogAddon a) => a.Required ? "Needed" : a.IsTemucraft ? "Temucraft" : LetterOf(a.Name);
+        foreach (CatalogAddon addon in shown.OrderByDescending(a => a.Required).ThenByDescending(a => a.IsTemucraft)
+                     .ThenBy(a => a.Name.TrimStart('_', '!', ' ', '-'), StringComparer.OrdinalIgnoreCase))
         {
-            string group = addon.Required ? "Needed" : LetterOf(addon.Name);
+            string group = GroupOf(addon);
             if (group != heading)
             {
                 heading = group;
-                int count = shown.Count(a => (a.Required ? "Needed" : LetterOf(a.Name)) == group);
+                int count = shown.Count(a => GroupOf(a) == group);
                 CatalogList.Children.Add(new TextBlock { Text = $"{group}  ({count})", Classes = { "section" }, Margin = new Thickness(0, 10, 0, 2) });
             }
             Grid row = new() { ColumnDefinitions = new ColumnDefinitions("2*,3*,Auto"), Margin = new Thickness(0, 2), Background = Brushes.Transparent };
-            row.Children.Add(new TextBlock
+            // the Temucraft label first, then the name (shortened with … when the column is narrow)
+            Grid name = new() { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+            string tag = addon.Required ? "needed" : addon.Recommended ? "recommended" : addon.Default ? "default" : "";
+            TextBlock title = new()
             {
-                Text = addon.Name + (addon.Required ? "  (needed)" : addon.Recommended ? "  (recommended)" : addon.Default ? "  (default)" : ""), FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center,
-                Classes = { addon.Required ? "good" : "text" },
-            });
+                FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center,
+                Classes = { addon.Required ? "good" : "text" }, TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            title.Inlines = [new Avalonia.Controls.Documents.Run(addon.Name)];
+            if (tag.Length > 0)
+                title.Inlines.Add(new Avalonia.Controls.Documents.Run($"  ({tag})")
+                {
+                    // recommended in green; default dimmed
+                    Foreground = (IBrush?)this.FindResource(tag == "default" ? "T.dim" : "T.good"), FontWeight = FontWeight.Normal,
+                });
+            ToolTip.SetTip(title, addon.Name + (tag.Length > 0 ? $" ({tag})" : ""));
+            // the label only where the Temucraft heading doesn't already say it (a needed addon, listed under Needed)
+            if (addon.IsTemucraft && GroupOf(addon) != "Temucraft")
+            {
+                Border badge = new()
+                {
+                    Background = (IBrush?)this.FindResource("T.accent"), CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 0),
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
+                    Child = new TextBlock { Text = "TEMUCRAFT", FontSize = 10, FontWeight = FontWeight.Bold, Foreground = Brushes.Black },
+                };
+                ToolTip.SetTip(badge, "Made or changed for 3.3.5 and Temucraft");
+                name.Children.Add(badge);
+            }
+            Grid.SetColumn(title, 1);
+            name.Children.Add(title);
+            row.Children.Add(name);
             TextBlock description = new() { Text = addon.Description, Classes = { "dim" }, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
             Grid.SetColumn(description, 1);
             row.Children.Add(description);
