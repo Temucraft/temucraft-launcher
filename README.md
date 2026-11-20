@@ -214,7 +214,7 @@ UPDATE) and the untracked-files warning.
 
 ## Uploading (server/upload.py)
 
-`upload.py` puts your files on the VPS over SSH and rebuilds the manifest: copy `server/upload.env.example` to
+`upload.py` puts your files on the VPS over SSH, puts its own copy of `make-manifest.py` there, and rebuilds the manifest: copy `server/upload.env.example` to
 `server/upload.env` (git-ignored), then
 
 ```

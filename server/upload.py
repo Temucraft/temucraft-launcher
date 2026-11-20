@@ -330,6 +330,13 @@ def manifest(client, env, dry):
     if not files_dir:
         sys.exit("upload.env has no REMOTE_FILES_DIR.")
     tool = env.get("REMOTE_MANIFEST_TOOL", posixpath.join(files_dir, "..", "make-manifest.py"))
+    # the server's manifest tool is kept the same version as this one (it knows the launcher's newest settings)
+    local_tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "make-manifest.py")
+    print(f"Updating {tool} on the server...", flush=True)
+    if not dry:
+        sftp = client.open_sftp()
+        sftp.put(local_tool, tool)
+        sftp.close()
     print("Rebuilding manifest.json on the server (new or changed files are hashed)...", flush=True)
     command = f"python3 {shlex.quote(tool)} {shlex.quote(files_dir)}"
     if env.get("REALMLIST"):
