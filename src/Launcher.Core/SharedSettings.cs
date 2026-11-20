@@ -77,9 +77,9 @@ public static class SharedSettings
                 changed.Add(Path.GetRelativePath(wowFolder, target));
             }
         }
-        return new Result(copied, [.. accounts.Select(Path.GetFileName)!], changed);
+        return new Result(copied, [.. accounts.Select(f => Path.GetFileName(f)!)], changed);
     }
 
     static IEnumerable<string> Files(string folder, string pattern) =>
-        Directory.Exists(folder) ? Directory.GetFiles(folder, pattern).Select(Path.GetFileName)! : [];
+        Directory.Exists(folder) ? Directory.GetFiles(folder, pattern).Select(f => Path.GetFileName(f)!) : [];
 }
