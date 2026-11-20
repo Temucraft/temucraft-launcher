@@ -19,6 +19,8 @@ public sealed class Manifest
 
     /// <summary>Choices the player makes for optional files: login screen, HD packs... (group name -> options).</summary>
     public List<OptionGroup> OptionGroups { get; set; } = [];
+    /// <summary>Pictures of the login screen scenes, by scene code ("lk"), next to the manifest.</summary>
+    public Dictionary<string, string> LoginScreenPreviews { get; set; } = [];
 
     public List<ManifestFile> Files { get; set; } = [];
 

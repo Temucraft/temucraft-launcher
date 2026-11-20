@@ -23,9 +23,14 @@ public static partial class LoginScreens
     public static IReadOnlyList<LoginScene> Read(string wowFolder)
     {
         string file = PathIn(wowFolder);
-        if (!File.Exists(file)) return [];
+        return File.Exists(file) ? Parse(File.ReadAllLines(file)) : [];
+    }
+
+    /// <summary>The scenes in a loginui.lua's lines (the installed file, or the server's copy).</summary>
+    public static IReadOnlyList<LoginScene> Parse(IEnumerable<string> lines)
+    {
         List<LoginScene> scenes = [];
-        foreach ((int _, Match m) in SceneLines(File.ReadAllLines(file)))
+        foreach ((int _, Match m) in SceneLines([.. lines.Select(l => l.TrimEnd('\r'))]))
             scenes.Add(new LoginScene(m.Groups["code"].Value, m.Groups["name"].Value, !m.Groups["off"].Success));
         return scenes;
     }

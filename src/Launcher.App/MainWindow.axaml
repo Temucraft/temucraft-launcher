@@ -95,6 +95,13 @@
       <Setter Property="Foreground" Value="{DynamicResource T.playText}" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <Style Selector="Border.tile">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.tile.picked"><Setter Property="BorderBrush" Value="{DynamicResource T.accent}" /></Style>
     <Style Selector="Border.card">
       <Setter Property="Background" Value="{DynamicResource T.card}" />
       <Setter Property="BorderBrush" Value="{DynamicResource T.border}" />

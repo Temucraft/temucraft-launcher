@@ -2124,26 +2124,61 @@ public partial class MainWindow : Window
         TweaksList.Children.Add(buttons);
     }
 
-    void LoadLoginScenes()
+    int _sceneLoad;
+
+    void LoadLoginScenes() => _ = LoadLoginScenesAsync();
+
+    /// <summary>The scenes of the installed game's loginui.lua, or of the server's copy when no game is installed yet,
+    /// each with its picture when the server has one.</summary>
+    async Task LoadLoginScenesAsync()
     {
         if (_scenePanel is null) return;
+        int ticket = ++_sceneLoad;
+        bool local = GameFolder.LooksLikeClient(Folder);
+        IReadOnlyList<LoginScene> scenes = local ? LoginScreens.Read(Folder) : [];
+        if (scenes.Count == 0 && _server is not null
+            && _manifest?.Files.FirstOrDefault(f => f.Path.Equals(LoginScreens.FilePath, StringComparison.OrdinalIgnoreCase)) is { } file)
+        {
+            try
+            {
+                using ServerClient client = NewClient();
+                byte[]? bytes = await client.GetBytesAsync(file.Url);
+                if (bytes is not null) scenes = LoginScreens.Parse(System.Text.Encoding.UTF8.GetString(bytes).Split('\n'));
+            }
+            catch (Exception error) { Logger.Warning("Couldn't read the server's login screens", error); }
+        }
+        if (ticket != _sceneLoad) return;
+        if (!local && _settings.LoginScenes is { Count: > 0 } mine)
+            scenes = [.. scenes.Select(x => x with { On = mine.Contains(x.Code) })];
         _scenePanel.Children.Clear();
         _sceneBoxes.Clear();
-        IReadOnlyList<LoginScene> scenes = GameFolder.LooksLikeClient(Folder) ? LoginScreens.Read(Folder) : [];
         if (_sceneButtons is not null) _sceneButtons.IsVisible = scenes.Count > 0;
         if (scenes.Count == 0)
         {
-            _scenePanel.Children.Add(new TextBlock { Text = GameFolder.LooksLikeClient(Folder)
+            _scenePanel.Children.Add(new TextBlock { Text = local
                 ? "The list of backgrounds comes with the next update."
-                : "Install the game first: the backgrounds are listed here after that.", Classes = { "dim" }, FontSize = 12 });
+                : "Connect to the server to see the backgrounds.", Classes = { "dim" }, FontSize = 12 });
             return;
         }
         foreach (LoginScene scene in scenes)
         {
-            CheckBox box = new() { Content = LoginScreens.Title(scene.Name), IsChecked = scene.On, Margin = new Thickness(0, 0, 14, 2), MinWidth = 170 };
+            CheckBox box = new() { Content = LoginScreens.Title(scene.Name), IsChecked = scene.On };
             _sceneBoxes[scene.Code] = box;
-            _scenePanel.Children.Add(box);
+            StackPanel tile = new() { Spacing = 2, Margin = new Thickness(0, 0, 12, 8), Width = 184 };
+            if (_manifest?.LoginScreenPreviews.TryGetValue(scene.Code, out string? url) == true)
+            {
+                Image picture = new() { Width = 180, Height = 100, Stretch = Stretch.UniformToFill, IsVisible = false,
+                                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
+                picture.PointerPressed += (_, _) => box.IsChecked = box.IsChecked != true;
+                tile.Children.Add(picture);
+                _ = SetPictureAsync(picture, url);
+            }
+            tile.Children.Add(box);
+            _scenePanel.Children.Add(tile);
         }
+        if (!local)
+            _scenePanel.Children.Add(new TextBlock { Text = "No game installed yet: your picks are used when it is.", Classes = { "dim" },
+                                                     FontSize = 12, Width = 600, TextWrapping = TextWrapping.Wrap });
     }
 
     /// <summary>The player's scenes into loginui.lua; the file still counts as the server's (it isn't downloaded again).</summary>
@@ -2689,6 +2724,7 @@ public partial class MainWindow : Window
     {
         OptionsList.Children.Clear();
         _previewImages.Clear();
+        _previewTiles.Clear();
         if (_manifest is null || _manifest.OptionGroups.Count == 0)
             OptionsList.Children.Add(new TextBlock { Text = "The server offers no cosmetic patches (or the launcher hasn't connected yet).", Classes = { "dim" } });
         foreach (OptionGroup group in _manifest?.OptionGroups ?? [])
@@ -2725,7 +2761,7 @@ public partial class MainWindow : Window
             {
                 _settings.Options[group.Name] = value;
                 SaveSettings();
-                if (group.Previews.Count > 0) _ = ShowPreviewAsync(group, value);
+                if (group.Previews.Count > 0) { _ = ShowPreviewAsync(group, value); MarkPicked(group.Name, value); }
                 // groups that need this one turn usable (or not)
                 if (_manifest!.OptionGroups.Any(g => g.Requires.ContainsKey(group.Name)))
                     Dispatcher.UIThread.Post(RefreshMods);
@@ -2739,6 +2775,7 @@ public partial class MainWindow : Window
             bool onOff = group.Options.SequenceEqual(["On", "Off"], StringComparer.OrdinalIgnoreCase);
             bool single = group.Optional && group.Options.Count == 1;
             Control control;
+            Action<string>? choose = null;   // picks a choice as if the switch or the dropdown had been used
             if (onOff || single)
             {
                 string on = onOff ? group.Options[0] : group.Options[0], off = onOff ? group.Options[1] : "";
@@ -2748,6 +2785,7 @@ public partial class MainWindow : Window
                     OnContent = single ? on : "On", OffContent = "Off", IsEnabled = !locked,
                 };
                 toggle.IsCheckedChanged += (_, _) => Pick(toggle.IsChecked == true ? on : off, toggle.IsChecked == true ? "on" : "off");
+                choose = v => toggle.IsChecked = string.Equals(v, on, StringComparison.OrdinalIgnoreCase);
                 control = toggle;
             }
             else
@@ -2760,16 +2798,50 @@ public partial class MainWindow : Window
                     string picked = box.SelectedItem as string ?? "";
                     Pick(picked == "(none)" ? "" : picked, picked);
                 };
+                choose = v => box.SelectedItem = v.Length == 0 ? "(none)" : v;
                 control = box;
             }
             if (group.Enforce) ToolTip.SetTip(control, "Set by the server");
             if (group.Previews.Count > 0)
             {
-                // a picture of the picked option (or of the group); hover for a bigger one
-                Image picture = new() { MaxHeight = 150, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
-                panel.Children.Add(picture);
-                _previewImages[group.Name] = picture;
-                _ = ShowPreviewAsync(group, chosen);
+                // a picture of each choice side by side (Off and On for a switch): click one to pick it, hover for a bigger one
+                List<(string Value, string Label)> choices = onOff ? [(group.Options[1], "Off"), (group.Options[0], "On")]
+                    : single ? [("", "Off"), (group.Options[0], "On")]
+                    : [.. (group.Optional ? new[] { ("", "(none)") } : []), .. group.Options.Select(o => (o, o))];
+                List<(string Value, string Label, string Url)> pictured = [];
+                foreach ((string value, string label) in choices)
+                    if (PreviewUrl(group, value) is { } url) pictured.Add((value, label, url));
+                if (pictured.Count < 2)
+                {
+                    // one picture only (of the group, or of one choice)
+                    Image picture = new() { MaxHeight = 150, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
+                    panel.Children.Add(picture);
+                    _previewImages[group.Name] = picture;
+                    _ = ShowPreviewAsync(group, chosen);
+                }
+                else
+                {
+                    WrapPanel tiles = new();
+                    List<(string Value, Border Frame)> frames = [];
+                    int across = Math.Min(pictured.Count, 3);
+                    double width = Math.Floor((OptionCardWidth() - 28) / across) - 8;
+                    foreach ((string value, string label, string url) in pictured)
+                    {
+                        Image picture = new() { Width = width, Height = Math.Round(width * 0.56), Stretch = Stretch.UniformToFill, IsVisible = false };
+                        StackPanel inner = new() { Spacing = 2 };
+                        inner.Children.Add(picture);
+                        using (Look.Untranslated()) inner.Children.Add(new TextBlock { Text = label, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center });
+                        Border frame = new() { Child = inner, Classes = { "tile" }, Margin = new Thickness(0, 0, 6, 6),
+                                               Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
+                        frame.PointerPressed += (_, _) => { if (!locked) choose?.Invoke(value); };
+                        frames.Add((value, frame));
+                        tiles.Children.Add(frame);
+                        _ = SetPictureAsync(picture, url);
+                    }
+                    _previewTiles[group.Name] = frames;
+                    panel.Children.Add(tiles);
+                    MarkPicked(group.Name, chosen);
+                }
             }
             panel.Children.Add(control);
             if (!met)
@@ -2806,6 +2878,52 @@ public partial class MainWindow : Window
 
     readonly Dictionary<string, Image> _previewImages = [];
     readonly Dictionary<string, Bitmap?> _previewCache = [];
+    readonly Dictionary<string, List<(string Value, Border Frame)>> _previewTiles = [];
+
+    /// <summary>The picture of one choice: "" (off or none) also goes by "Off" or "none".</summary>
+    static string? PreviewUrl(OptionGroup group, string value)
+    {
+        IEnumerable<string> keys = value.Length == 0 || value.Equals("Off", StringComparison.OrdinalIgnoreCase)
+            ? ["Off", "off", "none", "None", value] : [value];
+        foreach (string key in keys)
+            if (group.Previews.TryGetValue(key, out string? url)) return url;
+        return group.Previews.FirstOrDefault(p => p.Key.Equals(value, StringComparison.OrdinalIgnoreCase)).Value;
+    }
+
+    /// <summary>Frames the picture of the picked choice.</summary>
+    void MarkPicked(string group, string? chosen)
+    {
+        if (!_previewTiles.TryGetValue(group, out var frames)) return;
+        static bool Off(string? v) => string.IsNullOrEmpty(v) || v.Equals("Off", StringComparison.OrdinalIgnoreCase);
+        foreach ((string value, Border frame) in frames)
+            frame.Classes.Set("picked", Off(value) ? Off(chosen) : string.Equals(value, chosen, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A picture from the server, loaded once.</summary>
+    async Task<Bitmap?> PictureAsync(string url)
+    {
+        if (_previewCache.TryGetValue(url, out Bitmap? cached)) return cached;
+        Bitmap? bitmap = null;
+        try
+        {
+            using ServerClient client = NewClient();
+            byte[]? bytes = await client.GetBytesAsync(url);
+            bitmap = bytes is null ? null : new Bitmap(new MemoryStream(bytes));
+        }
+        catch (Exception error) { Logger.Warning($"Couldn't load the picture {url}", error); }
+        _previewCache[url] = bitmap;
+        return bitmap;
+    }
+
+    async Task SetPictureAsync(Image picture, string url)
+    {
+        if (_server is null) return;
+        Bitmap? bitmap = await PictureAsync(url);
+        picture.Source = bitmap;
+        picture.IsVisible = bitmap is not null;
+        if (bitmap is not null)
+            ToolTip.SetTip(picture, new Image { Source = bitmap, MaxWidth = 900, MaxHeight = 600, Stretch = Stretch.Uniform });
+    }
 
     /// <summary>The preview picture for an option (its own, else the group's), loaded once from the server.</summary>
     async Task ShowPreviewAsync(OptionGroup group, string? option)

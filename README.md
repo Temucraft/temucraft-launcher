@@ -228,6 +228,9 @@ UPDATE) and the untracked-files warning.
    `options/` folder for **cosmetic** patches and switchable fixes (an option group with an `On` folder and `"order": ["On", "Off"]` in its `group.json` is on by
    default and can be turned off; `Off` needs no folder) (see `server/examples/` and the top of `make-manifest.py`); patches the
    game or the server need belong in `patches/`, which every player gets.
+   Pictures: `options/<Group>/preview-<Option>.png` (or .jpg; `preview-Off.png` for a switch's off side) are shown side by
+   side on the group's card, and clicking one picks it; `previews/login/<code>.png` (the scene's code in loginui.lua, such as
+   `lk`) is shown above that login screen's tick box. Neither is installed.
 4. Each time you add or change files, rebuild the manifest:
 
    ```

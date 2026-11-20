@@ -202,7 +202,17 @@ def build(files_dir, realmlist, cache):
                            "requires": {str(k): str(v) for k, v in (info.get("requires") or {}).items()},
                            "previews": previews})
 
+    # previews/login/<code>.png or .jpg (the scene's code in loginui.lua, e.g. "lk"): shown on the login screen list
+    login_previews = {}
+    pdir = os.path.join(files_dir, "previews", "login")
+    if os.path.isdir(pdir):
+        for name in sorted(os.listdir(pdir)):
+            stem, ext = os.path.splitext(name)
+            if os.path.isfile(os.path.join(pdir, name)) and ext.lower() in (".png", ".jpg", ".jpeg"):
+                login_previews[stem.lower()] = url_of(files_dir, os.path.join(pdir, name))
+
     manifest = {"version": 1, "realmlist": realmlist, "clientVersion": "", "optionGroups": groups,
+                "loginScreenPreviews": login_previews,
                 "files": files, "obsolete": [], "policy": {}}
     # launcher-policy.json: {"installAddons": {"value": true, "enforce": true}, ...}; enforced settings can't be changed
     policy_file = os.path.join(files_dir, "launcher-policy.json")
