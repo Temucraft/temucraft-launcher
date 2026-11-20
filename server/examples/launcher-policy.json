@@ -1,65 +1,35 @@
-// What the server decides for the launcher. Comments like this one are fine: make-manifest.py removes them.
-// Each setting has a "value" (what the launcher starts with) and "enforce":
-//   enforce false = the player can change it in the launcher
-//   enforce true  = the server's value is always used and the player's switch is greyed out
-// Leave a setting out to let the launcher use its own default.
 {
-  // A new launcher on the server: "required" installs it before the player can do anything else,
-  // "recommended" only shows a banner the player can put off. Left out: required.
-  "launcherUpdate": { "value": "required" },
+  "_comment": [
+    "What the server decides for the launcher.",
+    "Each setting has a \"value\" (what the launcher starts with) and \"enforce\":",
+    "enforce false = the player can change it in the launcher",
+    "enforce true = the server's value is always used and the player's switch is greyed out",
+    "Leave a setting out to let the launcher use its own default. Any \"_comment\" is only a note: the launcher ignores it."
+  ],
 
-  // Install and update the addons that come with the server (Interface/AddOns)
-  "installAddons": { "value": true, "enforce": false },
+  "launcherUpdate": { "_comment": "A new launcher on the server: \"required\" installs it before the player can do anything else, \"recommended\" only shows a banner the player can put off. Left out: required.", "value": "required" },
+  "installAddons": { "_comment": "Install and update the addons that come with the server (Interface/AddOns)", "value": true, "enforce": false },
+  "clearCache": { "_comment": "Empty the game's Cache folder before starting WoW (fixes old item and quest text after updates)", "value": true, "enforce": false },
+  "reopenAfterGame": { "_comment": "Open the launcher again when WoW closes", "value": true, "enforce": false },
+  "rememberWindow": { "_comment": "Remember where the launcher window was and how big it was", "value": false, "enforce": false },
+  "backupBeforeUpdate": { "_comment": "Back up the player's settings and addons (WTF, Interface) before every update", "value": true, "enforce": false },
+  "backupsToKeep": { "_comment": "How many of those backups to keep; the oldest are deleted first", "value": 10, "enforce": false },
+  "largeAddressAware": { "_comment": "Let Wow.exe use up to 4 GB of memory instead of 2 GB (fewer out of memory crashes)", "value": true, "enforce": false },
 
-  // Empty the game's Cache folder before starting WoW (fixes old item and quest text after updates)
-  "clearCache": { "value": true, "enforce": false },
-
-  // Open the launcher again when WoW closes
-  "reopenAfterGame": { "value": true, "enforce": false },
-
-  // Remember where the launcher window was and how big it was
-  "rememberWindow": { "value": false, "enforce": false },
-
-  // Back up the player's settings and addons (WTF, Interface) before every update
-  "backupBeforeUpdate": { "value": true, "enforce": false },
-
-  // How many of those backups to keep; the oldest are deleted first
-  "backupsToKeep": { "value": 10, "enforce": false },
-
-  // Let Wow.exe use up to 4 GB of memory instead of 2 GB (fewer "out of memory" crashes with HD models)
-  "largeAddressAware": { "value": true, "enforce": false },
-
-  // Game settings (CVars) written into WTF/Config.wtf. These fill the "Server recommended" preset on the Tweaks page.
-  // Any CVar name works, even ones the launcher has no description for.
   "tweaks": {
-    // How far the land is drawn (game default 777, 1277 is the most)
-    "farclip": { "value": 1277, "enforce": false },
-    // Frame rate limit (0 = no limit)
-    "maxFPS": { "value": 144, "enforce": false },
-    // How far the camera can zoom out (50 is the most the game allows)
-    "cameraDistanceMax": { "value": 50, "enforce": false }
-    // DXVK's settings go to dxvk.conf and only show while DXVK is on, for example:
-    // "d3d9.samplerAnisotropy": { "value": 16, "enforce": false }   (sharper textures far away, 0 to 16)
-    // "dxvk.hud": { "value": "fps", "enforce": false }               (frame rate in the corner)
-    // Awesome WotLK's: "nameplateDistance" (yards, game default 41) and "cameraFov" (1 to 200, default 100)
+    "_comment": "Game settings written into WTF/Config.wtf (dxvk.conf for the d3d9. and dxvk. ones). They fill the \"Server recommended\" preset on the Game settings page. Any CVar name works.",
+    "farclip": { "_comment": "How far land is drawn (game default 777, 1277 is the most)", "value": 1277, "enforce": false },
+    "maxFPS": { "_comment": "Highest frame rate while playing (0 = no limit)", "value": 144, "enforce": false },
+    "cameraDistanceMax": { "_comment": "How far the camera zooms out (50 is the most)", "value": 50, "enforce": false },
+    "nameplateDistance": { "_comment": "Awesome WotLK: nameplate range in yards (game default 41)", "value": 41, "enforce": false },
+    "d3d9.samplerAnisotropy": { "_comment": "DXVK: sharper textures far away (-1 = the game's choice, up to 16)", "value": 16, "enforce": false },
+    "dxvk.hud": { "_comment": "DXVK: \"fps\" shows the frame rate, empty shows nothing", "value": "", "enforce": false }
   },
 
-  // The game language picked for new players (enUS if left out). It is always installed and can't be unticked.
-  // "requiredLocales": { "value": ["deDE"] } would also install other languages for everyone.
-  "defaultLocale": { "value": "enUS" },
-
-  // News page: show it or not, how many posts to show at first, and how many more each "Load more" adds.
-  // -1 means all of them (and "Load all" instead of "Load more").
-  "news": { "show": true, "entries": 20, "more": 20 },
-
-  // Changelog page: same as news
-  "changelog": { "show": true, "entries": 20, "more": 20 },
-
-  // The most KB/s each player may download at (0 or -1: no cap). Players can still pick a lower limit.
-  "downloadLimit": { "value": 0 },
-
-  // The launcher's look. theme: temucraft, vanilla, tbc, wotlk, cata, mop, wod, legion, bfa, shadowlands,
-  // dragonflight, tww or midnight. themeMode: dark or light. With enforce false the player can pick another one.
-  "theme": { "value": "temucraft", "enforce": false },
-  "themeMode": { "value": "dark", "enforce": false }
+  "defaultLocale": { "_comment": "The game language for new players (enUS if left out). Always installed. Add \"requiredLocales\": { \"value\": [\"deDE\"] } to install more languages for everyone.", "value": "enUS" },
+  "news": { "_comment": "News page: show it or not, posts shown at first, and how many more each \"Load more\" adds (-1 = all)", "show": true, "entries": 20, "more": 20 },
+  "changelog": { "_comment": "Changelog page: same as news", "show": true, "entries": 20, "more": 20 },
+  "downloadLimit": { "_comment": "The most KB/s each player may download at (0 or -1 = no cap). Players can still pick a lower limit.", "value": 0 },
+  "theme": { "_comment": "temucraft, vanilla, tbc, wotlk, cata, mop, wod, legion, bfa, shadowlands, dragonflight, tww or midnight", "value": "temucraft", "enforce": false },
+  "themeMode": { "_comment": "dark or light", "value": "dark", "enforce": false }
 }

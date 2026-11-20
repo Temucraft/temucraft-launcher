@@ -49,7 +49,7 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// (a banner the player can put off)</item>
 /// <item>theme: the launcher's theme ("temucraft", "wotlk"...) and themeMode: "dark" or "light"</item>
 /// </list>
-/// Names the launcher doesn't know are kept in <see cref="Unknown"/> (and logged), never an error.
+/// Names starting with "_" (like "_comment") are notes and are skipped. Names the launcher doesn't know are kept in <see cref="Unknown"/> (and logged), never an error.
 /// </summary>
 public sealed class LauncherPolicy
 {
@@ -69,6 +69,7 @@ public sealed class LauncherPolicy
         LauncherPolicy rules = new();
         foreach ((string key, JsonElement value) in policy ?? new Dictionary<string, JsonElement>())
         {
+            if (key.StartsWith('_')) continue;   // "_comment": a note for whoever edits the file
             if (key.Equals("news", StringComparison.OrdinalIgnoreCase) || key.Equals("changelog", StringComparison.OrdinalIgnoreCase))
             {
                 FeedRule feed = FeedRule.From(value);
@@ -78,7 +79,8 @@ public sealed class LauncherPolicy
             {
                 if (value.ValueKind != JsonValueKind.Object) { rules.Unknown.Add(key); continue; }
                 foreach (JsonProperty cvar in value.EnumerateObject())
-                    if (Rule(cvar.Value) is { } rule && rule.CVarText is not null) rules.Tweaks[cvar.Name] = rule;
+                    if (cvar.Name.StartsWith('_')) continue;
+                    else if (Rule(cvar.Value) is { } rule && rule.CVarText is not null) rules.Tweaks[cvar.Name] = rule;
                     else rules.Unknown.Add("tweaks." + cvar.Name);
             }
             else if (Known.Contains(key, StringComparer.OrdinalIgnoreCase) && Rule(value) is { } rule)

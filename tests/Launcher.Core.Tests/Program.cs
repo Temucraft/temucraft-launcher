@@ -1036,6 +1036,9 @@ static Task LauncherUpdateRule()
     LauncherPolicy off = LauncherPolicy.From(new Dictionary<string, System.Text.Json.JsonElement>
         { ["launcherUpdate"] = System.Text.Json.JsonDocument.Parse("false").RootElement });
     Check(!off.LauncherUpdateFirst && off.Unknown.Count == 0, "false");
+    LauncherPolicy notes = LauncherPolicy.From(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(
+        "{\"_comment\": [\"a\"], \"clearCache\": {\"_comment\": \"b\", \"value\": true}, \"tweaks\": {\"_comment\": \"c\", \"farclip\": {\"_comment\": \"d\", \"value\": 1277}}}"));
+    Check(notes.Unknown.Count == 0 && notes.Tweaks.Count == 1 && notes.Tweaks["farclip"].CVarText == "1277" && notes.Setting("clearCache")?.Bool == true, "_comment notes");
     return Task.CompletedTask;
 }
 

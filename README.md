@@ -89,7 +89,7 @@ recommendation (and as the value outright where the launcher has no box for it).
 | `themeMode` | `"dark"` or `"light"` | the default mode |
 
 Names the launcher doesn't know are skipped and noted in its log, so a newer policy never breaks an older launcher.
-`launcher-policy.json` may hold `//` and `/* */` comments; `make-manifest.py` removes them. See
+`launcher-policy.json` may hold `"_comment"` notes (on the file, on a setting or in `tweaks`); `make-manifest.py` removes them and the launcher skips them. Plain JSON, so editors don't complain. See
 `server/examples/launcher-policy.json`. An option group's `group.json` can say `"enforce": true` too: everyone
 then gets its first option.
 

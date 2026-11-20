@@ -18,7 +18,7 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
                                       "links": {"GitHub": "https://..."}};
                                       an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
-        launcher-policy.json          (// comments allowed) the server's say over launcher settings: {"installAddons": {"value": true,
+        launcher-policy.json          ("_comment" notes allowed) the server's say over launcher settings: {"installAddons": {"value": true,
                                       "enforce": true}, "tweaks": {"farclip": {"value": 1277, "enforce": true}}, ...};
                                       see the launcher's README; options/<Group>/group.json may say "enforce": true too
         news.json, changelog.json     [{"date": "...", "title": "...", "text": "...", "link": "https://..."}]
@@ -69,7 +69,16 @@ def load_jsonc(path):
         else:
             out.append(c)
         i += 1
-    return json.loads("".join(out))
+    return drop_notes(json.loads("".join(out)))
+
+
+def drop_notes(value):
+    """Removes "_comment" (and any other "_" key): notes for whoever edits the file, never sent to the launcher."""
+    if isinstance(value, dict):
+        return {k: drop_notes(v) for k, v in value.items() if not k.startswith("_")}
+    if isinstance(value, list):
+        return [drop_notes(v) for v in value]
+    return value
 
 
 def sha256(path, cache):
