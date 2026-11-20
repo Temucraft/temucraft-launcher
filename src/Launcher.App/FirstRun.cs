@@ -230,7 +230,7 @@ public partial class MainWindow
     {
         Dictionary<string, string> now = CurrentBoxes();
         bool dirty = now.Count != _savedBoxes.Count || now.Any(v => !_savedBoxes.TryGetValue(v.Key, out string? old) || old != v.Value)
-                     || ChangedGameOptions().Count > 0;
+                     || ChangedGameOptions().Count > 0 || ChangedBindings().Count > 0;
         ApplyTweaksButton.IsVisible = dirty;
         DiscardTweaksButton.IsVisible = dirty;
     }

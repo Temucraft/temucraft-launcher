@@ -76,6 +76,7 @@ public partial class MainWindow
             Text = Translation.T("* needs a game restart   ° needs a log out. Account settings are also written to WTF\\Account\\<name>\\config-cache.wtf."),
             Classes = { "dim" }, FontSize = 12, Margin = new Thickness(0, 10, 0, 0),
         });
+        BuildKeyBindings();
     }
 
     Control NewOptionControl(GameOption o)

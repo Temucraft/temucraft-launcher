@@ -1,0 +1,1257 @@
+[
+ {
+  "header": "Movement",
+  "command": "MOVEANDSTEER",
+  "label": "Move and Steer"
+ },
+ {
+  "header": "Movement",
+  "command": "MOVEFORWARD",
+  "label": "Move Forward"
+ },
+ {
+  "header": "Movement",
+  "command": "MOVEBACKWARD",
+  "label": "Move Backward"
+ },
+ {
+  "header": "Movement",
+  "command": "TURNLEFT",
+  "label": "Turn Left"
+ },
+ {
+  "header": "Movement",
+  "command": "TURNRIGHT",
+  "label": "Turn Right"
+ },
+ {
+  "header": "Movement",
+  "command": "STRAFELEFT",
+  "label": "Strafe Left"
+ },
+ {
+  "header": "Movement",
+  "command": "STRAFERIGHT",
+  "label": "Strafe Right"
+ },
+ {
+  "header": "Movement",
+  "command": "JUMP",
+  "label": "Jump"
+ },
+ {
+  "header": "Movement",
+  "command": "SITORSTAND",
+  "label": "Sit/Move Down"
+ },
+ {
+  "header": "Movement",
+  "command": "TOGGLESHEATH",
+  "label": "Sheath/Unsheath Weapon"
+ },
+ {
+  "header": "Movement",
+  "command": "TOGGLEAUTORUN",
+  "label": "Toggle Autorun"
+ },
+ {
+  "header": "Movement",
+  "command": "PITCHUP",
+  "label": "Pitch Up"
+ },
+ {
+  "header": "Movement",
+  "command": "PITCHDOWN",
+  "label": "Pitch Down"
+ },
+ {
+  "header": "Movement",
+  "command": "TOGGLERUN",
+  "label": "Toggle Run/Walk"
+ },
+ {
+  "header": "Movement",
+  "command": "FOLLOWTARGET",
+  "label": "Follow Target"
+ },
+ {
+  "header": "Chat",
+  "command": "OPENCHAT",
+  "label": "Open Chat"
+ },
+ {
+  "header": "Chat",
+  "command": "OPENCHATSLASH",
+  "label": "Open Chat Slash"
+ },
+ {
+  "header": "Chat",
+  "command": "CHATPAGEUP",
+  "label": "Chat Page Up"
+ },
+ {
+  "header": "Chat",
+  "command": "CHATPAGEDOWN",
+  "label": "Chat Page Down"
+ },
+ {
+  "header": "Chat",
+  "command": "CHATBOTTOM",
+  "label": "Chat Bottom"
+ },
+ {
+  "header": "Chat",
+  "command": "REPLY",
+  "label": "Chat Reply"
+ },
+ {
+  "header": "Chat",
+  "command": "REPLY2",
+  "label": "Re-Whisper"
+ },
+ {
+  "header": "Chat",
+  "command": "COMBATLOGPAGEUP",
+  "label": "Combat Log Page Up"
+ },
+ {
+  "header": "Chat",
+  "command": "COMBATLOGPAGEDOWN",
+  "label": "Combat Log Page Down"
+ },
+ {
+  "header": "Chat",
+  "command": "COMBATLOGBOTTOM",
+  "label": "Combat Log Bottom"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON1",
+  "label": "Action Button 1"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON2",
+  "label": "Action Button 2"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON3",
+  "label": "Action Button 3"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON4",
+  "label": "Action Button 4"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON5",
+  "label": "Action Button 5"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON6",
+  "label": "Action Button 6"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON7",
+  "label": "Action Button 7"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON8",
+  "label": "Action Button 8"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON9",
+  "label": "Action Button 9"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON10",
+  "label": "Action Button 10"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON11",
+  "label": "Action Button 11"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONBUTTON12",
+  "label": "Action Button 12"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON1",
+  "label": "Special Action Button 1"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON2",
+  "label": "Special Action Button 2"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON3",
+  "label": "Special Action Button 3"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON4",
+  "label": "Special Action Button 4"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON5",
+  "label": "Special Action Button 5"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON6",
+  "label": "Special Action Button 6"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON7",
+  "label": "Special Action Button 7"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON8",
+  "label": "Special Action Button 8"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON9",
+  "label": "Special Action Button 9"
+ },
+ {
+  "header": "Action Bar",
+  "command": "SHAPESHIFTBUTTON10",
+  "label": "Special Action Button 10"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON1",
+  "label": "Secondary Action Button 1"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON2",
+  "label": "Secondary Action Button 2"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON3",
+  "label": "Secondary Action Button 3"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON4",
+  "label": "Secondary Action Button 4"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON5",
+  "label": "Secondary Action Button 5"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON6",
+  "label": "Secondary Action Button 6"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON7",
+  "label": "Secondary Action Button 7"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON8",
+  "label": "Secondary Action Button 8"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON9",
+  "label": "Secondary Action Button 9"
+ },
+ {
+  "header": "Action Bar",
+  "command": "BONUSACTIONBUTTON10",
+  "label": "Secondary Action Button 10"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONPAGE1",
+  "label": "Action Page 1"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONPAGE2",
+  "label": "Action Page 2"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONPAGE3",
+  "label": "Action Page 3"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONPAGE4",
+  "label": "Action Page 4"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONPAGE5",
+  "label": "Action Page 5"
+ },
+ {
+  "header": "Action Bar",
+  "command": "ACTIONPAGE6",
+  "label": "Action Page 6"
+ },
+ {
+  "header": "Action Bar",
+  "command": "PREVIOUSACTIONPAGE",
+  "label": "Previous Action Bar"
+ },
+ {
+  "header": "Action Bar",
+  "command": "NEXTACTIONPAGE",
+  "label": "Next Action Bar"
+ },
+ {
+  "header": "Action Bar",
+  "command": "TOGGLEACTIONBARLOCK",
+  "label": "Toggle action bar Lock"
+ },
+ {
+  "header": "Action Bar",
+  "command": "TOGGLEAUTOSELFCAST",
+  "label": "Toggle Auto Self Cast"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTSUMMONBUTTON1",
+  "label": "Call of the Elements"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON1",
+  "label": "Earth Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON2",
+  "label": "Fire Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON3",
+  "label": "Water Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON4",
+  "label": "Air Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTSUMMONBUTTON2",
+  "label": "Call of the Ancestors"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON5",
+  "label": "Earth Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON6",
+  "label": "Fire Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON7",
+  "label": "Water Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON8",
+  "label": "Air Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTSUMMONBUTTON3",
+  "label": "Call of the Spirits"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON9",
+  "label": "Earth Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON10",
+  "label": "Fire Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON11",
+  "label": "Water Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTACTIONBUTTON12",
+  "label": "Air Totem"
+ },
+ {
+  "header": "Shaman totem bar",
+  "command": "MULTICASTRECALLBUTTON1",
+  "label": "Totemic Recall"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETNEARESTENEMY",
+  "label": "Target Nearest Enemy"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPREVIOUSENEMY",
+  "label": "Target Previous Enemy"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETNEARESTFRIEND",
+  "label": "Target Nearest Friend"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPREVIOUSFRIEND",
+  "label": "Target Previous Friend"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETNEARESTENEMYPLAYER",
+  "label": "Target Nearest Enemy Player"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPREVIOUSENEMYPLAYER",
+  "label": "Target Previous Enemy Player"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETNEARESTFRIENDPLAYER",
+  "label": "Target Nearest Friendly Player"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPREVIOUSFRIENDPLAYER",
+  "label": "Target Previous Friendly Player"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETSELF",
+  "label": "Target Self"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYMEMBER1",
+  "label": "Target Party Member 1"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYMEMBER2",
+  "label": "Target Party Member 2"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYMEMBER3",
+  "label": "Target Party Member 3"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYMEMBER4",
+  "label": "Target Party Member 4"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPET",
+  "label": "Target Pet"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYPET1",
+  "label": "Target Party Pet 1"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYPET2",
+  "label": "Target Party Pet 2"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYPET3",
+  "label": "Target Party Pet 3"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETPARTYPET4",
+  "label": "Target Party Pet 4"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETLASTHOSTILE",
+  "label": "Target Last Hostile"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETLASTTARGET",
+  "label": "Target Last Target"
+ },
+ {
+  "header": "Targeting",
+  "command": "NAMEPLATES",
+  "label": "Show Enemy Name Plates"
+ },
+ {
+  "header": "Targeting",
+  "command": "FRIENDNAMEPLATES",
+  "label": "Show Friendly Name Plates"
+ },
+ {
+  "header": "Targeting",
+  "command": "ALLNAMEPLATES",
+  "label": "Show All Name Plates"
+ },
+ {
+  "header": "Targeting",
+  "command": "INTERACTMOUSEOVER",
+  "label": "Interact With Mouseover"
+ },
+ {
+  "header": "Targeting",
+  "command": "INTERACTTARGET",
+  "label": "Interact With Target"
+ },
+ {
+  "header": "Targeting",
+  "command": "ASSISTTARGET",
+  "label": "Assist Target"
+ },
+ {
+  "header": "Targeting",
+  "command": "ATTACKTARGET",
+  "label": "Attack Target"
+ },
+ {
+  "header": "Targeting",
+  "command": "STARTATTACK",
+  "label": "Start Attack"
+ },
+ {
+  "header": "Targeting",
+  "command": "PETATTACK",
+  "label": "Pet Attack"
+ },
+ {
+  "header": "Targeting",
+  "command": "FOCUSTARGET",
+  "label": "Focus Target"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETFOCUS",
+  "label": "Target Focus"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETMOUSEOVER",
+  "label": "Target Mouseover"
+ },
+ {
+  "header": "Targeting",
+  "command": "TARGETTALKER",
+  "label": "Target Current Talker"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECHARACTER0",
+  "label": "Toggle Character Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEBACKPACK",
+  "label": "Toggle Backpack"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEBAG1",
+  "label": "Toggle Bag 1"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEBAG2",
+  "label": "Toggle Bag 2"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEBAG3",
+  "label": "Toggle Bag 3"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEBAG4",
+  "label": "Toggle Bag 4"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "OPENALLBAGS",
+  "label": "Open All Bags"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEKEYRING",
+  "label": "Toggle Keyring"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLESPELLBOOK",
+  "label": "Toggle Spellbook"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEPETBOOK",
+  "label": "Toggle Pet Book"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEINSCRIPTION",
+  "label": "Toggle Glyphs"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLETALENTS",
+  "label": "Toggle Talent Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECHARACTER4",
+  "label": "Toggle PVP Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECHARACTER3",
+  "label": "Toggle Pet Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECHARACTER2",
+  "label": "Toggle Reputation Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECHARACTER1",
+  "label": "Toggle Skill Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEQUESTLOG",
+  "label": "Toggle Quest Log"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEGAMEMENU",
+  "label": "Toggle Game Menu"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEMINIMAP",
+  "label": "Toggle Minimap"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEWORLDMAP",
+  "label": "Toggle World Map Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEWORLDMAPSIZE",
+  "label": "Toggle World Map Size"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLESOCIAL",
+  "label": "Toggle Social Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEFRIENDSTAB",
+  "label": "Toggle Friends Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEWHOTAB",
+  "label": "Toggle Who Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEGUILDTAB",
+  "label": "Toggle Guild Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECHATTAB",
+  "label": "Toggle Chat Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLERAIDTAB",
+  "label": "Toggle Raid Pane"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLELFGPARENT",
+  "label": "Toggle Dungeon Finder Frame"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLELFRPARENT",
+  "label": "Toggle Raid Browser"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEWORLDSTATESCORES",
+  "label": "Toggle Score Screen"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEBATTLEFIELDMINIMAP",
+  "label": "Toggle Zone Map"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEMINIMAPROTATION",
+  "label": "Toggle Minimap Rotation"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECHANNELPULLOUT",
+  "label": "Toggle Channel Pullout"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLEACHIEVEMENT",
+  "label": "Toggle Achievement Frame"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLESTATISTICS",
+  "label": "Toggle Statistics Frame"
+ },
+ {
+  "header": "Interface Panel",
+  "command": "TOGGLECURRENCY",
+  "label": "Toggle Currency Frame"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "STOPCASTING",
+  "label": "Stop Casting"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "STOPATTACK",
+  "label": "Stop Attacking"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "DISMOUNT",
+  "label": "Dismount"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "MINIMAPZOOMIN",
+  "label": "Minimap Zoom In"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "MINIMAPZOOMOUT",
+  "label": "Minimap Zoom Out"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "TOGGLEMUSIC",
+  "label": "Toggle Music"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "TOGGLESOUND",
+  "label": "Toggle Sound"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "MASTERVOLUMEUP",
+  "label": "Master Volume Up"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "MASTERVOLUMEDOWN",
+  "label": "Master Volume Down"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "TOGGLESELFMUTE",
+  "label": "Toggle Self Mute"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "TOGGLEUI",
+  "label": "Toggle User Interface"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "TOGGLEFPS",
+  "label": "Toggle Framerate Display"
+ },
+ {
+  "header": "Miscellaneous",
+  "command": "SCREENSHOT",
+  "label": "Screen Shot"
+ },
+ {
+  "header": "Camera",
+  "command": "NEXTVIEW",
+  "label": "Next View"
+ },
+ {
+  "header": "Camera",
+  "command": "PREVVIEW",
+  "label": "Previous View"
+ },
+ {
+  "header": "Camera",
+  "command": "CAMERAZOOMIN",
+  "label": "Zoom In"
+ },
+ {
+  "header": "Camera",
+  "command": "CAMERAZOOMOUT",
+  "label": "Zoom Out"
+ },
+ {
+  "header": "Camera",
+  "command": "SETVIEW1",
+  "label": "Set View 1"
+ },
+ {
+  "header": "Camera",
+  "command": "SETVIEW2",
+  "label": "Set View 2"
+ },
+ {
+  "header": "Camera",
+  "command": "SETVIEW3",
+  "label": "Set View 3"
+ },
+ {
+  "header": "Camera",
+  "command": "SETVIEW4",
+  "label": "Set View 4"
+ },
+ {
+  "header": "Camera",
+  "command": "SETVIEW5",
+  "label": "Set View 5"
+ },
+ {
+  "header": "Camera",
+  "command": "SAVEVIEW1",
+  "label": "Save View 1"
+ },
+ {
+  "header": "Camera",
+  "command": "SAVEVIEW2",
+  "label": "Save View 2"
+ },
+ {
+  "header": "Camera",
+  "command": "SAVEVIEW3",
+  "label": "Save View 3"
+ },
+ {
+  "header": "Camera",
+  "command": "SAVEVIEW4",
+  "label": "Save View 4"
+ },
+ {
+  "header": "Camera",
+  "command": "SAVEVIEW5",
+  "label": "Save View 5"
+ },
+ {
+  "header": "Camera",
+  "command": "RESETVIEW1",
+  "label": "Reset View 1"
+ },
+ {
+  "header": "Camera",
+  "command": "RESETVIEW2",
+  "label": "Reset View 2"
+ },
+ {
+  "header": "Camera",
+  "command": "RESETVIEW3",
+  "label": "Reset View 3"
+ },
+ {
+  "header": "Camera",
+  "command": "RESETVIEW4",
+  "label": "Reset View 4"
+ },
+ {
+  "header": "Camera",
+  "command": "RESETVIEW5",
+  "label": "Reset View 5"
+ },
+ {
+  "header": "Camera",
+  "command": "FLIPCAMERAYAW",
+  "label": "Flip Camera"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON1",
+  "label": "Bottom left Action Button 1"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON2",
+  "label": "Bottom left Action Button 2"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON3",
+  "label": "Bottom left Action Button 3"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON4",
+  "label": "Bottom left Action Button 4"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON5",
+  "label": "Bottom left Action Button 5"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON6",
+  "label": "Bottom left Action Button 6"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON7",
+  "label": "Bottom left Action Button 7"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON8",
+  "label": "Bottom left Action Button 8"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON9",
+  "label": "Bottom left Action Button 9"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON10",
+  "label": "Bottom left Action Button 10"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON11",
+  "label": "Bottom left Action Button 11"
+ },
+ {
+  "header": "Bottom left action bar",
+  "command": "MULTIACTIONBAR1BUTTON12",
+  "label": "Bottom left Action Button 12"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON1",
+  "label": "Bottom right Action Button 1"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON2",
+  "label": "Bottom right Action Button 2"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON3",
+  "label": "Bottom right Action Button 3"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON4",
+  "label": "Bottom right Action Button 4"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON5",
+  "label": "Bottom right Action Button 5"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON6",
+  "label": "Bottom right Action Button 6"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON7",
+  "label": "Bottom right Action Button 7"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON8",
+  "label": "Bottom right Action Button 8"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON9",
+  "label": "Bottom right Action Button 9"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON10",
+  "label": "Bottom right Action Button 10"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON11",
+  "label": "Bottom right Action Button 11"
+ },
+ {
+  "header": "Bottom right action bar",
+  "command": "MULTIACTIONBAR2BUTTON12",
+  "label": "Bottom right Action Button 12"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON1",
+  "label": "Right Action Button 1"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON2",
+  "label": "Right Action Button 2"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON3",
+  "label": "Right Action Button 3"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON4",
+  "label": "Right Action Button 4"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON5",
+  "label": "Right Action Button 5"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON6",
+  "label": "Right Action Button 6"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON7",
+  "label": "Right Action Button 7"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON8",
+  "label": "Right Action Button 8"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON9",
+  "label": "Right Action Button 9"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON10",
+  "label": "Right Action Button 10"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON11",
+  "label": "Right Action Button 11"
+ },
+ {
+  "header": "Right action bar",
+  "command": "MULTIACTIONBAR3BUTTON12",
+  "label": "Right Action Button 12"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON1",
+  "label": "Right action bar 2 Button 1"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON2",
+  "label": "Right action bar 2 Button 2"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON3",
+  "label": "Right action bar 2 Button 3"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON4",
+  "label": "Right action bar 2 Button 4"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON5",
+  "label": "Right action bar 2 Button 5"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON6",
+  "label": "Right action bar 2 Button 6"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON7",
+  "label": "Right action bar 2 Button 7"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON8",
+  "label": "Right action bar 2 Button 8"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON9",
+  "label": "Right action bar 2 Button 9"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON10",
+  "label": "Right action bar 2 Button 10"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON11",
+  "label": "Right action bar 2 Button 11"
+ },
+ {
+  "header": "Right action bar 2",
+  "command": "MULTIACTIONBAR4BUTTON12",
+  "label": "Right action bar 2 Button 12"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET1",
+  "label": "Assign Star to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET2",
+  "label": "Assign Circle to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET3",
+  "label": "Assign Diamond to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET4",
+  "label": "Assign Triangle to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET5",
+  "label": "Assign Moon to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET6",
+  "label": "Assign Square to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET7",
+  "label": "Assign Cross to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGET8",
+  "label": "Assign Skull to Target"
+ },
+ {
+  "header": "Raid Targeting",
+  "command": "RAIDTARGETNONE",
+  "label": "Clear Raid Target Icon"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLEEXIT",
+  "label": "Exit Vehicle"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLEPREVSEAT",
+  "label": "Previous Seat"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLENEXTSEAT",
+  "label": "Next Seat"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLEAIMUP",
+  "label": "Aim Up"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLEAIMDOWN",
+  "label": "Aim Down"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLEAIMINCREMENT",
+  "label": "Aim Increment"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLEAIMDECREMENT",
+  "label": "Aim Decrement"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLECAMERAZOOMIN",
+  "label": "Camera Zoom In"
+ },
+ {
+  "header": "Vehicle Controls",
+  "command": "VEHICLECAMERAZOOMOUT",
+  "label": "Camera Zoom Out"
+ }
+]
