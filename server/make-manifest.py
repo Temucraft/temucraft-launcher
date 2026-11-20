@@ -22,6 +22,8 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
                                       "enforce": true}, "tweaks": {"farclip": {"value": 1277, "enforce": true}}, ...};
                                       see the launcher's README; options/<Group>/group.json may say "enforce": true too
         news.json, changelog.json     [{"date": "...", "title": "...", "text": "...", "link": "https://..."}]
+        breakingnews.html             written by this script: the newest news and changes for the game's character
+                                      screen (mod-breaking-news-override, BreakingNews.HtmlPath)
         addons.json                   [{"name": "...", "description": "...", "repo": "owner/repo", "branch": "main",
                                         "folders": ["Addon"], "required": true}]
 
@@ -211,6 +213,47 @@ def build(files_dir, realmlist, cache):
     return manifest
 
 
+def breaking_news(files_dir, posts=2, lines=8):
+    """breakingnews.html for mod-breaking-news-override (the news box on the game's character screen): the newest
+    news and changelog posts in WoW's SimpleHTML. Point BreakingNews.HtmlPath at this file."""
+    import html
+    import re
+    def esc(text):
+        text = re.sub(r"\[(\w[\w ]*)\]", r"\1:", text)   # changelog tags: "[New] x" -> "New: x"
+        # SimpleHTML wants plain text; the module needs [ ] ' and \ escaped (it sends the page as a Lua string)
+        text = html.escape(text, quote=False)
+        for ch in "\\[]'":
+            text = text.replace(ch, "\\" + ch)
+        return text
+    parts = []
+    for name, heading in (("news.json", "News"), ("changelog.json", "Changes")):
+        path = os.path.join(files_dir, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            items = load_jsonc(path)
+        except ValueError:
+            continue
+        items = [i for i in items if isinstance(i, dict)][:posts]
+        if not items:
+            continue
+        parts.append(f"<h1>{heading}</h1>")
+        for item in items:
+            parts.append(f"<h2>{esc(item.get('title', ''))}</h2>")
+            if item.get("date"):
+                parts.append(f"<p>{esc(item['date'])}</p>")
+            text = [l.strip() for l in str(item.get("text", "")).splitlines() if l.strip()]
+            for line in text[:lines]:
+                parts.append(f"<p>{esc(line)}</p>")
+            if len(text) > lines:
+                parts.append("<p>...</p>")
+            parts.append("<br/>")
+    if not parts:
+        return
+    with open(os.path.join(files_dir, "breakingnews.html"), "w", encoding="utf-8") as f:
+        f.write("<html><body>\n" + "\n".join(parts) + "\n</body></html>\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Write manifest.json for the Temucraft launcher.")
     parser.add_argument("files_dir", help="the folder Apache serves (where SERVER_URL points)")
@@ -249,6 +292,8 @@ def main():
     os.replace(manifest_path + ".tmp", manifest_path)
     with open(cache_path, "w") as f:
         json.dump(cache, f)
+
+    breaking_news(files_dir)
 
     counts = {}
     for item in manifest["files"]:
