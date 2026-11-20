@@ -2199,8 +2199,10 @@ public partial class MainWindow : Window
         if (fresh && !_settings.TweakPresetChosen) FillPreset(_policy.Tweaks.Count > 0 ? "server" : "default");
         LockEnforcedTweaks();
         MarkPreset(MatchingPreset());
+        FillOptionsFor();
         LoadGameOptions();
         LoadBindings();
+        LoadMacros();
         UpdateTweaksDirty();
     }
 
@@ -2373,6 +2375,7 @@ public partial class MainWindow : Window
             dxvk.Save();
             SaveGameOptions();   // the game's own options and keys, before anything else can fail
             SaveBindings();
+            SaveMacros();
             if (_laaBox is not null) LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true);
             List<string> scenes = _sceneBoxes.Where(b => b.Value.IsChecked == true).Select(b => b.Key).ToList();
             if (_sceneBoxes.Count > 0 && scenes.Count > 0 && LoginScreens.Read(Folder).Where(x => x.On).Select(x => x.Code).Order().SequenceEqual(scenes.Order()) == false)

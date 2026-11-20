@@ -54,6 +54,8 @@ public static class GameOptions
 /// The game's settings as the client sees them: WTF\Config.wtf, and the newest WTF\Account\*\config-cache.wtf, where
 /// the client keeps account settings (auto loot, nameplates...) and which wins over Config.wtf once logged in.
 /// Writing sets Config.wtf, and every account file that already holds that setting.
+/// Loaded for a character, the settings the game keeps per character (nameplates, block trades...) are read from and
+/// written to that character's own config-cache.wtf; the rest stay as for the account.
 /// </summary>
 public sealed class GameOptionStore
 {
@@ -61,13 +63,29 @@ public sealed class GameOptionStore
     readonly List<ConfigWtf> _accounts;
     readonly List<BindingsFile> _bindings;
     readonly HashSet<BindingsFile> _bindingsChanged = [];
+    readonly ConfigWtf? _character;
+    bool _characterChanged;
 
-    GameOptionStore(ConfigWtf config, List<ConfigWtf> accounts, List<BindingsFile> bindings)
+    GameOptionStore(ConfigWtf config, List<ConfigWtf> accounts, List<BindingsFile> bindings, WowCharacter? character = null)
     {
         _config = config; _accounts = accounts; _bindings = bindings;
+        Character = character;
+        if (character is not null) _character = ConfigWtf.LoadFile(Path.Combine(character.Folder, "config-cache.wtf"));
     }
 
     const string ModClick = "modifiedclick ";
+
+    /// <summary>The settings the 3.3.5 client keeps in a character's config-cache.wtf, not the account's.</summary>
+    public static readonly IReadOnlySet<string> PerCharacter = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "nameplateShowEnemies", "nameplateShowFriends", "nameplateAllowOverlap", "ShowClassColorInNameplate",
+        "showDispelDebuffs", "showRaidRange", "blockTrades", "assistAttack", "mapQuestDifficulty", "previewTalents",
+        "equipmentManager", "showBattlefieldMinimap", "showKeyring", "showTokenFrame", "questPOI", "minimapZoom",
+        "minimapInsideZoom", "cameraSavedDistance", "cameraSavedPitch",
+    };
+
+    /// <summary>The character the settings were loaded for; null for the account.</summary>
+    public WowCharacter? Character { get; }
 
     public static GameOptionStore Load(string wowFolder)
     {
@@ -83,18 +101,35 @@ public sealed class GameOptionStore
         return new GameOptionStore(ConfigWtf.Load(wowFolder), accounts, BindingsFile.Find(wowFolder));
     }
 
-    /// <summary>The value the game uses now: the newest account file, then Config.wtf; null when neither has it.</summary>
+    /// <summary>The settings as one character sees them: its own file, then its account's, then Config.wtf.</summary>
+    public static GameOptionStore Load(string wowFolder, WowCharacter? character)
+    {
+        if (character is null) return Load(wowFolder);
+        string accountFile = Path.Combine(character.AccountFolder, "config-cache.wtf");
+        List<ConfigWtf> accounts = File.Exists(accountFile) ? [ConfigWtf.LoadFile(accountFile)] : [];
+        return new GameOptionStore(ConfigWtf.Load(wowFolder), accounts, BindingsFile.Find(wowFolder), character);
+    }
+
+    /// <summary>True when the game keeps this setting per character (known to, or already in the character's file).</summary>
+    public bool IsPerCharacter(string cvar) =>
+        !cvar.StartsWith(ModClick, StringComparison.OrdinalIgnoreCase)
+        && (PerCharacter.Contains(cvar) || _character?.Get(cvar) is not null);
+
+    /// <summary>The value the game uses now: the character's file (for its own settings), the newest account file,
+    /// then Config.wtf; null when none has it.</summary>
     public string? Get(string cvar)
     {
         if (cvar.StartsWith(ModClick, StringComparison.OrdinalIgnoreCase))
             return _bindings.Count > 0 ? _bindings[0].GetModifiedClick(cvar[ModClick.Length..]) : null;
+        if (_character is not null && IsPerCharacter(cvar) && _character.Get(cvar) is { } own) return own;
         foreach (ConfigWtf account in _accounts)
             if (account.Get(cvar) is { } value) return value;
         return _config.Get(cvar);
     }
 
     /// <summary>Sets a CVar, or a modified click ("modifiedclick SELFCAST") in the account's bindings file and every
-    /// character file that has it. False when there is nowhere to keep a modified click (no account folder yet).</summary>
+    /// character file that has it. False when there is nowhere to keep a modified click (no account folder yet).
+    /// Loaded for a character, a setting the game keeps per character goes to that character's file only.</summary>
     public bool Set(string cvar, string value)
     {
         if (cvar.StartsWith(ModClick, StringComparison.OrdinalIgnoreCase))
@@ -109,6 +144,12 @@ public sealed class GameOptionStore
                 }
             return true;
         }
+        if (_character is not null && IsPerCharacter(cvar))
+        {
+            _character.Set(cvar, value);
+            _characterChanged = true;
+            return true;
+        }
         _config.Set(cvar, value);
         foreach (ConfigWtf account in _accounts)
             if (account.Get(cvar) is not null) account.Set(cvar, value);
@@ -120,5 +161,6 @@ public sealed class GameOptionStore
         _config.Save();
         foreach (ConfigWtf account in _accounts) account.Save();
         foreach (BindingsFile file in _bindingsChanged) file.Save();
+        if (_characterChanged) _character!.Save();
     }
 }

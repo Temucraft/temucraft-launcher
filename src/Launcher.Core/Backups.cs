@@ -187,6 +187,8 @@ public static class Backups
     {
         Directory.CreateDirectory(Folder);
         string file = Path.Combine(Folder, $"{DateTime.Now:yyyyMMdd-HHmmss}-{reason}.zip");
+        for (int n = 2; File.Exists(file); n++)   // two backups in the same second
+            file = Path.Combine(Folder, $"{DateTime.Now:yyyyMMdd-HHmmss}-{reason}-{n}.zip");
         using (ZipArchive zip = ZipFile.Open(file, ZipArchiveMode.Create))
         {
             AddFolder(zip, wowFolder, "WTF", n => !n.EndsWith("realmlist.wtf", StringComparison.OrdinalIgnoreCase));

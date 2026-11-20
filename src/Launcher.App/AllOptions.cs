@@ -18,6 +18,10 @@ public partial class MainWindow
     readonly Dictionary<string, (GameOption Option, Control Control)> _optionControls = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> _optionShown = new(StringComparer.OrdinalIgnoreCase);
     bool _loadingOptions;
+    ComboBox? _optionsForBox;
+    TextBlock? _optionsForNote;
+    List<WowCharacter> _optionCharacters = [];
+    int _optionsForShown;   // the entry the boxes were read for (0 = the account)
 
     /// <summary>Adds the game's own options to TweaksList (after the quick settings), skipping ones already there.</summary>
     void BuildGameOptions()
@@ -26,6 +30,7 @@ public partial class MainWindow
         HashSet<string> quick = new(Tweaks.All.Select(t => t.CVar), StringComparer.OrdinalIgnoreCase);
         string? group = null, section = null;
         WrapPanel rows = new();
+        BuildOptionsFor();
         foreach (GameOption o in GameOptions.All)
         {
             if (o.ModifiedClick is null && quick.Contains(o.CVar)) continue;
@@ -63,7 +68,8 @@ public partial class MainWindow
             TextBlock tip = new()
             {
                 Text = o.Tip + (o.Tip.Length > 0 ? " " : "") + string.Format(Translation.T("Default: {0}."), defaultText)
-                       + (o.Restart ? " " + Translation.T("Needs a game restart.") : o.Logout ? " " + Translation.T("Needs a log out.") : ""),
+                       + (o.Restart ? " " + Translation.T("Needs a game restart.") : o.Logout ? " " + Translation.T("Needs a log out.") : "")
+                       + (GameOptionStore.PerCharacter.Contains(o.CVar) ? " " + Translation.T("Kept per character.") : ""),
                 Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, TextWrapping = TextWrapping.Wrap,
             };
             string where = o.ModifiedClick is null ? $"SET {o.CVar}" : $"{o.Key} (bindings-cache.wtf)";
@@ -80,6 +86,60 @@ public partial class MainWindow
             Classes = { "dim" }, FontSize = 12, Margin = new Thickness(0, 10, 0, 0),
         });
         BuildKeyBindings();
+        BuildMacros();
+    }
+
+    /// <summary>"Settings for": the account, or a character (for the settings the game keeps per character).</summary>
+    void BuildOptionsFor()
+    {
+        Grid top = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Margin = new Thickness(0, 18, 0, 0), Classes = { "keep" } };   // shown while searching
+        top.Children.Add(new TextBlock { Text = Translation.T("Settings for:"), VerticalAlignment = VerticalAlignment.Center, Classes = { "text" }, Margin = new Thickness(0, 0, 10, 0) });
+        _optionsForBox = new ComboBox { MinWidth = 260, ItemTemplate = RawText };
+        _optionsForBox.SelectionChanged += (_, _) => OptionsForChanged();
+        Grid.SetColumn(_optionsForBox, 1);
+        top.Children.Add(_optionsForBox);
+        _optionsForNote = new TextBlock { Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+        Grid.SetColumn(_optionsForNote, 2);
+        top.Children.Add(_optionsForNote);
+        TweaksList.Children.Add(top);
+    }
+
+    /// <summary>The character chosen in "Settings for", null for the account.</summary>
+    WowCharacter? OptionsCharacter =>
+        _optionsForBox?.SelectedIndex is int i and > 0 && i - 1 < _optionCharacters.Count ? _optionCharacters[i - 1] : null;
+
+    void FillOptionsFor()
+    {
+        if (_optionsForBox is null) return;
+        string? previous = OptionsCharacter?.Folder;
+        try { _optionCharacters = GameFolder.LooksLikeClient(Folder) ? WowCharacter.List(Folder) : []; }
+        catch (Exception e) { Logger.Warning("Couldn't list the characters", e); _optionCharacters = []; }
+        _loadingOptions = true;
+        try
+        {
+            _optionsForBox.ItemsSource = new[] { Translation.T("Account (all characters)") }.Concat(_optionCharacters.Select(c => c.ToString())).ToList();
+            int index = previous is null ? 0 : _optionCharacters.FindIndex(c => c.Folder == previous) + 1;
+            _optionsForBox.SelectedIndex = Math.Max(0, index);
+            _optionsForShown = _optionsForBox.SelectedIndex;
+        }
+        finally { _loadingOptions = false; }
+    }
+
+    void OptionsForChanged()
+    {
+        if (_loadingOptions || _optionsForBox is null) return;
+        if (ChangedGameOptions().Count > 0)
+        {
+            // the boxes hold changes for the other choice: keep it until they are applied or discarded
+            _loadingOptions = true;
+            try { _optionsForBox.SelectedIndex = _optionsForShown; }
+            finally { _loadingOptions = false; }
+            Status(Translation.T("Apply or discard your changes first."));
+            return;
+        }
+        _optionsForShown = _optionsForBox.SelectedIndex;
+        LoadGameOptions();
+        UpdateTweaksDirty();
     }
 
     Control NewOptionControl(GameOption o)
@@ -134,7 +194,8 @@ public partial class MainWindow
         _optionShown.Clear();
         if (_optionControls.Count == 0 || !GameFolder.LooksLikeClient(Folder)) return;
         GameOptionStore store;
-        try { store = GameOptionStore.Load(Folder); }
+        WowCharacter? character = OptionsCharacter;
+        try { store = GameOptionStore.Load(Folder, character); }
         catch (Exception e) { Logger.Warning("Couldn't read the game's settings", e); return; }
         _loadingOptions = true;
         try
@@ -152,9 +213,19 @@ public partial class MainWindow
                         break;
                 }
                 if (OptionValue(o, control) is { } shown) _optionShown[o.Key] = shown;
+                // for a character, only what the game keeps per character can change here; the rest is the account's
+                bool own = store.IsPerCharacter(o.Key);
+                control.IsEnabled = (character is null || own);
+                string where = o.ModifiedClick is null ? $"SET {o.CVar}" : $"{o.Key} (bindings-cache.wtf)";
+                ToolTip.SetTip(control, character is not null && !own ? Translation.T("Kept for the whole account: choose Account above to change it.")
+                    : own ? where + " - " + Translation.T("Each character keeps its own value.") : where);
             }
         }
         finally { _loadingOptions = false; }
+        if (_optionsForNote is not null)
+            _optionsForNote.Text = character is null
+                ? (_optionCharacters.Count > 0 ? Translation.T("Some settings are kept per character (nameplates, block trades...): pick a character to change them for it alone.") : "")
+                : string.Format(Translation.T("Settings marked per character are saved for {0} only; the rest stay the account's."), character.Name);
     }
 
     /// <summary>The options changed since they were read: cvar and new value.</summary>
@@ -169,12 +240,12 @@ public partial class MainWindow
     {
         List<(string CVar, string Value)> changed = ChangedGameOptions();
         if (changed.Count == 0) return;
-        GameOptionStore store = GameOptionStore.Load(Folder);
+        GameOptionStore store = GameOptionStore.Load(Folder, OptionsCharacter);
         foreach ((string cvar, string value) in changed)
             if (TweakRule(cvar) is not { Enforce: true } && !store.Set(cvar, value))
                 Log($"{cvar} not saved: start the game and log in once, so it makes the account's folder.");
         store.Save();
-        Log($"{Words.Files(changed.Count).Replace("file", "game setting")} saved: {string.Join(", ", changed.Select(c => $"{c.CVar}={c.Value}"))}");
+        Log($"{Words.Files(changed.Count).Replace("file", "game setting")} saved{(store.Character is { } c ? " for " + c : "")}: {string.Join(", ", changed.Select(c => $"{c.CVar}={c.Value}"))}");
     }
 
     // ------------------------------------------------------------------------------------------- menu and search
@@ -216,6 +287,7 @@ public partial class MainWindow
         foreach (Control child in TweaksList.Children)
         {
             if (child is TextBlock { } t && (t.Classes.Contains("section") || t.Classes.Contains("group"))) { header = t; continue; }
+            if (child.Classes.Contains("keep")) { child.IsVisible = true; continue; }
             if (child is not WrapPanel)
             {
                 // other entries (the login screens, Large Address Aware, the server's values): by their text

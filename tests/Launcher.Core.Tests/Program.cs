@@ -60,6 +60,8 @@ List<(string Name, Func<Task> Body)> tests =
     ("A new launcher is required unless the server says recommended", LauncherUpdateRule),
     ("Login screen scenes are read and turned on or off", LoginScenes),
     ("Self cast, focus cast and auto loot keys go to bindings-cache.wtf", ModifiedClicks),
+    ("Macro files read and write back the same; new ids and limits", MacroFileRoundTrip),
+    ("Per character settings go to the character's config-cache.wtf", PerCharacterOptions),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -1241,6 +1243,91 @@ static Task ModifiedClicks()
     Check(self.Key == "modifiedclick SELFCAST" && self.ChoiceLabel(1) == "ALT key", self.Key);
     Check(GameOptions.All.Where(o => o.Choices is not null).All(o => o.ChoiceLabels is null || o.ChoiceLabels.Count == o.Choices!.Count), "a label per choice");
     Check(!GameOptions.All.Any(o => o.CVar == "autoLootKey"), "auto loot key is a modified click, not a CVar");
+    Directory.Delete(wow, true);
+    return Task.CompletedTask;
+}
+
+static Task MacroFileRoundTrip()
+{
+    string wow = Path.Combine(Path.GetTempPath(), "mf" + Guid.NewGuid().ToString("N"));
+    string account = Path.Combine(wow, "WTF", "Account", "MAIN");
+    string character = Path.Combine(account, "Realm", "Hero");
+    Directory.CreateDirectory(character);
+    Directory.CreateDirectory(Path.Combine(account, "SavedVariables"));
+    // as the game writes it: CRLF, a name cut to 16 letters, an empty macro
+    string text = "MACRO 4 \"Focus\" INV_Misc_QuestionMark\r\n#showtooltip\r\n/cast [@target] Mangle (Bear)\r\nEND\r\n"
+                + "MACRO 1 \"#showtooltip/cas\" Ability_Hunter_BeastCall\r\n.learn 2575\r\n.additem 7005\r\nEND\r\n"
+                + "MACRO 2 \"Empty\" INV_Misc_QuestionMark\r\nEND\r\n";
+    File.WriteAllText(Path.Combine(account, "macros-cache.txt"), text);
+    File.WriteAllText(Path.Combine(character, "macros-cache.txt"), "MACRO 16777217 \"test\" INV_Misc_QuestionMark\n/petautocaston Growl\nEND\n");
+
+    MacroFile file = MacroFile.ForAccount(account);
+    Check(file.Macros.Count == 3 && !file.IsCharacter && file.Limit == 36, "three account macros: " + file.Macros.Count);
+    Check(file.Macros[0] is { Id: 4, Name: "Focus", Icon: "INV_Misc_QuestionMark", Body: "#showtooltip\n/cast [@target] Mangle (Bear)" }, "first macro");
+    Check(file.Macros[1].Name == "#showtooltip/cas" && file.Macros[2].Body == "", "name and empty body");
+    Check(file.Text == text, "writes back exactly what it read:\n" + file.Text);
+
+    Macro added = file.Add("A name that is much too long \"quoted\"", " Spell_Holy_Heal ", "/cast Heal\r\nEND\n" + new string('x', 300));
+    Check(added.Id == 3, "first free account id: " + added.Id);
+    file.Macros.RemoveAll(m => m.Id == 4);
+    file.Save();
+    MacroFile again = MacroFile.ForAccount(account);
+    Macro back = again.Macros.Single(m => m.Id == 3);
+    Check(back.Name == "A name that is m" && back.Icon == "Spell_Holy_Heal", $"cleaned name and icon: {back.Name}|{back.Icon}");
+    Check(back.Body.Length <= Macro.BodyLimit && back.Body.StartsWith("/cast Heal\nEND \n"), "body cut to 255 and END kept inside: " + back.Body[..20]);
+    Check(again.Macros.Count == 3 && !again.Macros.Any(m => m.Id == 4), "deleted one, added one");
+    Check(File.ReadAllText(again.File).Contains("\r\nEND\r\n") && !File.ReadAllBytes(again.File).Take(3).SequenceEqual(new byte[] { 0xEF, 0xBB, 0xBF }), "CRLF, no BOM");
+
+    MacroFile own = MacroFile.ForCharacter(character);
+    Check(own.IsCharacter && own.Limit == 18 && own.Macros.Single().Name == "test", "character macros");
+    Check(own.Add("Two").Id == 16777218, "character ids start at 16777217");
+    Check(MacroFile.ForCharacter(Path.Combine(account, "Realm", "Nobody")).Macros.Count == 0, "no file, no macros");
+
+    List<WowCharacter> characters = WowCharacter.List(wow);
+    Check(characters.Count == 1 && characters[0] is { Account: "MAIN", Realm: "Realm", Name: "Hero" } && characters[0].AccountFolder == account,
+        "characters found (SavedVariables is not a realm): " + string.Join(",", characters));
+    Directory.Delete(wow, true);
+    return Task.CompletedTask;
+}
+
+static Task PerCharacterOptions()
+{
+    string wow = Path.Combine(Path.GetTempPath(), "pc" + Guid.NewGuid().ToString("N"));
+    string account = Path.Combine(wow, "WTF", "Account", "MAIN");
+    string hero = Path.Combine(account, "Realm", "Hero"), alt = Path.Combine(account, "Realm", "Alt");
+    Directory.CreateDirectory(hero);
+    Directory.CreateDirectory(alt);
+    File.WriteAllText(Path.Combine(wow, "WTF", "Config.wtf"), "SET farclip \"777\"\n");
+    File.WriteAllText(Path.Combine(account, "config-cache.wtf"), "SET autoLootDefault \"1\"\nSET nameplateShowEnemies \"0\"\n");
+    File.WriteAllText(Path.Combine(hero, "config-cache.wtf"), "SET nameplateShowEnemies \"1\"\nSET trackedQuests \"v\"\n");
+    File.WriteAllText(Path.Combine(alt, "config-cache.wtf"), "SET cameraSavedPitch \"20\"\n");
+    WowCharacter heroChar = WowCharacter.List(wow).Single(c => c.Name == "Hero");
+    WowCharacter altChar = WowCharacter.List(wow).Single(c => c.Name == "Alt");
+
+    GameOptionStore accountStore = GameOptionStore.Load(wow, null);
+    Check(accountStore.Character is null && accountStore.Get("nameplateShowEnemies") == "0", "the account by default");
+    GameOptionStore store = GameOptionStore.Load(wow, heroChar);
+    Check(store.Get("nameplateShowEnemies") == "1", "the character's own value wins");
+    Check(store.Get("autoLootDefault") == "1" && store.Get("farclip") == "777", "the rest from the account and Config.wtf");
+    Check(store.IsPerCharacter("blockTrades") && store.IsPerCharacter("trackedQuests") && !store.IsPerCharacter("autoLootDefault")
+          && !store.IsPerCharacter("modifiedclick SELFCAST"), "which settings are per character");
+    store.Set("nameplateShowEnemies", "0");
+    store.Set("blockTrades", "1");
+    store.Set("autoLootDefault", "0");
+    store.Save();
+    string heroText = File.ReadAllText(Path.Combine(hero, "config-cache.wtf"));
+    Check(heroText.Contains("SET nameplateShowEnemies \"0\"") && heroText.Contains("SET blockTrades \"1\"") && heroText.Contains("trackedQuests")
+          && !heroText.Contains("autoLootDefault"), heroText);
+    string accText = File.ReadAllText(Path.Combine(account, "config-cache.wtf"));
+    Check(accText.Contains("SET autoLootDefault \"0\"") && !accText.Contains("blockTrades"), "account settings stay in the account's file: " + accText);
+    Check(GameOptionStore.Load(wow, altChar).Get("blockTrades") is null && GameOptionStore.Load(wow, altChar).Get("nameplateShowEnemies") == "0",
+        "the other character keeps its own (none: the account's)");
+    string altBefore = File.ReadAllText(Path.Combine(alt, "config-cache.wtf"));
+    GameOptionStore altStore = GameOptionStore.Load(wow, altChar);
+    altStore.Set("farclip", "900");
+    altStore.Save();
+    Check(File.ReadAllText(Path.Combine(alt, "config-cache.wtf")) == altBefore && GameOptionStore.Load(wow).Get("farclip") == "900",
+        "an account setting from a character goes to Config.wtf, the character file is left alone");
     Directory.Delete(wow, true);
     return Task.CompletedTask;
 }
