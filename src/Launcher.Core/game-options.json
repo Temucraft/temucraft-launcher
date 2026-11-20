@@ -26,15 +26,22 @@
  {
   "group": "Interface",
   "section": "Controls",
-  "cvar": "autoLootKey",
+  "cvar": "",
+  "modifiedClick": "AUTOLOOTTOGGLE",
   "label": "Auto Loot Key",
-  "tip": "",
+  "tip": "Key to use to auto loot.",
   "default": "SHIFT",
   "choices": [
    "NONE",
    "ALT",
    "CTRL",
    "SHIFT"
+  ],
+  "choiceLabels": [
+   "None",
+   "ALT key",
+   "CTRL key",
+   "SHIFT key"
   ]
  },
  {
@@ -125,6 +132,70 @@
   "label": "Target of Target",
   "tip": "Toggles the display of the target of your target.",
   "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "targetOfTargetMode",
+  "label": "Show Target of Target",
+  "tip": "When the target of your target is shown (with Target of Target on).",
+  "default": "5",
+  "choices": [
+   "1",
+   "2",
+   "3",
+   "4",
+   "5"
+  ],
+  "choiceLabels": [
+   "Raid",
+   "Party",
+   "Solo",
+   "Raid and party",
+   "Always"
+  ]
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "",
+  "modifiedClick": "SELFCAST",
+  "label": "Self Cast Key",
+  "tip": "When held this key will allow self casting, even if an enemy is targeted.",
+  "default": "ALT",
+  "choices": [
+   "NONE",
+   "ALT",
+   "CTRL",
+   "SHIFT"
+  ],
+  "choiceLabels": [
+   "None",
+   "ALT key",
+   "CTRL key",
+   "SHIFT key"
+  ]
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "",
+  "modifiedClick": "FOCUSCAST",
+  "label": "Focus Cast Key",
+  "tip": "Key to hold to cast targeted spells on your focus target.",
+  "default": "NONE",
+  "choices": [
+   "NONE",
+   "ALT",
+   "CTRL",
+   "SHIFT"
+  ],
+  "choiceLabels": [
+   "None",
+   "ALT key",
+   "CTRL key",
+   "SHIFT key"
+  ]
  },
  {
   "group": "Interface",
@@ -326,6 +397,38 @@
   "label": "Remove Chat Hover Delay",
   "tip": "Check to show chat windows immediately upon mouseover.",
   "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "chatStyle",
+  "label": "Chat Style",
+  "tip": "IM Style keeps the chat box open; Classic Style opens it with Enter.",
+  "default": "im",
+  "choices": [
+   "im",
+   "classic"
+  ],
+  "choiceLabels": [
+   "IM Style",
+   "Classic Style"
+  ]
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "conversationMode",
+  "label": "New Real ID Conversations",
+  "tip": "Where new Real ID conversations open.",
+  "default": "popout",
+  "choices": [
+   "popout",
+   "inline"
+  ],
+  "choiceLabels": [
+   "New Tab",
+   "In-line"
+  ]
  },
  {
   "group": "Interface",
@@ -681,6 +784,24 @@
  },
  {
   "group": "Interface",
+  "section": "Combat text",
+  "cvar": "combatTextFloatMode",
+  "label": "Combat Text Float Mode",
+  "tip": "Sets the direction that combat text scrolls.",
+  "default": "1",
+  "choices": [
+   "1",
+   "2",
+   "3"
+  ],
+  "choiceLabels": [
+   "Scroll Up",
+   "Scroll Down",
+   "Arc"
+  ]
+ },
+ {
+  "group": "Interface",
   "section": "Status text",
   "cvar": "statusTextPercentage",
   "label": "Display Percentages",
@@ -847,6 +968,25 @@
  },
  {
   "group": "Interface",
+  "section": "Camera",
+  "cvar": "cameraSmoothStyle",
+  "label": "Camera Following Style",
+  "tip": "How the camera follows your character.",
+  "choices": [
+   "1",
+   "4",
+   "2",
+   "0"
+  ],
+  "choiceLabels": [
+   "Only horizontal when moving",
+   "Only when moving",
+   "Always adjust camera",
+   "Never adjust camera"
+  ]
+ },
+ {
+  "group": "Interface",
   "section": "Buffs and debuffs",
   "cvar": "buffDurations",
   "label": "Buff Durations",
@@ -930,6 +1070,25 @@
   "min": 0.5,
   "max": 1.5,
   "step": 0.05
+ },
+ {
+  "group": "Interface",
+  "section": "Mouse",
+  "cvar": "cameraSmoothTrackingStyle",
+  "label": "Click-to-Move Camera Style",
+  "tip": "Determines the way the camera follows the player while in Click-to-Move mode.",
+  "choices": [
+   "1",
+   "4",
+   "2",
+   "0"
+  ],
+  "choiceLabels": [
+   "Only horizontal when moving",
+   "Only when moving",
+   "Always adjust camera",
+   "Never adjust camera"
+  ]
  },
  {
   "group": "Interface",

@@ -58,6 +58,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Diagnostics mark files against the server's copy", DiagnosticsMarks),
     ("A new launcher is required unless the server says recommended", LauncherUpdateRule),
     ("Login screen scenes are read and turned on or off", LoginScenes),
+    ("Self cast, focus cast and auto loot keys go to bindings-cache.wtf", ModifiedClicks),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -1142,6 +1143,35 @@ static async Task CertPinOverTls()
         listener.Stop();
         await server;
     }
+}
+
+static Task ModifiedClicks()
+{
+    string wow = Path.Combine(Path.GetTempPath(), "mc" + Guid.NewGuid().ToString("N"));
+    string account = Path.Combine(wow, "WTF", "Account", "MAIN");
+    string character = Path.Combine(account, "Realm", "Hero");
+    Directory.CreateDirectory(character);
+    File.WriteAllText(Path.Combine(wow, "Wow.exe"), "");
+    File.WriteAllText(Path.Combine(account, "bindings-cache.wtf"), "BINDINGMODE 0\nbind A STRAFELEFT\nmodifiedclick SELFCAST ALT\n");
+    File.WriteAllText(Path.Combine(character, "bindings-cache.wtf"), "bind B STRAFERIGHT\nmodifiedclick SELFCAST ALT\n");
+    File.WriteAllText(Path.Combine(account, "config-cache.wtf"), "SET autoLootDefault \"1\"\n");
+    GameOptionStore store = GameOptionStore.Load(wow);
+    Check(store.Get("modifiedclick SELFCAST") == "ALT", "reads the account's key");
+    Check(store.Get("modifiedclick FOCUSCAST") is null, "not set: the game's default");
+    Check(store.Set("modifiedclick SELFCAST", "CTRL") && store.Set("modifiedclick FOCUSCAST", "SHIFT"), "set");
+    store.Set("targetOfTargetMode", "3");
+    store.Save();
+    string acc = File.ReadAllText(Path.Combine(account, "bindings-cache.wtf"));
+    string chr = File.ReadAllText(Path.Combine(character, "bindings-cache.wtf"));
+    Check(acc.Contains("modifiedclick SELFCAST CTRL") && acc.Contains("modifiedclick FOCUSCAST SHIFT") && acc.Contains("bind A STRAFELEFT"), acc);
+    Check(chr.Contains("modifiedclick SELFCAST CTRL") && !chr.Contains("FOCUSCAST") && chr.Contains("bind B STRAFERIGHT"), chr);
+    Check(GameOptionStore.Load(wow).Get("targetOfTargetMode") == "3", "CVars still go to Config.wtf");
+    GameOption self = GameOptions.All.Single(o => o.ModifiedClick == "SELFCAST");
+    Check(self.Key == "modifiedclick SELFCAST" && self.ChoiceLabel(1) == "ALT key", self.Key);
+    Check(GameOptions.All.Where(o => o.Choices is not null).All(o => o.ChoiceLabels is null || o.ChoiceLabels.Count == o.Choices!.Count), "a label per choice");
+    Check(!GameOptions.All.Any(o => o.CVar == "autoLootKey"), "auto loot key is a modified click, not a CVar");
+    Directory.Delete(wow, true);
+    return Task.CompletedTask;
 }
 
 /// <summary>Answers like Apache: files under the folder, Range requests with 206.</summary>

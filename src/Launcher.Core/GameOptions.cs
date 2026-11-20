@@ -25,8 +25,15 @@ public sealed record GameOption
     /// <summary>The box is ticked when the value is 0 (Sticky Targeting is deselectOnClick = 0).</summary>
     public bool Invert { get; init; }
     public List<string>? Choices { get; init; }
+    /// <summary>What the game's dropdown shows for each of Choices (same order); the values themselves when missing.</summary>
+    public List<string>? ChoiceLabels { get; init; }
+    /// <summary>A key setting kept in bindings-cache.wtf (<c>modifiedclick SELFCAST ALT</c>), not a CVar.</summary>
+    public string? ModifiedClick { get; init; }
 
     [JsonIgnore] public bool IsToggle => Min is null && Choices is null;
+    /// <summary>The setting's name in the files: the CVar, or "modifiedclick ACTION".</summary>
+    [JsonIgnore] public string Key => ModifiedClick is null ? CVar : "modifiedclick " + ModifiedClick;
+    public string ChoiceLabel(int i) => ChoiceLabels is { } l && i < l.Count ? l[i] : Choices![i];
 }
 
 public static class GameOptions
@@ -52,8 +59,15 @@ public sealed class GameOptionStore
 {
     readonly ConfigWtf _config;
     readonly List<ConfigWtf> _accounts;
+    readonly List<BindingsFile> _bindings;
+    readonly HashSet<BindingsFile> _bindingsChanged = [];
 
-    GameOptionStore(ConfigWtf config, List<ConfigWtf> accounts) { _config = config; _accounts = accounts; }
+    GameOptionStore(ConfigWtf config, List<ConfigWtf> accounts, List<BindingsFile> bindings)
+    {
+        _config = config; _accounts = accounts; _bindings = bindings;
+    }
+
+    const string ModClick = "modifiedclick ";
 
     public static GameOptionStore Load(string wowFolder)
     {
@@ -66,27 +80,45 @@ public sealed class GameOptionStore
                 .OrderByDescending(File.GetLastWriteTimeUtc)   // the account played last first
                 .Select(ConfigWtf.LoadFile)
                 .ToList();
-        return new GameOptionStore(ConfigWtf.Load(wowFolder), accounts);
+        return new GameOptionStore(ConfigWtf.Load(wowFolder), accounts, BindingsFile.Find(wowFolder));
     }
 
     /// <summary>The value the game uses now: the newest account file, then Config.wtf; null when neither has it.</summary>
     public string? Get(string cvar)
     {
+        if (cvar.StartsWith(ModClick, StringComparison.OrdinalIgnoreCase))
+            return _bindings.Count > 0 ? _bindings[0].GetModifiedClick(cvar[ModClick.Length..]) : null;
         foreach (ConfigWtf account in _accounts)
             if (account.Get(cvar) is { } value) return value;
         return _config.Get(cvar);
     }
 
-    public void Set(string cvar, string value)
+    /// <summary>Sets a CVar, or a modified click ("modifiedclick SELFCAST") in the account's bindings file and every
+    /// character file that has it. False when there is nowhere to keep a modified click (no account folder yet).</summary>
+    public bool Set(string cvar, string value)
     {
+        if (cvar.StartsWith(ModClick, StringComparison.OrdinalIgnoreCase))
+        {
+            string action = cvar[ModClick.Length..];
+            if (_bindings.Count == 0) return false;
+            foreach (BindingsFile file in _bindings)
+                if (file == _bindings[0] || file.GetModifiedClick(action) is not null)
+                {
+                    file.SetModifiedClick(action, value);
+                    _bindingsChanged.Add(file);
+                }
+            return true;
+        }
         _config.Set(cvar, value);
         foreach (ConfigWtf account in _accounts)
             if (account.Get(cvar) is not null) account.Set(cvar, value);
+        return true;
     }
 
     public void Save()
     {
         _config.Save();
         foreach (ConfigWtf account in _accounts) account.Save();
+        foreach (BindingsFile file in _bindingsChanged) file.Save();
     }
 }

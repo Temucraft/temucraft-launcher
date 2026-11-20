@@ -28,7 +28,7 @@ public partial class MainWindow
         WrapPanel rows = new();
         foreach (GameOption o in GameOptions.All)
         {
-            if (quick.Contains(o.CVar)) continue;
+            if (o.ModifiedClick is null && quick.Contains(o.CVar)) continue;
             if (o.Group != group)
             {
                 group = o.Group;
@@ -48,7 +48,7 @@ public partial class MainWindow
             Grid row = new()
             {
                 ColumnDefinitions = new ColumnDefinitions("270,150,*"), Margin = new Thickness(0, 3, 16, 3), Width = TweakRowWidth(),
-                Tag = $"{o.Label} {o.CVar} {o.Tip} {o.Section} {o.Group}",
+                Tag = $"{o.Label} {o.Key} {o.Tip} {o.Section} {o.Group}",
             };
             _tweakRows.Add(row);
             string label = o.Label + (o.Restart ? " *" : o.Logout ? " °" : "");
@@ -57,19 +57,22 @@ public partial class MainWindow
             Grid.SetColumn(control, 1);
             row.Children.Add(control);
             string defaultText = o.Default is null ? Translation.T("the game decides")
-                : o.IsToggle ? Translation.T((o.Default == "1") != o.Invert ? "on" : "off") : o.Default;
+                : o.IsToggle ? Translation.T((o.Default == "1") != o.Invert ? "on" : "off")
+                : o.Choices is { } ch && ch.FindIndex(x => x.Equals(o.Default, StringComparison.OrdinalIgnoreCase)) is int di and >= 0 ? o.ChoiceLabel(di)
+                : o.Default;
             TextBlock tip = new()
             {
                 Text = o.Tip + (o.Tip.Length > 0 ? " " : "") + string.Format(Translation.T("Default: {0}."), defaultText)
                        + (o.Restart ? " " + Translation.T("Needs a game restart.") : o.Logout ? " " + Translation.T("Needs a log out.") : ""),
                 Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, TextWrapping = TextWrapping.Wrap,
             };
-            ToolTip.SetTip(tip, $"SET {o.CVar}");
-            ToolTip.SetTip(control, $"SET {o.CVar}");
+            string where = o.ModifiedClick is null ? $"SET {o.CVar}" : $"{o.Key} (bindings-cache.wtf)";
+            ToolTip.SetTip(tip, where);
+            ToolTip.SetTip(control, where);
             Grid.SetColumn(tip, 2);
             row.Children.Add(tip);
             rows.Children.Add(row);
-            _optionControls[o.CVar] = (o, control);
+            _optionControls[o.Key] = (o, control);
         }
         TweaksList.Children.Add(new TextBlock
         {
@@ -83,7 +86,10 @@ public partial class MainWindow
     {
         if (o.Choices is { } choices)
         {
-            ComboBox box = new() { ItemsSource = choices, Width = 132, HorizontalAlignment = HorizontalAlignment.Left };
+            ComboBox box = new()
+            {
+                ItemsSource = choices.Select((_, i) => o.ChoiceLabel(i)).ToList(), Width = 132, HorizontalAlignment = HorizontalAlignment.Left,
+            };
             box.SelectionChanged += (_, _) => OptionEdited();
             return box;
         }
@@ -117,7 +123,7 @@ public partial class MainWindow
     static string? OptionValue(GameOption o, Control control) => control switch
     {
         CheckBox c => (c.IsChecked == true) != o.Invert ? "1" : "0",
-        ComboBox b => b.SelectedItem as string,
+        ComboBox b => b.SelectedIndex is int i and >= 0 && i < o.Choices!.Count ? o.Choices[i] : null,
         NumericUpDown n => n.Value?.ToString("0.###", CultureInfo.InvariantCulture),
         _ => null,
     };
@@ -135,17 +141,17 @@ public partial class MainWindow
         {
             foreach ((GameOption o, Control control) in _optionControls.Values)
             {
-                string? value = store.Get(o.CVar) ?? o.Default;
+                string? value = store.Get(o.Key) ?? o.Default;
                 switch (control)
                 {
                     case CheckBox c: c.IsChecked = value is not null && (value.Trim() == "1") != o.Invert; break;
-                    case ComboBox b: b.SelectedItem = o.Choices!.FirstOrDefault(x => x.Equals(value, StringComparison.OrdinalIgnoreCase)); break;
+                    case ComboBox b: b.SelectedIndex = o.Choices!.FindIndex(x => x.Equals(value, StringComparison.OrdinalIgnoreCase)); break;
                     case NumericUpDown n:
                         n.Value = double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double d)
                             ? Math.Clamp((decimal)d, n.Minimum, n.Maximum) : null;
                         break;
                 }
-                if (OptionValue(o, control) is { } shown) _optionShown[o.CVar] = shown;
+                if (OptionValue(o, control) is { } shown) _optionShown[o.Key] = shown;
             }
         }
         finally { _loadingOptions = false; }
@@ -154,7 +160,7 @@ public partial class MainWindow
     /// <summary>The options changed since they were read: cvar and new value.</summary>
     List<(string CVar, string Value)> ChangedGameOptions() =>
         _optionControls.Values
-            .Select(x => (x.Option.CVar, Value: OptionValue(x.Option, x.Control)))
+            .Select(x => (CVar: x.Option.Key, Value: OptionValue(x.Option, x.Control)))
             .Where(x => x.Value is not null && (!_optionShown.TryGetValue(x.CVar, out string? old) || old != x.Value))
             .Select(x => (x.CVar, x.Value!)).ToList();
 
@@ -165,7 +171,8 @@ public partial class MainWindow
         if (changed.Count == 0) return;
         GameOptionStore store = GameOptionStore.Load(Folder);
         foreach ((string cvar, string value) in changed)
-            if (TweakRule(cvar) is not { Enforce: true }) store.Set(cvar, value);
+            if (TweakRule(cvar) is not { Enforce: true } && !store.Set(cvar, value))
+                Log($"{cvar} not saved: start the game and log in once, so it makes the account's folder.");
         store.Save();
         Log($"{Words.Files(changed.Count).Replace("file", "game setting")} saved: {string.Join(", ", changed.Select(c => $"{c.CVar}={c.Value}"))}");
     }

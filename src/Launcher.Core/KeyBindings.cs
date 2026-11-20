@@ -75,6 +75,29 @@ public sealed class BindingsFile
                 _lines.Add($"bind {key} {command}");
     }
 
+    /// <summary>The key of a modified click (<c>modifiedclick SELFCAST ALT</c>), null when the file doesn't set it.</summary>
+    public string? GetModifiedClick(string action)
+    {
+        foreach (string line in _lines)
+        {
+            string[] p = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (p.Length >= 3 && p[0].Equals("modifiedclick", StringComparison.OrdinalIgnoreCase) && p[1].Equals(action, StringComparison.OrdinalIgnoreCase))
+                return p[2];
+        }
+        return null;
+    }
+
+    public void SetModifiedClick(string action, string key)
+    {
+        string line = $"modifiedclick {action.ToUpperInvariant()} {key.ToUpperInvariant()}";
+        int i = _lines.FindIndex(l =>
+        {
+            string[] p = l.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return p.Length >= 2 && p[0].Equals("modifiedclick", StringComparison.OrdinalIgnoreCase) && p[1].Equals(action, StringComparison.OrdinalIgnoreCase);
+        });
+        if (i >= 0) _lines[i] = line; else _lines.Add(line);
+    }
+
     public void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(File)!);
