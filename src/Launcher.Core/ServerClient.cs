@@ -78,6 +78,20 @@ public sealed class ServerClient : IDisposable
         return await response.Content.ReadAsStringAsync(timeout.Token);
     }
 
+    /// <summary>A small file next to the manifest (a preview image...); null when the server has none.</summary>
+    public async Task<byte[]?> GetBytesAsync(string relative, CancellationToken token = default)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        Uri uri = new(_base, string.Join('/', relative.Split('/').Select(Uri.EscapeDataString)));
+        using HttpResponseMessage response = await SendAsync(new HttpRequestMessage(HttpMethod.Get, uri),
+            HttpCompletionOption.ResponseContentRead, timeout.Token);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return null;
+        ThrowForStatus(response);
+        return await response.Content.ReadAsByteArrayAsync(timeout.Token);
+    }
+
     /// <summary>The file's address, with each part of its path escaped (names may hold spaces or '#').</summary>
     public Uri FileUri(ManifestFile file) =>
         new(_base, string.Join('/', file.Url.Split('/').Select(Uri.EscapeDataString)));

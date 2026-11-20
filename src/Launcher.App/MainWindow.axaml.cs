@@ -124,6 +124,8 @@ public partial class MainWindow : Window
         _autoUpdateTimer.Start();
         _launcherTimer.Tick += async (_, _) => await CheckLauncherAsync();
         _launcherTimer.Start();
+        TweaksList.SizeChanged += (_, _) => { double w = TweakRowWidth(); foreach (Grid r in _tweakRows) r.Width = w; };
+        OptionsList.SizeChanged += (_, _) => { double w = OptionCardWidth(); foreach (Control c in OptionsList.Children) if (c is Border) c.Width = w; };
         Activated += async (_, _) => await CheckLauncherAsync();   // also when the player comes back to the window
         Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
@@ -1119,6 +1121,16 @@ public partial class MainWindow : Window
         if (news is not null) ShowNews(WhatsNewList, [news], new FeedRule(true, 1, 1));
     }
 
+    /// <summary>Mods cards share the page width: as many columns as fit (each at least 250 wide).</summary>
+    double OptionCardWidth()
+    {
+        const double gap = 12, min = 250;   // each card keeps a 12 margin on its right
+        double width = OptionsList.Bounds.Width;
+        if (width <= 0) return 300;
+        int columns = Math.Max(1, (int)(width / (min + gap)));
+        return Math.Floor(width / columns) - gap;
+    }
+
     void OnWhatsNew(object? sender, RoutedEventArgs e) => WhatsNewPanel.IsVisible = !WhatsNewPanel.IsVisible;
 
     void OnLauncherLater(object? sender, RoutedEventArgs e)
@@ -1625,7 +1637,7 @@ public partial class MainWindow : Window
                     using (Look.Untranslated()) InstallParts.Children.Add(new TextBlock { Text = group.Name, Margin = new Thickness(0, 4, 0, 0) });
                     List<LookChoice> items = [.. (group.Optional ? new[] { new LookChoice("", Translation.T("(none)")) } : []),
                                               .. group.Options.Select(o => new LookChoice(o, $"{o}  ({Words.ShortSize(InstallSizes.Option(manifest, group.Name, o))})"))];
-                    ComboBox combo = new() { ItemsSource = items, MinWidth = 260, IsEnabled = !group.Enforce };
+                    ComboBox combo = new() { ItemsSource = items, MinWidth = 200, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = !group.Enforce };
                     combo.SelectedItem = items.FirstOrDefault(c => c.Value.Equals(current, StringComparison.OrdinalIgnoreCase)) ?? items[0];
                     Grid row = PartRow(combo, InstallSizes.Option(manifest, group.Name, current));
                     combo.SelectionChanged += (_, _) =>
@@ -1885,12 +1897,25 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------------------------------- tweaks
+    readonly List<Grid> _tweakRows = [];
+
+    /// <summary>Game settings sit in two columns when the page is wide enough (each row at least 640 wide).</summary>
+    double TweakRowWidth()
+    {
+        double width = TweaksList.Bounds.Width;
+        if (width <= 0) return double.NaN;
+        int columns = width >= 2 * 640 ? 2 : 1;
+        return Math.Floor(width / columns) - 16;
+    }
+
     void BuildTweaks()
     {
         TweaksList.Children.Clear();
         _tweakControls.Clear();
         _gatedTweakRows.Clear();
+        _tweakRows.Clear();
         string? section = null;
+        WrapPanel rows = new();
         foreach (Tweak t in Tweaks.All)
         {
             if (t.Section != section)
@@ -1899,8 +1924,12 @@ public partial class MainWindow : Window
                 TextBlock header = new() { Text = section.ToUpperInvariant(), Classes = { "section" } };
                 TweaksList.Children.Add(header);
                 if (t.Requires is not null) _gatedTweakRows.Add((t.Requires, header));
+                rows = new WrapPanel();
+                TweaksList.Children.Add(rows);
+                if (t.Requires is not null) _gatedTweakRows.Add((t.Requires, rows));
             }
-            Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
+            Grid row = new() { ColumnDefinitions = new ColumnDefinitions("210,150,*"), Margin = new Thickness(0, 3, 16, 3), Width = TweakRowWidth() };
+            _tweakRows.Add(row);
             if (t.Requires is not null) _gatedTweakRows.Add((t.Requires, row));
             row.Children.Add(new TextBlock
             {
@@ -1929,13 +1958,13 @@ public partial class MainWindow : Window
                     if (e.NewValue is decimal v && (v < number.Minimum || v > number.Maximum)) { number.Value = Math.Clamp(v, number.Minimum, number.Maximum); return; }
                     TweakEdited();
                 };
-            TextBlock description = new() { Text = t.Description, Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+            TextBlock description = new() { Text = t.Description, Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, TextWrapping = TextWrapping.Wrap };
             Control info = description;
             // how other WoW versions do it: on hover, so the row stays short
             if (t.Compare.Length > 0) { ToolTip.SetTip(description, t.Compare); ToolTip.SetTip(control, t.Compare); }
             Grid.SetColumn(info, 2);
             row.Children.Add(info);
-            TweaksList.Children.Add(row);
+            rows.Children.Add(row);
             _tweakControls[t.CVar] = control;
         }
         _serverTweaks.Clear();
@@ -1996,23 +2025,25 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------------------------- login screen
     readonly Dictionary<string, CheckBox> _sceneBoxes = [];
     WrapPanel? _scenePanel;
+    StackPanel? _sceneButtons;
 
     /// <summary>The login screen section: one box per scene in the game's loginui.lua (one is picked at random).</summary>
     void BuildLoginScenes()
     {
         TweaksList.Children.Add(new TextBlock { Text = "LOGIN SCREEN", Classes = { "section" } });
-        TweaksList.Children.Add(new TextBlock { Text = "The login screen picks one of the ticked scenes at random each time. Saved with Save.",
+        TweaksList.Children.Add(new TextBlock { Text = "Pick the backgrounds your login screen can show. Each time the game starts it shows one of the ticked ones at random. Press Save to keep your choice.",
                                                 Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
         _scenePanel = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         TweaksList.Children.Add(_scenePanel);
         StackPanel buttons = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
         Button all = new() { Content = "Tick all", FontSize = 12, Padding = new Thickness(8, 2) };
         all.Click += (_, _) => { foreach (CheckBox box in _sceneBoxes.Values) box.IsChecked = true; };
-        Button server = new() { Content = "Server's choice", FontSize = 12, Padding = new Thickness(8, 2) };
-        ToolTip.SetTip(server, "Use the scenes the server picked (the file is downloaded again on the next update)");
+        Button server = new() { Content = "Use the server's picks", FontSize = 12, Padding = new Thickness(8, 2) };
+        ToolTip.SetTip(server, "Go back to the backgrounds the server picked (they come back with the next update)");
         server.Click += (_, _) => ResetLoginScenes();
         buttons.Children.Add(all);
         buttons.Children.Add(server);
+        _sceneButtons = buttons;
         TweaksList.Children.Add(buttons);
     }
 
@@ -2021,10 +2052,13 @@ public partial class MainWindow : Window
         if (_scenePanel is null) return;
         _scenePanel.Children.Clear();
         _sceneBoxes.Clear();
-        IReadOnlyList<LoginScene> scenes = LoginScreens.Read(Folder);
+        IReadOnlyList<LoginScene> scenes = GameFolder.LooksLikeClient(Folder) ? LoginScreens.Read(Folder) : [];
+        if (_sceneButtons is not null) _sceneButtons.IsVisible = scenes.Count > 0;
         if (scenes.Count == 0)
         {
-            _scenePanel.Children.Add(new TextBlock { Text = "The game has no login screen list yet (it comes with the next update).", Classes = { "dim" }, FontSize = 12 });
+            _scenePanel.Children.Add(new TextBlock { Text = GameFolder.LooksLikeClient(Folder)
+                ? "The list of backgrounds comes with the next update."
+                : "Install the game first: the backgrounds are listed here after that.", Classes = { "dim" }, FontSize = 12 });
             return;
         }
         foreach (LoginScene scene in scenes)
@@ -2069,8 +2103,8 @@ public partial class MainWindow : Window
     {
         TweaksHint.IsVisible = !GameFolder.LooksLikeClient(Folder);
         PresetChanges.IsVisible = false;
-        if (TweaksHint.IsVisible) return;
         LoadLoginScenes();
+        if (TweaksHint.IsVisible) return;
         ConfigWtf config = ConfigWtf.Load(Folder);
         DxvkConf dxvk = DxvkConf.Load(Folder);
         _fillingTweaks = true;
@@ -2336,13 +2370,69 @@ public partial class MainWindow : Window
         !IsInstalled(addon, folder) || (_latestCommits.TryGetValue(addon.Name, out string? latest)
                                         && (!_settings.AddonCommits.TryGetValue(addon.Name, out string? have) || have != latest));
 
+    string _catalogCategory = "";   // "" = all, "\u0001" = needed only
+    bool _catalogHooked;
+
+    static string LetterOf(string name)
+    {
+        char c = name.TrimStart('_', '!', ' ', '-').FirstOrDefault();
+        return char.IsLetter(c) ? char.ToUpperInvariant(c).ToString() : "#";
+    }
+
+    /// <summary>The server's addons: a search box, category buttons with counts, needed addons first, then the rest
+    /// under letter headings.</summary>
     void RefreshCatalog()
     {
-        CatalogList.Children.Clear();
-        if (_catalog.Count == 0)
-            CatalogList.Children.Add(new TextBlock { Text = "The server lists no addons (addons.json).", Classes = { "dim" } });
-        foreach (CatalogAddon addon in _catalog.OrderByDescending(a => a.Required).ThenBy(a => a.Name))
+        if (!_catalogHooked)
         {
+            _catalogHooked = true;
+            CatalogSearch.TextChanged += (_, _) => RefreshCatalog();
+        }
+        CatalogList.Children.Clear();
+        CatalogCategories.Children.Clear();
+        CatalogTitle.Text = $"FROM THE SERVER ({_catalog.Count})";
+        if (_catalog.Count == 0)
+        {
+            CatalogList.Children.Add(new TextBlock { Text = "The server lists no addons (addons.json).", Classes = { "dim" } });
+            return;
+        }
+        string query = CatalogSearch.Text?.Trim() ?? "";
+        bool Matches(CatalogAddon a) => query.Length == 0
+            || a.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || a.Description.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || a.Category.Contains(query, StringComparison.OrdinalIgnoreCase);
+        List<CatalogAddon> found = [.. _catalog.Where(Matches)];
+
+        void AddCategory(string key, string label, int count)
+        {
+            Button b = new() { Content = $"{label} ({count})", FontSize = 12, Padding = new Thickness(8, 2), Margin = new Thickness(0, 0, 6, 6),
+                               Classes = { "preset" } };
+            if (_catalogCategory == key) b.Classes.Add("active");
+            b.Click += (_, _) => { _catalogCategory = _catalogCategory == key ? "" : key; RefreshCatalog(); };
+            CatalogCategories.Children.Add(b);
+        }
+        AddCategory("", "All", found.Count);
+        if (found.Any(a => a.Required)) AddCategory("\u0001", "Needed", found.Count(a => a.Required));
+        foreach (var group in found.Where(a => a.Category.Length > 0).GroupBy(a => a.Category, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key))
+            AddCategory(group.Key, group.Key, group.Count());
+
+        List<CatalogAddon> shown = [.. found.Where(a => _catalogCategory.Length == 0
+            || (_catalogCategory == "\u0001" ? a.Required : a.Category.Equals(_catalogCategory, StringComparison.OrdinalIgnoreCase)))];
+        if (shown.Count == 0)
+        {
+            CatalogList.Children.Add(new TextBlock { Text = "No addons match.", Classes = { "dim" } });
+            return;
+        }
+        string heading = "";
+        foreach (CatalogAddon addon in shown.OrderByDescending(a => a.Required).ThenBy(a => a.Name.TrimStart('_', '!', ' ', '-'), StringComparer.OrdinalIgnoreCase))
+        {
+            string group = addon.Required ? "Needed" : LetterOf(addon.Name);
+            if (group != heading)
+            {
+                heading = group;
+                int count = shown.Count(a => (a.Required ? "Needed" : LetterOf(a.Name)) == group);
+                CatalogList.Children.Add(new TextBlock { Text = $"{group}  ({count})", Classes = { "section" }, Margin = new Thickness(0, 10, 0, 2) });
+            }
             Grid row = new() { ColumnDefinitions = new ColumnDefinitions("2*,3*,Auto"), Margin = new Thickness(0, 2), Background = Brushes.Transparent };
             row.Children.Add(new TextBlock
             {
@@ -2469,6 +2559,7 @@ public partial class MainWindow : Window
     void RefreshMods()
     {
         OptionsList.Children.Clear();
+        _previewImages.Clear();
         if (_manifest is null || _manifest.OptionGroups.Count == 0)
             OptionsList.Children.Add(new TextBlock { Text = "The server offers no cosmetic patches (or the launcher hasn't connected yet).", Classes = { "dim" } });
         foreach (OptionGroup group in _manifest?.OptionGroups ?? [])
@@ -2477,7 +2568,7 @@ public partial class MainWindow : Window
             StackPanel panel = new() { Spacing = 6 };
             Border card = new()
             {
-                Child = panel, Width = 300, MinHeight = 120, Margin = new Thickness(0, 0, 12, 12), Padding = new Thickness(14, 12),
+                Child = panel, Width = OptionCardWidth(), MinHeight = 120, Margin = new Thickness(0, 0, 12, 12), Padding = new Thickness(14, 12),
                 Classes = { "card" },
                 BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
             };
@@ -2498,11 +2589,17 @@ public partial class MainWindow : Window
                         : string.Join("  ·  ", sized.Select(o => $"{o}: {Words.ShortSize(InstallSizes.Option(_manifest!, group.Name, o))}")),
                 });
             string? chosen = UpdatePlanner.ChosenOption(_manifest!, _settings.Options, group.Name);
+            bool met = UpdatePlanner.RequirementsMet(_manifest!, _settings.Options, group);
+            bool locked = group.Enforce || !met;
 
             void Pick(string value, string shown)
             {
                 _settings.Options[group.Name] = value;
                 SaveSettings();
+                if (group.Previews.Count > 0) _ = ShowPreviewAsync(group, value);
+                // groups that need this one turn usable (or not)
+                if (_manifest!.OptionGroups.Any(g => g.Requires.ContainsKey(group.Name)))
+                    Dispatcher.UIThread.Post(RefreshMods);
                 ShowGatedTweaks();
                 _pendingFiles = Math.Max(_pendingFiles, 1);
                 ShowPlayState();
@@ -2519,7 +2616,7 @@ public partial class MainWindow : Window
                 ToggleSwitch toggle = new()
                 {
                     IsChecked = string.Equals(chosen, on, StringComparison.OrdinalIgnoreCase),
-                    OnContent = single ? on : "On", OffContent = "Off", IsEnabled = !group.Enforce,
+                    OnContent = single ? on : "On", OffContent = "Off", IsEnabled = !locked,
                 };
                 toggle.IsCheckedChanged += (_, _) => Pick(toggle.IsChecked == true ? on : off, toggle.IsChecked == true ? "on" : "off");
                 control = toggle;
@@ -2527,7 +2624,7 @@ public partial class MainWindow : Window
             else
             {
                 List<string> items = [.. (group.Optional ? new[] { "(none)" } : []), .. group.Options];
-                ComboBox box = new() { ItemsSource = items, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = !group.Enforce };
+                ComboBox box = new() { ItemsSource = items, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = !locked };
                 box.SelectedItem = chosen ?? (group.Optional ? "(none)" : items.FirstOrDefault());
                 box.SelectionChanged += (_, _) =>
                 {
@@ -2537,7 +2634,21 @@ public partial class MainWindow : Window
                 control = box;
             }
             if (group.Enforce) ToolTip.SetTip(control, "Set by the server");
+            if (group.Previews.Count > 0)
+            {
+                // a picture of the picked option (or of the group); hover for a bigger one
+                Image picture = new() { MaxHeight = 150, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
+                panel.Children.Add(picture);
+                _previewImages[group.Name] = picture;
+                _ = ShowPreviewAsync(group, chosen);
+            }
             panel.Children.Add(control);
+            if (!met)
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "Needs " + string.Join(", ", group.Requires.Select(r => $"{r.Key}: {r.Value}")) + " first.",
+                    Classes = { "accent" }, FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                });
             // the server's links for this option (GitHub, website...), bottom right of the card
             List<OptionLink> links = [.. group.Links.Where(l => l.IsWeb && l.Name.Length > 0)];
             if (links.Count > 0)
@@ -2562,6 +2673,34 @@ public partial class MainWindow : Window
             OptionsList.Children.Add(card);
         }
         RefreshUntracked();
+    }
+
+    readonly Dictionary<string, Image> _previewImages = [];
+    readonly Dictionary<string, Bitmap?> _previewCache = [];
+
+    /// <summary>The preview picture for an option (its own, else the group's), loaded once from the server.</summary>
+    async Task ShowPreviewAsync(OptionGroup group, string? option)
+    {
+        if (!_previewImages.TryGetValue(group.Name, out Image? picture)) return;
+        string? url = option is not null && group.Previews.TryGetValue(option, out string? own) ? own
+                    : group.Previews.TryGetValue("", out string? all) ? all
+                    : group.Previews.Values.FirstOrDefault();
+        if (url is null || _server is null) { picture.IsVisible = false; return; }
+        if (!_previewCache.TryGetValue(url, out Bitmap? bitmap))
+        {
+            try
+            {
+                using ServerClient client = NewClient();
+                byte[]? bytes = await client.GetBytesAsync(url);
+                bitmap = bytes is null ? null : new Bitmap(new MemoryStream(bytes));
+            }
+            catch (Exception error) { Logger.Warning($"Couldn't load the preview of {group.Name}", error); bitmap = null; }
+            _previewCache[url] = bitmap;
+        }
+        picture.Source = bitmap;
+        picture.IsVisible = bitmap is not null;
+        if (bitmap is not null)
+            ToolTip.SetTip(picture, new Image { Source = bitmap, MaxWidth = 900, MaxHeight = 600, Stretch = Stretch.Uniform });
     }
 
     void RefreshUntracked()
@@ -2682,6 +2821,13 @@ public partial class MainWindow : Window
         if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
         try { Status(string.Format(Translation.T("Imported {0}. Close the game first if it was running."), Words.Files(Backups.ImportMacros(Folder, path)))); RefreshBackups(); }
         catch (Exception error) { Status(error.Message); Logger.Error("Importing macros", error); }
+    }
+
+    void OnOpenLogFolder(object? sender, RoutedEventArgs e)
+    {
+        if (Logger.File is { } log && File.Exists(log) && OperatingSystem.IsWindows())
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{log}\"") { UseShellExecute = true });
+        else OpenFolder(Logger.File is { } file ? Path.GetDirectoryName(file) ?? UserSettings.DefaultFolder : UserSettings.DefaultFolder);
     }
 
     void OnOpenLog(object? sender, RoutedEventArgs e)

@@ -14,6 +14,8 @@
     <Style Selector="Button.tab.selected">
       <Setter Property="Foreground" Value="{DynamicResource T.accent}" />
     </Style>
+    <!-- page content stays clear of the scroll bar -->
+    <Style Selector="ScrollViewer.page"><Setter Property="Padding" Value="0,0,18,0" /></Style>
     <Style Selector="Border.panel">
       <Setter Property="Background" Value="{DynamicResource T.panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource T.border}" />
@@ -152,7 +154,7 @@
             </StackPanel>
           </Grid>
           <Border Name="WhatsNewPanel" IsVisible="False" Classes="card" BorderThickness="1" CornerRadius="4" Padding="10,8" MaxHeight="260">
-            <ScrollViewer><StackPanel Name="WhatsNewList" /></ScrollViewer>
+            <ScrollViewer Classes="page"><StackPanel Name="WhatsNewList" /></ScrollViewer>
           </Border>
         </StackPanel>
       </Border>
@@ -163,14 +165,14 @@
           <Border Name="NewsPanel" Classes="panel">
             <DockPanel>
               <TextBlock DockPanel.Dock="Top" Classes="title" Text="NEWS" />
-              <ScrollViewer><StackPanel Name="NewsList" Spacing="14" /></ScrollViewer>
+              <ScrollViewer Classes="page"><StackPanel Name="NewsList" Spacing="14" /></ScrollViewer>
             </DockPanel>
           </Border>
           <Border Grid.Column="2" Name="ChangelogPanel" Classes="panel">
             <DockPanel>
               <TextBlock DockPanel.Dock="Top" Classes="title" Text="CHANGELOG" Margin="0,0,0,2" />
               <TextBlock DockPanel.Dock="Top" Name="TagLegend" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap" />
-              <ScrollViewer><StackPanel Name="ChangelogList" Spacing="14" /></ScrollViewer>
+              <ScrollViewer Classes="page"><StackPanel Name="ChangelogList" Spacing="14" /></ScrollViewer>
             </DockPanel>
           </Border>
         </Grid>
@@ -206,7 +208,7 @@
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Name="TweaksHint" Classes="dim" IsVisible="False" Margin="0,0,0,8"
                        Text="These are read from your game's WTF\Config.wtf: pick your WoW folder under Game files, or install the game files there first." />
-            <ScrollViewer><StackPanel Name="TweaksList" /></ScrollViewer>
+            <ScrollViewer Classes="page"><StackPanel Name="TweaksList" /></ScrollViewer>
           </DockPanel>
         </Border>
 
@@ -219,9 +221,13 @@
                 <Button Content="Update all" Click="OnUpdateAllAddons" />
                 <Button Content="Open AddOns folder" Click="OnOpenAddons" />
               </StackPanel>
-              <ScrollViewer>
+              <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,18,8">
+                <TextBlock Classes="title" Name="CatalogTitle" Text="FROM THE SERVER" />
+                <TextBox Name="CatalogSearch" Watermark="Search addons (name, what it does, category)" />
+                <WrapPanel Name="CatalogCategories" />
+              </StackPanel>
+              <ScrollViewer Classes="page">
                 <StackPanel>
-                  <TextBlock Classes="title" Text="FROM THE SERVER" />
                   <StackPanel Name="CatalogList" Spacing="4" />
                   <TextBlock Classes="title" Text="INSTALLED" Margin="0,16,0,10" />
                   <StackPanel Name="InstalledList" Spacing="4" />
@@ -236,7 +242,7 @@
                 <Button Name="PreviewInstall" Content="Install" IsVisible="False" Click="OnPreviewInstall" />
                 <Button Name="PreviewOpen" Classes="link" Content="Open on GitHub" IsVisible="False" Click="OnPreviewOpen" />
               </StackPanel>
-              <ScrollViewer>
+              <ScrollViewer Classes="page">
                 <SelectableTextBlock Name="PreviewText" TextWrapping="Wrap" Foreground="{DynamicResource T.textSoft}"
                                      Text="Pick an addon from the server's list to see its page." />
               </ScrollViewer>
@@ -246,7 +252,7 @@
 
         <!-- 3 mods -->
         <Border Name="ModsPage" Classes="panel" IsVisible="False">
-          <ScrollViewer>
+          <ScrollViewer Classes="page">
             <StackPanel>
               <TextBlock Classes="title" Text="MODS" />
               <TextBlock Classes="dim" Text="Fixes and extras from the server, never gameplay. The fixes are on by default; turn off any you don't want. Changes are installed (or removed) at the next update." />
@@ -260,7 +266,7 @@
 
         <!-- 4 settings -->
         <Border Name="SettingsPage" Classes="panel" IsVisible="False">
-          <ScrollViewer>
+          <ScrollViewer Classes="page">
             <StackPanel>
               <TextBlock Classes="title" Text="GAME FILES" Margin="0,0,0,2" />
               <TextBlock Classes="dim" Text="Where the game is, which languages to install, downloads, updates and backups." />
@@ -352,7 +358,7 @@
 
         <!-- 5 launcher -->
         <Border Name="LauncherPage" Classes="panel" IsVisible="False">
-          <ScrollViewer>
+          <ScrollViewer Classes="page">
             <StackPanel>
               <TextBlock Classes="title" Text="LAUNCHER" Margin="0,0,0,2" />
               <TextBlock Classes="dim" Text="The launcher itself: your login, language, look, window and privacy." />
@@ -422,6 +428,7 @@
                   <TextBlock Classes="section" Text="LOG" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Open log file" Click="OnOpenLog" />
+                    <Button Content="Open file location" Click="OnOpenLogFolder" ToolTip.Tip="Show the log file in its folder" />
                     <Button Name="DiagnosticsButton" Content="Copy diagnostics" Click="OnCopyDiagnostics"
                             ToolTip.Tip="Copies a short report about your game files. Send it to the server's admin when the game won't start." />
                   </StackPanel>

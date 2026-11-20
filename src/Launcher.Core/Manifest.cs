@@ -88,6 +88,11 @@ public sealed class OptionGroup
     public bool Enforce { get; set; }
     /// <summary>Links shown on the option's card (its GitHub page, website...); only http(s) ones are shown.</summary>
     public List<OptionLink> Links { get; set; } = [];
+    /// <summary>Other groups this one needs, e.g. {"Character models": "HD"}: until they are picked, this group stays at
+    /// its first option (or none) and its switch can't be used.</summary>
+    public Dictionary<string, string> Requires { get; set; } = [];
+    /// <summary>Preview images next to the manifest, by option ("" = one picture for the whole group).</summary>
+    public Dictionary<string, string> Previews { get; set; } = [];
 }
 
 public sealed class OptionLink

@@ -186,12 +186,21 @@ def build(files_dir, realmlist, cache):
                 for path in walk(odir):
                     files.append(entry(files_dir, path, os.path.relpath(path, odir).replace(os.sep, "/"), "option", cache,
                                        group=group, option=option))
+            # preview.png (the whole group) or preview-<Option>.png/.jpg next to group.json: shown on the card, never installed
+            previews = {}
+            for name in sorted(os.listdir(gdir)):
+                stem, ext = os.path.splitext(name)
+                if os.path.isfile(os.path.join(gdir, name)) and ext.lower() in (".png", ".jpg", ".jpeg") and stem.lower().startswith("preview"):
+                    previews[stem[8:] if stem.lower().startswith("preview-") else ""] = url_of(files_dir, os.path.join(gdir, name))
             # "links": {"GitHub": "https://...", "Website": "https://..."} (or "link": "https://..."): shown on the card
             links = info.get("links") or ({"Page": info["link"]} if info.get("link") else {})
             links = [{"name": str(n), "url": str(u)} for n, u in links.items() if str(u).startswith(("https://", "http://"))]
             groups.append({"name": group, "description": info.get("description", ""), "options": order,
                            "optional": bool(info.get("optional", False)), "enforce": bool(info.get("enforce", False)),
-                           "links": links})
+                           "links": links,
+                           # "requires": {"Character models": "HD"}: the group can only be turned on with that pick
+                           "requires": {str(k): str(v) for k, v in (info.get("requires") or {}).items()},
+                           "previews": previews})
 
     manifest = {"version": 1, "realmlist": realmlist, "clientVersion": "", "optionGroups": groups,
                 "files": files, "obsolete": [], "policy": {}}

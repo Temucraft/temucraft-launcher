@@ -128,13 +128,22 @@ public static class UpdatePlanner
     }
 
     /// <summary>The option the player picked in a group (the first option when nothing was picked and it isn't optional).</summary>
-    public static string? ChosenOption(Manifest manifest, IReadOnlyDictionary<string, string>? options, string group)
+    public static string? ChosenOption(Manifest manifest, IReadOnlyDictionary<string, string>? options, string group) =>
+        ChosenOption(manifest, options, group, 0);
+
+    static string? ChosenOption(Manifest manifest, IReadOnlyDictionary<string, string>? options, string group, int depth)
     {
         OptionGroup? info = manifest.OptionGroups.FirstOrDefault(g => g.Name == group);
-        if (info is not { Enforce: true } && options is not null && options.TryGetValue(group, out string? picked))
+        if (info is not { Enforce: true } && options is not null && options.TryGetValue(group, out string? picked)
+            && RequirementsMet(manifest, options, info, depth))
             return picked.Length == 0 ? null : picked;
         return info is null || info.Optional ? null : info.Options.FirstOrDefault();
     }
+
+    /// <summary>Whether the groups a group needs ("requires") have the option it needs picked.</summary>
+    public static bool RequirementsMet(Manifest manifest, IReadOnlyDictionary<string, string>? options, OptionGroup? info, int depth = 0) =>
+        info is null || depth > 8 || info.Requires.All(r =>
+            string.Equals(ChosenOption(manifest, options, r.Key, depth + 1), r.Value, StringComparison.OrdinalIgnoreCase));
 
     static bool IsChosen(Manifest manifest, InstallChoice choice, ManifestFile file) =>
         string.Equals(ChosenOption(manifest, choice.Options, file.Group!), file.Option, StringComparison.OrdinalIgnoreCase);
