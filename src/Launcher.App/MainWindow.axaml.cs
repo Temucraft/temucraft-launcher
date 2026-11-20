@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        LoadDownloadHistory();
         Logger.Written += ShowLogLine;
         _settings = UserSettings.Load(_settingsFile);
         if (_settings.InstallId.Length == 0) _settings.InstallId = Guid.NewGuid().ToString("N");
@@ -1507,6 +1508,8 @@ public partial class MainWindow : Window
     async Task InstallAsync(ServerClient client, IReadOnlyList<PlannedFile> outdated, string? wowFolder, CancellationToken token)
     {
         HashCache cache = HashCache.Load(_cacheFile);
+        Dictionary<PlannedFile, DownloadRow> rows = StartDownloadList(outdated);
+        DownloadRow? currentRow = null;
         try
         {
             long total = outdated.Sum(p => p.File.Size);
@@ -1517,6 +1520,15 @@ public partial class MainWindow : Window
             UpdateInstaller.Result result = await UpdateInstaller.InstallAsync(client, outdated, cache, wowFolder,
                 onFile: (planned, before, copy) => Dispatcher.UIThread.Post(() =>
                 {
+                    // the file before this one is finished; a copy is finished when this is called
+                    if (currentRow is not null) SetRow(currentRow, RowState.Done);
+                    currentRow = null;
+                    if (rows.TryGetValue(planned, out DownloadRow? row))
+                    {
+                        if (copy) SetRow(row, RowState.Copied);
+                        else { SetRow(row, RowState.Downloading, 0, planned.File.Size); currentRow = row; }
+                    }
+                    UpdateDownloadsButton();
                     Progress.Value = total == 0 ? 1 : (double)before / total;
                     StatusText.Text = string.Format(Translation.T(copy ? "Copying {0} ({1}/{2}) (already on your disk)" : "Downloading {0} ({1}/{2})"),
                                                     planned.File.Path, Index(planned), outdated.Count);
@@ -1529,6 +1541,8 @@ public partial class MainWindow : Window
                     double speed = meter.Add(done);
                     string rate = speed > 0 ? $"  ·  {SpeedLimit.Format(speed, _settings.SpeedInBits)}" : "";
                     string left = SpeedLimit.TimeLeft(total - done, speed);
+                    if (rows.TryGetValue(planned, out DownloadRow? row))
+                        SetRow(row, RowState.Downloading, p.Done, p.Total, SpeedLimit.TimeLeft(p.Total - p.Done, speed));
                     StatusText.Text = string.Format(Translation.T("Downloading {0} ({1}/{2})"), planned.File.Path, Index(planned), outdated.Count)
                                       + $"  {Words.ShortSize(p.Done)} / {Words.ShortSize(p.Total)}{rate}" + (left.Length > 0 ? $"  ·  {left}" : "");
                     ToolTip.SetTip(Progress, $"{Words.ShortSize(done)} / {Words.Size(total)}");
@@ -1536,10 +1550,28 @@ public partial class MainWindow : Window
                 token: token);
             if (result.Copied > 0)
                 Log($"{Words.Files(result.Copied)} ({Words.Size(result.BytesCopied)}) copied from your own disk instead of downloaded");
+            // after the queued file updates: the last file is done too
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (currentRow is not null) SetRow(currentRow, RowState.Done);
+                currentRow = null;
+            });
+        }
+        catch (Exception error)
+        {
+            bool stopped = error is OperationCanceledException;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (currentRow is not null) SetRow(currentRow, stopped ? RowState.Stopped : RowState.Failed);
+                currentRow = null;
+                foreach (DownloadRow row in rows.Values.Where(r => r.Entry.State == RowState.Waiting)) SetRow(row, RowState.Stopped);
+            });
+            throw;
         }
         finally
         {
             cache.Save();
+            Dispatcher.UIThread.Post(() => { UpdateDownloadsButton(); SaveDownloadHistory(); });
         }
     }
 
