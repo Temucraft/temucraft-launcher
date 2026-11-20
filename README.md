@@ -102,6 +102,10 @@ against the free space on that drive.
 (`downloadLimit`). "Test my speed" measures the speed to the server for a few seconds and suggests a limit (80% of it).
 The status line shows each file as "(12/188)", the speed and the time left; sizes read as "16.6 GB (17029.3 MB)".
 
+**The computer stays awake** while the launcher downloads, installs or checks files, so a long download goes on
+with the screen locked or off (Windows: SetThreadExecutionState; macOS: caffeinate; Linux: systemd-inhibit). It may
+sleep again as soon as the job ends.
+
 **Automatic updates** (off by default): when the launcher opens and every 30 minutes, optionally only between two
 hours, and never while the game is running.
 

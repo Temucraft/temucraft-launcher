@@ -311,6 +311,8 @@ public partial class MainWindow : Window
         _work = cts;
         _job = what;
         Logger.Info($"{what}: started", toWindow: false);
+        // a sleeping PC drops the download (a locked one is fine): stay awake until the job ends
+        using KeepAwake awake = new(what);
         try
         {
             await Task.Run(() => work(cts.Token));
