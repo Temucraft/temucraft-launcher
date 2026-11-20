@@ -339,6 +339,7 @@
                   <Button Content="Clear download cache" Click="OnClearDownloadCache" Margin="0,8,0,0" />
                   <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
                              Text="Forgets which files were already checked and removes unfinished downloads. Can fix updates that keep failing." />
+                  <Button Name="ClearKeptButton" Content="Remove kept option files" Click="OnClearKept" Margin="0,8,0,0" ToolTip.Tip="Files of mods you turned off are kept so switching back needs no download. This frees that space." />
 
                   <TextBlock Classes="section" Text="UPDATES" />
                   <CheckBox Name="AutoUpdateBox"><TextBlock TextWrapping="Wrap" Text="Update by itself (when the launcher opens, and every 30 minutes while it is open)" /></CheckBox>

@@ -1438,7 +1438,7 @@ public partial class MainWindow : Window
 
             if (!download)
             {
-                long size = outdated.Sum(p => p.File.Size);
+                long size = outdated.Where(p => !KeptFiles.Has(folder, p.File.Sha256)).Sum(p => p.File.Size); // kept files need no download
                 int pending = outdated.Count + addonUpdates.Count;
                 Status(pending == 0 ? "Everything up to date!"
                     : string.Format(Translation.T("Update available! {0}, {1} to download."), Words.Files(pending), Words.Size(size)));
@@ -1453,8 +1453,12 @@ public partial class MainWindow : Window
             }
             foreach (string removed in GameFolder.RemoveObsolete(folder, manifest.Obsolete))
                 Log($"Removed {removed} (no longer on the server)");
-            foreach (string removed in GameFolder.RemoveObsolete(folder, UpdatePlanner.Unchosen(manifest, choice)))
-                Log($"Removed {removed} (option not picked)");
+            // files of options turned off are kept (not deleted), so switching back needs no download
+            HashCache keptCache = HashCache.Load(_cacheFile);
+            foreach (string kept in await KeptFiles.KeepAsync(folder, UpdatePlanner.Unchosen(manifest, choice), keptCache, token))
+                Log($"Kept {kept} aside (option not picked; it comes back without a download)");
+            outdated = KeptFiles.Restore(folder, outdated, keptCache, Log);
+            keptCache.Save();
             await InstallAsync(client, outdated, folder, token);
             foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, folder, token);
             GameFolder.WriteRealmlist(folder, manifest.Realmlist);
@@ -2541,6 +2545,15 @@ public partial class MainWindow : Window
                 await InstallCatalogAsync(addon, folder, token);
             Status("Addons up to date.");
         });
+    }
+
+    void OnClearKept(object? sender, RoutedEventArgs e)
+    {
+        if (NeedFolder()) return;
+        long size = KeptFiles.Size(Folder);
+        KeptFiles.Clear(Folder);
+        Log($"Removed kept option files ({Words.Size(size)})");
+        Status(string.Format(Translation.T("Removed kept option files ({0})."), Words.Size(size)));
     }
 
     void OnOpenGameFolder(object? sender, RoutedEventArgs e)
