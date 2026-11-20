@@ -198,6 +198,7 @@
                 <Button Content="Import settings" Click="OnImportSettings"
                         ToolTip.Tip="Fill in settings copied with Copy settings (from the clipboard)" />
               </StackPanel>
+              <TextBlock Name="PresetChanges" Classes="dim" FontSize="12" TextWrapping="Wrap" IsVisible="False" />
               <TextBlock Classes="dim" TextWrapping="Wrap">
                 <Run Text="Highlighted" Foreground="{DynamicResource T.good}" FontWeight="SemiBold" />
                 <Run Text=" options are the launcher's recommended ones. Changes are written to WTF\Config.wtf when you press Save; close the game first." />
@@ -265,10 +266,11 @@
               <TextBlock Classes="dim" Text="Where the game is, which languages to install, downloads, updates and backups." />
 
               <TextBlock Classes="section" Text="WORLD OF WARCRAFT 3.3.5a FOLDER" />
-              <Grid ColumnDefinitions="*,8,Auto,8,Auto">
+              <Grid ColumnDefinitions="*,8,Auto,8,Auto,8,Auto">
                 <TextBox Name="WowFolderBox" Watermark="C:\Games\World of Warcraft" />
                 <Button Grid.Column="2" Content="Browse…" Click="OnBrowseWow" />
-                <Button Grid.Column="4" Name="ClientButton" Content="Install game files…" Click="OnDownloadClient" />
+                <Button Grid.Column="4" Content="Open folder" Click="OnOpenGameFolder" ToolTip.Tip="Open the game folder in your file manager" />
+                <Button Grid.Column="6" Name="ClientButton" Content="Install game files…" Click="OnDownloadClient" />
               </Grid>
               <TextBlock Classes="dim" Margin="0,4,0,0" Text="No game yet? Press Install game files… and pick an empty folder: the whole client is downloaded there." />
 

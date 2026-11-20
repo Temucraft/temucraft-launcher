@@ -57,6 +57,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Needed addons are turned back on in every AddOns.txt", RequiredAddonsEnabled),
     ("Diagnostics mark files against the server's copy", DiagnosticsMarks),
     ("A new launcher is required unless the server says recommended", LauncherUpdateRule),
+    ("Login screen scenes are read and turned on or off", LoginScenes),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -1025,6 +1026,24 @@ static async Task DiagnosticsMarks()
     Check(text.Contains("DIFFERENT from the server"), text);
     Check(text.Contains("extra.dll") && text.Contains("not from the server"), text);
     Check(text.Contains("Data/patch-Y.MPQ: missing") && text.Contains("Wow.exe: not found"), text);
+}
+
+static Task LoginScenes()
+{
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "Interface"));
+    string file = Path.Combine(wow, "Interface", "loginui.lua");
+    File.WriteAllText(file, "vx = {\r\n\t[\"SceneList\"] = {\r\n\t\t\t\"cl\", -- classic\r\n\t\t\t--\"ns\", -- chinese lich king (no Sindragosa)\r\n\t\t\t\"lk\", -- lich king\r\n\t\t\t--\"Interface\\\\GLUES\\\\loading\",\r\n\t\t\t},\r\n\t[\"LoginMusic\"] ={ --\"cl\", -- classic\r\n}\r\n");
+    var scenes = LoginScreens.Read(wow);
+    Check(scenes.Count == 3 && scenes[0].On && !scenes[1].On && scenes[2].Name == "lich king", string.Join(",", scenes));
+    Check(LoginScreens.Write(wow, ["ns"]), "changed");
+    scenes = LoginScreens.Read(wow);
+    Check(!scenes[0].On && scenes[1].On && !scenes[2].On, string.Join(",", scenes));
+    string text = File.ReadAllText(file);
+    Check(text.Contains("\r\n\t\t\t\"ns\", -- chinese lich king (no Sindragosa)\r\n") && text.Contains("LoginMusic"), text);
+    Check(!LoginScreens.Write(wow, ["ns"]) && !LoginScreens.Write(wow, []), "no change");
+    Check(LoginScreens.Title("lich king") == "Lich King", "title");
+    return Task.CompletedTask;
 }
 
 static Task LauncherUpdateRule()

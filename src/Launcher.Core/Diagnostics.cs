@@ -10,7 +10,8 @@ namespace Launcher.Core;
 /// </summary>
 public static class Diagnostics
 {
-    public static async Task<string> BuildAsync(string wowFolder, Manifest? manifest, IEnumerable<string> extraLines, CancellationToken token = default)
+    public static async Task<string> BuildAsync(string wowFolder, Manifest? manifest, IEnumerable<string> extraLines,
+                                                HashCache? cache = null, CancellationToken token = default)
     {
         StringBuilder text = new();
         text.AppendLine($"Temucraft Launcher {LauncherInfo.Version}");
@@ -26,7 +27,7 @@ public static class Diagnostics
         text.AppendLine();
         if (File.Exists(exe))
         {
-            text.AppendLine(await FileLineAsync(wowFolder, exe, server, token));
+            text.AppendLine(await FileLineAsync(wowFolder, exe, server, cache, token));
             try { text.AppendLine($"  Large Address Aware (4 GB): {(LargeAddressAware.IsEnabled(exe) ? "on" : "off")}"); }
             catch (Exception error) when (error is IOException or InvalidDataException) { text.AppendLine($"  Large Address Aware: can't read ({error.Message})"); }
             text.AppendLine($"  Windows compatibility mode: {CompatibilityMode(exe) ?? "off"}");
@@ -45,7 +46,7 @@ public static class Diagnostics
         string dxvk = Path.Combine(wowFolder, "dxvk.conf");
         if (File.Exists(dxvk)) files.Add(dxvk);
         foreach (string file in files.Order(StringComparer.OrdinalIgnoreCase))
-            text.AppendLine(await FileLineAsync(wowFolder, file, server, token));
+            text.AppendLine(await FileLineAsync(wowFolder, file, server, cache, token));
 
         // files the server lists that are missing here
         foreach (ManifestFile file in server.Values.Where(f => f.Category is FileCategory.Patch))
@@ -54,17 +55,42 @@ public static class Diagnostics
         return text.ToString().TrimEnd();
     }
 
-    static async Task<string> FileLineAsync(string wowFolder, string file, Dictionary<string, ManifestFile> server, CancellationToken token)
+    static async Task<string> FileLineAsync(string wowFolder, string file, Dictionary<string, ManifestFile> server, HashCache? cache, CancellationToken token)
     {
         string relative = Path.GetRelativePath(wowFolder, file).Replace('\\', '/');
         long size = new FileInfo(file).Length;
         string sha;
-        try { sha = await Hashing.Sha256Async(file, token: token); }
+        // the update check's hashes are reused: hashing 60 GB of patches again would take minutes
+        try { sha = cache is not null ? await cache.GetAsync(file, token: token) : await Hashing.Sha256Async(file, token: token); }
         catch (IOException error) { return $"{relative}: {Words.Size(size)}, can't read ({error.Message})"; }
         string mark = server.TryGetValue(relative, out ManifestFile? copy)
             ? copy.Sha256.Equals(sha, StringComparison.OrdinalIgnoreCase) ? "same as the server" : "DIFFERENT from the server"
             : "not from the server";
         return $"{relative}: {Words.Size(size)}, {sha[..12]}, {mark}";
+    }
+
+    /// <summary>
+    /// Takes Windows compatibility mode off Wow.exe for this Windows user (Windows can turn it on by itself after a
+    /// crash). The 3.3.5a client runs best without it. Returns what was removed, or null.
+    /// </summary>
+    public static string? RemoveCompatibilityMode(string exe)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        const string key = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
+        string full = Path.GetFullPath(exe);
+        try
+        {
+            using Microsoft.Win32.RegistryKey? layers = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key, writable: true);
+            if (layers is null) return null;
+            foreach (string name in layers.GetValueNames())
+                if (string.Equals(name, full, StringComparison.OrdinalIgnoreCase) && layers.GetValue(name) is string value)
+                {
+                    layers.DeleteValue(name, throwOnMissingValue: false);
+                    return value.Trim();
+                }
+        }
+        catch (Exception error) when (error is System.Security.SecurityException or UnauthorizedAccessException or IOException) { }
+        return null;
     }
 
     /// <summary>The Windows compatibility settings on Wow.exe ("Run this program in compatibility mode for..."), or null.</summary>

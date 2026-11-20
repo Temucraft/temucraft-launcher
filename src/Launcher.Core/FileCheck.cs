@@ -80,6 +80,9 @@ public sealed class HashCache
         _entries[Path.GetFullPath(path).ToLowerInvariant()] = new Entry(info.Length, info.LastWriteTimeUtc.Ticks, sha256, Path.GetFullPath(path));
     }
 
+    /// <summary>Forgets a file, so the next check hashes it again.</summary>
+    public void Forget(string path) => _entries.Remove(Path.GetFullPath(path).ToLowerInvariant());
+
     /// <summary>Files on disk this cache knows hold exactly this content (same hash and size, unchanged since).</summary>
     public IEnumerable<string> FilesWith(string sha256, long size)
     {

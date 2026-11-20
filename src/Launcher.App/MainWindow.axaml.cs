@@ -1442,6 +1442,7 @@ public partial class MainWindow : Window
             foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, folder, token);
             GameFolder.WriteRealmlist(folder, manifest.Realmlist);
             ApplyEnforcedToGame(folder);
+            ApplyLoginScenes(folder);
             Status("Everything up to date!");
             await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
         });
@@ -1751,6 +1752,9 @@ public partial class MainWindow : Window
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
             ShareSettings(Folder);
             EnableRequiredAddons(Folder);
+            ApplyLoginScenes(Folder);
+            if (Diagnostics.RemoveCompatibilityMode(GameFolder.ExePath(Folder)) is { } compat)
+                Log($"Windows compatibility mode was on for Wow.exe ({compat}); turned it off");
             await RequestPlayTicketAsync();
             Process? game = GameFolder.Start(Folder);
             DateTime started = DateTime.Now;
@@ -1809,7 +1813,10 @@ public partial class MainWindow : Window
         try
         {
             DiagnosticsButton.IsEnabled = false;
-            string text = await Task.Run(() => Diagnostics.BuildAsync(folder, manifest, extra));
+            DiagnosticsButton.Content = Translation.T("Making the report…");
+            HashCache cache = HashCache.Load(_cacheFile);
+            string text = await Task.Run(() => Diagnostics.BuildAsync(folder, manifest, extra, cache));
+            try { cache.Save(); } catch (IOException) { }
             await clipboard.SetTextAsync(text);
             DiagnosticsButton.Content = Translation.T("Copied");
             Status(Translation.T("Diagnostics copied. Paste them in a message to the server's admin."));
@@ -1820,6 +1827,7 @@ public partial class MainWindow : Window
         {
             Logger.Warning("Couldn't make the diagnostics", error);
             Status(error.Message);
+            DiagnosticsButton.Content = Translation.T("Copy diagnostics");
         }
         finally { DiagnosticsButton.IsEnabled = true; }
     }
@@ -1946,6 +1954,7 @@ public partial class MainWindow : Window
                 _serverTweaks.Add(cvar);
             }
         }
+        BuildLoginScenes();
         TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
         _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
@@ -1979,10 +1988,84 @@ public partial class MainWindow : Window
         _ => null,   // an empty number box leaves the game's own value alone
     };
 
+    // ------------------------------------------------------------------------------------- login screen
+    readonly Dictionary<string, CheckBox> _sceneBoxes = [];
+    WrapPanel? _scenePanel;
+
+    /// <summary>The login screen section: one box per scene in the game's loginui.lua (one is picked at random).</summary>
+    void BuildLoginScenes()
+    {
+        TweaksList.Children.Add(new TextBlock { Text = "LOGIN SCREEN", Classes = { "section" } });
+        TweaksList.Children.Add(new TextBlock { Text = "The login screen picks one of the ticked scenes at random each time. Saved with Save.",
+                                                Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
+        _scenePanel = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        TweaksList.Children.Add(_scenePanel);
+        StackPanel buttons = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
+        Button all = new() { Content = "Tick all", FontSize = 12, Padding = new Thickness(8, 2) };
+        all.Click += (_, _) => { foreach (CheckBox box in _sceneBoxes.Values) box.IsChecked = true; };
+        Button server = new() { Content = "Server's choice", FontSize = 12, Padding = new Thickness(8, 2) };
+        ToolTip.SetTip(server, "Use the scenes the server picked (the file is downloaded again on the next update)");
+        server.Click += (_, _) => ResetLoginScenes();
+        buttons.Children.Add(all);
+        buttons.Children.Add(server);
+        TweaksList.Children.Add(buttons);
+    }
+
+    void LoadLoginScenes()
+    {
+        if (_scenePanel is null) return;
+        _scenePanel.Children.Clear();
+        _sceneBoxes.Clear();
+        IReadOnlyList<LoginScene> scenes = LoginScreens.Read(Folder);
+        if (scenes.Count == 0)
+        {
+            _scenePanel.Children.Add(new TextBlock { Text = "The game has no login screen list yet (it comes with the next update).", Classes = { "dim" }, FontSize = 12 });
+            return;
+        }
+        foreach (LoginScene scene in scenes)
+        {
+            CheckBox box = new() { Content = LoginScreens.Title(scene.Name), IsChecked = scene.On, Margin = new Thickness(0, 0, 14, 2), MinWidth = 170 };
+            _sceneBoxes[scene.Code] = box;
+            _scenePanel.Children.Add(box);
+        }
+    }
+
+    /// <summary>The player's scenes into loginui.lua; the file still counts as the server's (it isn't downloaded again).</summary>
+    void ApplyLoginScenes(string folder)
+    {
+        if (_settings.LoginScenes is not { Count: > 0 } scenes) return;
+        try
+        {
+            if (!LoginScreens.Write(folder, scenes)) return;
+            if (_manifest?.Files.FirstOrDefault(f => f.Path.Equals(LoginScreens.FilePath, StringComparison.OrdinalIgnoreCase)) is { } file)
+            {
+                HashCache cache = HashCache.Load(_cacheFile);
+                cache.Remember(LoginScreens.PathIn(folder), file.Sha256);
+                cache.Save();
+            }
+            Log($"Login screen scenes set: {string.Join(", ", scenes)}");
+        }
+        catch (Exception error) { Logger.Warning("Couldn't set the login screen", error); }
+    }
+
+    void ResetLoginScenes()
+    {
+        _settings.LoginScenes = null;
+        SaveSettings();
+        HashCache cache = HashCache.Load(_cacheFile);
+        cache.Forget(LoginScreens.PathIn(Folder));
+        cache.Save();
+        _pendingFiles = Math.Max(_pendingFiles, 1);
+        ShowPlayState();
+        Status(Translation.T("The server's login screens come back with the next update."));
+    }
+
     void LoadTweaks()
     {
         TweaksHint.IsVisible = !GameFolder.LooksLikeClient(Folder);
+        PresetChanges.IsVisible = false;
         if (TweaksHint.IsVisible) return;
+        LoadLoginScenes();
         ConfigWtf config = ConfigWtf.Load(Folder);
         DxvkConf dxvk = DxvkConf.Load(Folder);
         _fillingTweaks = true;
@@ -2012,8 +2095,27 @@ public partial class MainWindow : Window
         _ => t.Default,
     };
 
+    /// <summary>Each box's value now, by name, to show what a preset changes.</summary>
+    Dictionary<string, string> CurrentBoxes()
+    {
+        Dictionary<string, string> values = [];
+        foreach (Tweak t in Tweaks.All)
+            if (t.Requires is null || OptionOn(t.Requires))
+            {
+                string value = BoxValue(t, _tweakControls.GetValueOrDefault(t.CVar)) ?? "";
+                values[t.Name] = t.Kind == TweakKind.Toggle ? (value == t.On ? "on" : "off") : value;
+            }
+        foreach (string cvar in _serverTweaks)
+            if (_tweakControls.GetValueOrDefault(cvar) is TextBox box) values[cvar] = box.Text?.Trim() ?? "";
+        if (_laaBox is not null) values["Large Address Aware"] = _laaBox.IsChecked == true ? "on" : "off";
+        return values;
+    }
+
+    static string Shown(string value) => value.Length == 0 ? "-" : value;
+
     void FillPreset(string preset)
     {
+        Dictionary<string, string> before = CurrentBoxes();
         _fillingTweaks = true;
         try
         {
@@ -2024,6 +2126,12 @@ public partial class MainWindow : Window
         }
         finally { _fillingTweaks = false; }
         MarkPreset(preset);
+        // what the preset changed, until Save (or the next preset)
+        List<string> changes = CurrentBoxes().Where(v => before.TryGetValue(v.Key, out string? old) && old != v.Value)
+            .Select(v => $"{Translation.T(v.Key)}: {Translation.T(Shown(before[v.Key]))} → {Translation.T(Shown(v.Value))}").ToList();
+        PresetChanges.Text = changes.Count == 0 ? Translation.T("Nothing changes: your settings already match.")
+            : Translation.T("Press Save to keep these changes:") + "\n" + string.Join("\n", changes);
+        PresetChanges.IsVisible = true;
     }
 
     /// <summary>The preset the boxes match (server first), or "custom".</summary>
@@ -2122,7 +2230,15 @@ public partial class MainWindow : Window
             config.Save();
             dxvk.Save();
             if (_laaBox is not null) LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true);
+            List<string> scenes = _sceneBoxes.Where(b => b.Value.IsChecked == true).Select(b => b.Key).ToList();
+            if (_sceneBoxes.Count > 0 && scenes.Count > 0 && LoginScreens.Read(Folder).Where(x => x.On).Select(x => x.Code).Order().SequenceEqual(scenes.Order()) == false)
+            {
+                _settings.LoginScenes = scenes;
+                SaveSettings();
+                ApplyLoginScenes(Folder);
+            }
             LoadTweaks();
+            PresetChanges.IsVisible = false;
             Status("Tweaks saved.");
             Log("Tweaks saved to WTF\\Config.wtf" + (OptionOn("DXVK") ? " and dxvk.conf" : ""));
         }
@@ -2310,6 +2426,13 @@ public partial class MainWindow : Window
                 await InstallCatalogAsync(addon, folder, token);
             Status("Addons up to date.");
         });
+    }
+
+    void OnOpenGameFolder(object? sender, RoutedEventArgs e)
+    {
+        if (NeedFolder()) return;
+        Log($"Opened the game folder: {Folder}");
+        OpenFolder(Folder);
     }
 
     void OnOpenAddons(object? sender, RoutedEventArgs e)

@@ -137,6 +137,8 @@ public sealed class UserSettings
     public bool ClearCacheOnPlay { get; set; } = true;
     /// <summary>Picked option per option group (login screen...); "" = none.</summary>
     public Dictionary<string, string> Options { get; set; } = [];
+    /// <summary>The login screen scenes the player picked (codes from loginui.lua); null: the server's own list.</summary>
+    public List<string>? LoginScenes { get; set; }
     public bool ReopenAfterGame { get; set; } = true;
     public bool RememberWindow { get; set; }
     /// <summary>The remembered window position; null until "Remember window position" has saved one.</summary>
