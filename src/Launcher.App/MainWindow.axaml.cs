@@ -124,6 +124,7 @@ public partial class MainWindow : Window
         _autoUpdateTimer.Start();
         _launcherTimer.Tick += async (_, _) => await CheckLauncherAsync();
         _launcherTimer.Start();
+        Activated += async (_, _) => await CheckLauncherAsync();   // also when the player comes back to the window
         Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
         {
@@ -1079,12 +1080,16 @@ public partial class MainWindow : Window
     bool _launcherLater;     // "Later" pressed: no banner again for that launcher
     string _laterSha = "";   // the server's launcher when "Later" was pressed
     bool _launcherChecked;   // the first check of this run is done (only that one installs a new launcher by itself)
-    readonly DispatcherTimer _launcherTimer = new() { Interval = TimeSpan.FromMinutes(30) };
+    readonly DispatcherTimer _launcherTimer = new() { Interval = TimeSpan.FromMinutes(5) };
+    DateTime _lastLauncherCheck = DateTime.Now;
 
-    /// <summary>While the launcher is open: every 30 minutes, whether the server has a new launcher (a banner asks).</summary>
+    /// <summary>While the launcher is open: every 5 minutes, and when the window gets focus again (at most once a minute),
+    /// whether the server has a new launcher (a banner asks).</summary>
     async Task CheckLauncherAsync()
     {
         if (Busy || _server is null || !HaveLogin || !Agreed || !_launcherChecked) return;
+        if (DateTime.Now - _lastLauncherCheck < TimeSpan.FromMinutes(1)) return;
+        _lastLauncherCheck = DateTime.Now;
         try
         {
             using ServerClient client = NewClient();
