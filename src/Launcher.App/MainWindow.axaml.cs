@@ -2127,10 +2127,30 @@ public partial class MainWindow : Window
         finally { _fillingTweaks = false; }
         MarkPreset(preset);
         // what the preset changed, until Save (or the next preset)
-        List<string> changes = CurrentBoxes().Where(v => before.TryGetValue(v.Key, out string? old) && old != v.Value)
-            .Select(v => $"{Translation.T(v.Key)}: {Translation.T(Shown(before[v.Key]))} → {Translation.T(Shown(v.Value))}").ToList();
-        PresetChanges.Text = changes.Count == 0 ? Translation.T("Nothing changes: your settings already match.")
-            : Translation.T("Press Save to keep these changes:") + "\n" + string.Join("\n", changes);
+        // each change as: Name: `old` → `new`
+        List<(string Name, string Old, string New)> changes = CurrentBoxes()
+            .Where(v => before.TryGetValue(v.Key, out string? old) && old != v.Value)
+            .Select(v => (Translation.T(v.Key), Translation.T(Shown(before[v.Key])), Translation.T(Shown(v.Value)))).ToList();
+        PresetChanges.Inlines?.Clear();
+        PresetChanges.Text = null;
+        if (changes.Count == 0) PresetChanges.Text = Translation.T("Nothing changes: your settings already match.");
+        else
+        {
+            FontFamily mono = new("Consolas, Cascadia Mono, monospace");
+            IBrush? field = (IBrush?)this.FindResource("T.field"), soft = (IBrush?)this.FindResource("T.textSoft"),
+                    accent = (IBrush?)this.FindResource("T.accent");
+            Avalonia.Controls.Documents.InlineCollection inlines = [];
+            inlines.Add(new Avalonia.Controls.Documents.Run(Translation.T("Press Save to keep these changes:")));
+            foreach ((string name, string oldValue, string newValue) in changes)
+            {
+                inlines.Add(new Avalonia.Controls.Documents.LineBreak());
+                inlines.Add(new Avalonia.Controls.Documents.Run($"{name}: "));
+                inlines.Add(new Avalonia.Controls.Documents.Run($" {oldValue} ") { FontFamily = mono, Background = field, Foreground = soft });
+                inlines.Add(new Avalonia.Controls.Documents.Run(" → "));
+                inlines.Add(new Avalonia.Controls.Documents.Run($" {newValue} ") { FontFamily = mono, Background = field, Foreground = accent, FontWeight = FontWeight.SemiBold });
+            }
+            PresetChanges.Inlines = inlines;
+        }
         PresetChanges.IsVisible = true;
     }
 
