@@ -190,7 +190,11 @@
           <DockPanel>
             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
               <TextBlock Classes="title" Text="GAME SETTINGS" Margin="0,0,0,2" />
-              <TextBlock Classes="dim" Text="The game's own settings (WTF\Config.wtf), and those of DXVK and Awesome WotLK while they are on." />
+              <TextBlock Classes="dim" Text="The launcher's quick settings, then every option of the game's Interface, Video and Sound windows (WTF\Config.wtf), and those of DXVK and Awesome WotLK while they are on." />
+              <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                <TextBox Name="TweaksSearch" Watermark="Search all settings (Ctrl+F)" MaxWidth="520" HorizontalAlignment="Left" Width="520" />
+                <TextBlock Grid.Column="1" Name="TweaksSearchCount" Classes="dim" VerticalAlignment="Center" Margin="10,0,0,0" />
+              </Grid>
             </StackPanel>
             <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,10,0,0">
               <Grid ColumnDefinitions="*,Auto">
@@ -224,7 +228,12 @@
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Name="TweaksHint" Classes="dim" IsVisible="False" Margin="0,0,0,8"
                        Text="These are read from your game's WTF\Config.wtf: pick your WoW folder under Game files, or install the game files there first." />
-            <ScrollViewer Classes="page"><StackPanel Name="TweaksList" /></ScrollViewer>
+            <Grid ColumnDefinitions="190,*">
+              <ScrollViewer Classes="page" Padding="0,0,8,0"><StackPanel Name="TweaksMenu" Spacing="0" Margin="0,4,8,0" /></ScrollViewer>
+              <Border Grid.Column="1" BorderBrush="{DynamicResource T.border}" BorderThickness="1,0,0,0" Padding="14,0,0,0">
+                <ScrollViewer Classes="page"><StackPanel Name="TweaksList" /></ScrollViewer>
+              </Border>
+            </Grid>
           </DockPanel>
         </Border>
 

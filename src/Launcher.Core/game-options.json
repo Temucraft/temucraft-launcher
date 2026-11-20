@@ -1,0 +1,1408 @@
+[
+ {
+  "group": "Interface",
+  "section": "Controls",
+  "cvar": "autoClearAFK",
+  "label": "Auto Clear Away",
+  "tip": "Automatically exit Away mode upon moving or talking.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Controls",
+  "cvar": "autoDismountFlying",
+  "label": "Auto Dismount in Flight",
+  "tip": "If enabled, your character will automatically dismount before casting while flying.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Controls",
+  "cvar": "autoLootDefault",
+  "label": "Auto Loot",
+  "tip": "Sets Auto Looting as the default action when clicking on lootable things. (Looting when this is checked, or Auto Looting when it is not, is performed by holding the Loot Key / Auto Loot Key)",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Controls",
+  "cvar": "autoLootKey",
+  "label": "Auto Loot Key",
+  "tip": "",
+  "default": "SHIFT",
+  "choices": [
+   "NONE",
+   "ALT",
+   "CTRL",
+   "SHIFT"
+  ]
+ },
+ {
+  "group": "Interface",
+  "section": "Controls",
+  "cvar": "blockTrades",
+  "label": "Block Trades",
+  "tip": "Block all incoming trade requests.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Controls",
+  "cvar": "lootUnderMouse",
+  "label": "Open Loot Window at Mouse",
+  "tip": "When checked the loot window will open up under the current mouse location.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Controls",
+  "cvar": "deselectOnClick",
+  "label": "Sticky Targeting",
+  "tip": "Checking this will prevent the deselection of targets by clicking on the gamefield. Targets can only be cleared by pressing escape or clicking another target.",
+  "default": "1",
+  "invert": true
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "assistAttack",
+  "label": "Attack on Assist",
+  "tip": "Automatically attack a target when you acquire it by using \"/assist\".",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "autoRangedCombat",
+  "label": "Auto Attack/Auto Shot",
+  "tip": "If enabled, your character will automatically switch between auto attack and auto shot.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "autoSelfCast",
+  "label": "Auto Self Cast",
+  "tip": "When this is enabled, friendly target spells that you cast while you have a non friendly target or no target will automatically be self cast.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "ShowClassColorInNameplate",
+  "label": "Class Colors in Nameplates",
+  "tip": "Toggles class colors in the background of Nameplate health bar for enemy players.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "showVKeyCastbar",
+  "label": "On Nameplates",
+  "tip": "If the Name Plate is displayed for your current target, show the enemy cast bar with the target's health bar in the game field.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "showTargetCastbar",
+  "label": "On Targets",
+  "tip": "Show the spell that your current target is casting.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "stopAutoAttackOnTargetChange",
+  "label": "Stop Auto Attack",
+  "tip": "Stop auto attacking when you switch targets.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat",
+  "cvar": "showTargetOfTarget",
+  "label": "Target of Target",
+  "tip": "Toggles the display of the target of your target.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "movieSubtitle",
+  "label": "Cinematic Subtitles",
+  "tip": "Enables subtitles during the intro cinematic.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "colorblindMode",
+  "label": "Colorblind Mode",
+  "tip": "Displays unit reactions and item qualities in tooltips and adds additional information to several other interfaces.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "showLootSpam",
+  "label": "Detailed Loot Information",
+  "tip": "Uncheck this to hide individual loot roll messages and only show the winner.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "threatPlaySounds",
+  "label": "Play Aggro Sounds",
+  "tip": "Enable the playing of alert sounds when aggro advances to a higher level.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "rotateMinimap",
+  "label": "Rotate Minimap",
+  "tip": "Check this to rotate the entire minimap instead of the player arrow.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "screenEdgeFlash",
+  "label": "Screen Edge Flash",
+  "tip": "Shows a screen edge flash when you have a fullscreen UI up and you are in combat.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "threatShowNumeric",
+  "label": "Show Aggro Percentages",
+  "tip": "Check this to show threat on targets as a percentage.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "showClock",
+  "label": "Show Clock",
+  "tip": "Displays the clock button on the minimap.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "displayFreeBagSlots",
+  "label": "Show Free Bag Space",
+  "tip": "Displays remaining inventory space on the backpack icon.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Display",
+  "cvar": "showItemLevel",
+  "label": "Show Item Level",
+  "tip": "Display item level in the tooltip for certain items.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Quests",
+  "cvar": "autoQuestProgress",
+  "label": "Automatic Quest Progress Updates",
+  "tip": "Quests are automatically watched for 5 minutes when you achieve a quest objective.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Quests",
+  "cvar": "autoQuestWatch",
+  "label": "Automatic Quest Tracking",
+  "tip": "Automatically track quests with objectives as soon as you obtain them.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Quests",
+  "cvar": "questFadingDisable",
+  "label": "Instant Quest Text",
+  "tip": "Check this to make quest text appear instantly.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Quests",
+  "cvar": "advancedWorldMap",
+  "label": "Movable World Map",
+  "tip": "Enabling this will allow you to move the smaller world map by right-clicking its title bar.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Quests",
+  "cvar": "mapQuestDifficulty",
+  "label": "Quest Difficulty Color",
+  "tip": "Color quest titles by difficulty when displayed with the World Map.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Quests",
+  "cvar": "watchFrameWidth",
+  "label": "Wider Objectives Tracker|TInterface\\OptionsFrame\\UI-OptionsFrame-NewFeatureIcon:0:0:0:-1|t",
+  "tip": "Increases the width of the Objectives tracker.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "guildRecruitmentChannel",
+  "label": "Auto Join Guild Recruitment Channel",
+  "tip": "Check this option to automatically join the Guild Recruitment chat channel based upon whether or not you are in a guild.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "chatBubbles",
+  "label": "Chat Bubbles",
+  "tip": "Shows /say and /yell text in speech bubbles above characters' heads.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "wholeChatWindowClickable",
+  "label": "Click to Focus",
+  "tip": "Clicking anywhere in a Chat Frame will cause it to receive focus.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "spamFilter",
+  "label": "Disable Spam Filter",
+  "tip": "Disables spam filtering on chat text.",
+  "default": "1",
+  "invert": true
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "chatMouseScroll",
+  "label": "Enable Mouse Wheel Scrolling",
+  "tip": "Check to make the mouse wheel scroll through chat when the cursor is over a chat window.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "guildMemberNotify",
+  "label": "Guild Member Alert",
+  "tip": "Show a message when your guild members login and logout.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "profanityFilter",
+  "label": "Mature Language Filter",
+  "tip": "Enable mature language filtering.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "chatBubblesParty",
+  "label": "Party Chat Bubbles",
+  "tip": "Shows party chat text in speech bubbles above party members' heads.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Social",
+  "cvar": "removeChatDelay",
+  "label": "Remove Chat Hover Delay",
+  "tip": "Check to show chat windows immediately upon mouseover.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Action bars",
+  "cvar": "alwaysShowActionBars",
+  "label": "Always Show ActionBars",
+  "tip": "Check this option to always display extra actionbars.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Action bars",
+  "cvar": "lockActionBars",
+  "label": "Lock ActionBars",
+  "tip": "Prevents the user from picking up/dragging spells on the action bar. This function can be bound to a function key in the keybindings interface.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Action bars",
+  "cvar": "secureAbilityToggle",
+  "label": "Secure Ability Toggle",
+  "tip": "When selected you will be protected from toggling your abilities off if accidently hitting the button more than once in a short period of time.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateAllowOverlap",
+  "label": "Nameplates: Allow Overlapping Unit Nameplates",
+  "tip": "Unit Nameplates can overlap if units are visually in a line. Turn this off to keep each Unit Nameplate seperate from each other.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameNonCombatCreatureName",
+  "label": "Names: Critters and Vanity Pets",
+  "tip": "Show critter and vanity pet names in the game world.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameEnemyPlayerName",
+  "label": "Names: Enemy Players",
+  "tip": "Show enemy players' names in the game world.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowEnemies",
+  "label": "Nameplates: Enemy Units",
+  "tip": "Turn this on to display Unit Nameplates for enemies.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameFriendlyPlayerName",
+  "label": "Names: Friendly Players",
+  "tip": "Show friendly players' names in the game world.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowFriends",
+  "label": "Nameplates: Friendly Units",
+  "tip": "Turn this on to display Unit Nameplates for friendly units",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameEnemyGuardianName",
+  "label": "Names: Enemy guardians",
+  "tip": "Show enemy guardian names in the game world.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameFriendlyGuardianName",
+  "label": "Names: Friendly guardians",
+  "tip": "Show friendly guardian names in the game world.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowEnemyGuardians",
+  "label": "Nameplates: Enemy guardians",
+  "tip": "Turn this on to display Unit Nameplates for enemy guardians",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowFriendlyGuardians",
+  "label": "Nameplates: Friendly guardians",
+  "tip": "Turn this on to display Unit Nameplates for friendly guardians",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNamePlayerGuild",
+  "label": "Names: Guild Names",
+  "tip": "Show players' guild names in the game world.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameOwn",
+  "label": "Names: My Name",
+  "tip": "Display your character's name in the game world.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameNPC",
+  "label": "Names: NPC Names",
+  "tip": "Show NPC names in the game world.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameEnemyPetName",
+  "label": "Names: Enemy pets",
+  "tip": "Show enemy pet names in the game world.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameFriendlyPetName",
+  "label": "Names: Friendly pets",
+  "tip": "Show friendly pet names in the game world.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowEnemyPets",
+  "label": "Nameplates: Enemy pets",
+  "tip": "Turn this on to display Unit Nameplates for enemy pets",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowFriendlyPets",
+  "label": "Nameplates: Friendly pets",
+  "tip": "Turn this on to display Unit Nameplates for friendly pets.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNamePlayerPVPTitle",
+  "label": "Names: Titles",
+  "tip": "Show player titles in the game world.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameEnemyTotemName",
+  "label": "Names: Enemy totems",
+  "tip": "Show enemy totem names in the game world.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "UnitNameFriendlyTotemName",
+  "label": "Names: Friendly totems",
+  "tip": "Show friendly totem names in the game world.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowEnemyTotems",
+  "label": "Nameplates: Enemy totems",
+  "tip": "Turn this on to display Unit Nameplates for enemy totems",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Names",
+  "cvar": "nameplateShowFriendlyTotems",
+  "label": "Nameplates: Friendly totems",
+  "tip": "Turn this on to display Unit Nameplates for friendly totems",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctAuras",
+  "label": "Auras",
+  "tip": "Shows a message when the player gains or loses an aura.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctCombatState",
+  "label": "Combat State",
+  "tip": "Shows a message when you enter or leave combat.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctComboPoints",
+  "label": "Combo Points",
+  "tip": "Shows the number of combo points you have each time you acquire a new one.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctDamageReduction",
+  "label": "Damage Reduction",
+  "tip": "Shows when you resist taking damage from attacks or spells.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctDodgeParryMiss",
+  "label": "Dodges/Parries/Misses",
+  "tip": "Shows attacks against you that dodge, parry, or miss.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "enableCombatText",
+  "label": "Enable My Floating Combat Text",
+  "tip": "Checking this will enable additional combat messages to appear in the playfield.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctEnergyGains",
+  "label": "Energy Gains",
+  "tip": "Shows all instant gains of mana, rage, and energy.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctFriendlyHealers",
+  "label": "Friendly Healer Names",
+  "tip": "Shows the name of a friendly caster when they cast a heal spell on you.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "CombatHealing",
+  "label": "Healing",
+  "tip": "Display amount of healing you did to the target.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctHonorGains",
+  "label": "Honor Gained",
+  "tip": "Shows the honor you gain from killing other players.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctLowManaHealth",
+  "label": "Low Mana & Health",
+  "tip": "Shows a message when you fall below 20% mana or health.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "CombatLogPeriodicSpells",
+  "label": "Periodic Damage",
+  "tip": "Display damage caused by periodic effects such as Rend and Shadow Word: Pain.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctPeriodicEnergyGains",
+  "label": "Periodic Energy Gains",
+  "tip": "Shows all periodic gains of mana, rage, and energy.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "PetMeleeDamage",
+  "label": "Pet Damage",
+  "tip": "Show damage caused by your pet.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctReactives",
+  "label": "Reactive Spells & Abilities",
+  "tip": "Shows when reactive class specific abilities and spells become available (e.g. Overpower for warriors).",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctRepChanges",
+  "label": "Reputation Changes",
+  "tip": "Shows a message when the player gains or loses reputation with a faction.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctSpellMechanicsOther",
+  "label": "Show for other players' targets",
+  "tip": "Display effects such as Silence and Snare on other players' targets.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "CombatDamage",
+  "label": "Target Damage",
+  "tip": "Display damage numbers over hostile creatures when damaged.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Combat text",
+  "cvar": "fctSpellMechanics",
+  "label": "Target Effects",
+  "tip": "Display effects such as Silence and Snare on your target.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Status text",
+  "cvar": "statusTextPercentage",
+  "label": "Display Percentages",
+  "tip": "Always display status text using percentage values.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Status text",
+  "cvar": "xpBarText",
+  "label": "Experience Bar Text",
+  "tip": "Always display the text on your XP bar.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Status text",
+  "cvar": "partyStatusText",
+  "label": "Party",
+  "tip": "Always display the text on your party's health, mana, rage, or energy bars.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Status text",
+  "cvar": "petStatusText",
+  "label": "Pet",
+  "tip": "Always display the text on your pet's health, mana, or focus bars.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Status text",
+  "cvar": "playerStatusText",
+  "label": "Player",
+  "tip": "Always display the text on your character's health, mana, rage, or energy bars.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Status text",
+  "cvar": "targetStatusText",
+  "label": "Target",
+  "tip": "Always display the text on your target's health, mana, rage, energy, or focus bars.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "showArenaEnemyFrames",
+  "label": "Arena Enemy Frames",
+  "tip": "Show enemy unit frames in arenas.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "hidePartyInRaid",
+  "label": "Hide Party Interface in Raid",
+  "tip": "Click this to hide your party's portraits and health bars.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "fullSizeFocusFrame",
+  "label": "Larger Focus Frame",
+  "tip": "Increases the size of the Focus Frame to that of the Target Frame.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "showPartyPets",
+  "label": "Party Members' Pets",
+  "tip": "Show the portraits of your party members' pets.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "showPartyBackground",
+  "label": "Party/Arena Background",
+  "tip": "Show a background behind party members and enemy arena team members.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "showRaidRange",
+  "label": "Range in Raid Interface",
+  "tip": "Show the range of raid members when they are far away by fading out their health bars.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "showArenaEnemyCastbar",
+  "label": "Show Cast Bars",
+  "tip": "Show the spells that players on the enemy arena team are casting.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Raid and party frames",
+  "cvar": "showArenaEnemyPets",
+  "label": "Show Pets",
+  "tip": "Show the portraits of the pets belonging to the enemy arena team.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Camera",
+  "cvar": "cameraYawSmoothSpeed",
+  "label": "Auto Follow Speed",
+  "tip": "Adjust the camera movement speed in Always and Smart following styles.",
+  "default": "180",
+  "min": 90,
+  "max": 270,
+  "step": 10
+ },
+ {
+  "group": "Interface",
+  "section": "Camera",
+  "cvar": "cameraTerrainTilt",
+  "label": "Follow Terrain",
+  "tip": "Automatically change the camera angle based on the terrain. If your character climbs a slope, the camera will rotate upwards; if you descend, it will rotate downwards.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Camera",
+  "cvar": "cameraBobbing",
+  "label": "Head Bob",
+  "tip": "Simulate head bobbing when in first-person perspective.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Camera",
+  "cvar": "cameraDistanceMaxFactor",
+  "label": "Max Camera Distance",
+  "tip": "Adjust the maximum distance the camera will follow behind you.",
+  "default": "1.0",
+  "min": 1,
+  "max": 2,
+  "step": 0.1
+ },
+ {
+  "group": "Interface",
+  "section": "Camera",
+  "cvar": "cameraPivot",
+  "label": "Smart Pivot",
+  "tip": "Lets you free look when the camera is on the ground.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Camera",
+  "cvar": "cameraWaterCollision",
+  "label": "Water Collision",
+  "tip": "Set the camera to be above water when your character is above water, and below water when your character is below water.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Buffs and debuffs",
+  "cvar": "buffDurations",
+  "label": "Buff Durations",
+  "tip": "Toggle text counters for buff durations on and off.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Buffs and debuffs",
+  "cvar": "showCastableBuffs",
+  "label": "Castable Buffs",
+  "tip": "Show only buffs you can cast on friendly targets. Only applies to raids.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Buffs and debuffs",
+  "cvar": "showCastableDebuffs",
+  "label": "Castable Debuffs",
+  "tip": "Show only the debuffs you applied on enemy targets.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Buffs and debuffs",
+  "cvar": "consolidateBuffs",
+  "label": "Consolidate Buffs",
+  "tip": "Filters certain buffs into a buff consolidation box. Short term buffs are displayed in the box. Very long term buffs are displayed in the box until they are about to expire.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Buffs and debuffs",
+  "cvar": "showDispelDebuffs",
+  "label": "Dispellable Debuffs",
+  "tip": "Show only debuffs you can dispel on friendly targets. Only applies to raids.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Mouse",
+  "cvar": "autoInteract",
+  "label": "Click-to-Move",
+  "tip": "Use mouse clicks to move your character to destinations.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Mouse",
+  "cvar": "enableWowMouse",
+  "label": "Detect World of Warcraft Gaming Mouse",
+  "tip": "Enable this option if you have a World of Warcraft Gaming Mouse and you wish to bind keys to the extra buttons.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Mouse",
+  "cvar": "mouseInvertPitch",
+  "label": "Invert Mouse",
+  "tip": "Invert the way that the mouse affects camera pitch.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Mouse",
+  "cvar": "cameraYawMoveSpeed",
+  "label": "Mouse Look Speed",
+  "tip": "Adjust the speed at which you turn the camera when using mouse look.",
+  "default": "180",
+  "min": 90,
+  "max": 270,
+  "step": 10
+ },
+ {
+  "group": "Interface",
+  "section": "Mouse",
+  "cvar": "mouseSpeed",
+  "label": "Mouse Sensitivity",
+  "tip": "Adjust the speed at which the mouse cursor moves.",
+  "default": "1.0",
+  "min": 0.5,
+  "max": 1.5,
+  "step": 0.05
+ },
+ {
+  "group": "Interface",
+  "section": "Features",
+  "cvar": "previewTalents",
+  "label": "Preview Talent Changes",
+  "tip": "Toggles the ability to preview talents before spending talent points.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Features",
+  "cvar": "equipmentManager",
+  "label": "Use Equipment Manager",
+  "tip": "Enables the equipment management UI",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Help",
+  "cvar": "showNewbieTips",
+  "label": "Beginner Tooltips",
+  "tip": "Show detailed information about various user interface elements. Advanced players may want to turn this off.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Help",
+  "cvar": "scriptErrors",
+  "label": "Display Lua Errors",
+  "tip": "Shows error messages related to UI functionality.",
+  "default": "0"
+ },
+ {
+  "group": "Interface",
+  "section": "Help",
+  "cvar": "UberTooltips",
+  "label": "Enhanced Tooltips",
+  "tip": "Enable detailed tooltips in the lower right hand corner of the screen.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Help",
+  "cvar": "showGameTips",
+  "label": "Loading Screen Tips",
+  "tip": "Uncheck this to hide the tip of the day in the load screens.",
+  "default": "1"
+ },
+ {
+  "group": "Interface",
+  "section": "Help",
+  "cvar": "showTutorials",
+  "label": "Tutorials",
+  "tip": "Display tutorials which help introduce you to WoW.",
+  "default": "1"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "windowResizeLock",
+  "label": "Disable Resize",
+  "tip": "Enable this to prevent resizing the game window.",
+  "default": "0"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "gxCursor",
+  "label": "Hardware Cursor",
+  "tip": "Enable this option for a more responsive cursor unless you have cursor problems.",
+  "default": "1"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "gxMaximize",
+  "label": "Maximized",
+  "tip": "Check to maximize window and remove borders.",
+  "default": "0"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "gxFixLag",
+  "label": "Reduce Input Lag",
+  "tip": "Enabling this reduces user interface lag, but may drastically reduce frame rates.",
+  "default": null
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "gxTripleBuffer",
+  "label": "Triple Buffering",
+  "tip": "Enables triple buffering of frames when vertical sync is enabled. Selecting triple buffering may even out frame rate spikes, but may also cause slight input lag.",
+  "default": "0"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "uiScale",
+  "label": "UI scale",
+  "tip": "The current UI scale",
+  "default": "1.0",
+  "min": 0.64,
+  "max": 1,
+  "step": 0.01
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "DesktopGamma",
+  "label": "Use desktop gamma",
+  "tip": "Use the same gamma settings as your desktop.",
+  "default": "0"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "useUiScale",
+  "label": "Use UI Scale",
+  "tip": "Check to use the UI Scale Slider, uncheck to use the system default scale.",
+  "default": "0"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "gxVSync",
+  "label": "Vertical Sync",
+  "tip": "Synchronizes your framerate to some fraction of your monitor's refresh rate. Enable this if you see excessive screen tearing in game.",
+  "default": "1"
+ },
+ {
+  "group": "Video",
+  "section": "Display mode",
+  "cvar": "gxWindow",
+  "label": "Windowed Mode",
+  "tip": "Check to play in a non-fullscreen window. If this is checked the game will use your desktop gamma and you will not be able to adjust it via the slider below.",
+  "default": "0"
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "ffxDeath",
+  "label": "Death Effect",
+  "tip": "Uncheck to disable glowing effect while in ghost form. Disabling this can sometimes improve performance.",
+  "default": "1"
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "environmentDetail",
+  "label": "Environment Detail",
+  "tip": "Controls how far you can see objects. Decrease to improve performance.",
+  "default": "1.0",
+  "min": 0.5,
+  "max": 1.5,
+  "step": 0.25
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "ffxGlow",
+  "label": "Full-Screen Glow Effect",
+  "tip": "Enables a full screen effect that softens edges and lighting. Disabling this can sometimes improve performance.",
+  "default": "1"
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "groundEffectDensity",
+  "label": "Ground Clutter Density",
+  "tip": "Controls the number of ground clutter items, like grass and foliage. Decrease to improve performance.",
+  "default": "16",
+  "min": 16,
+  "max": 64,
+  "step": 8
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "groundEffectDist",
+  "label": "Ground Clutter Radius",
+  "tip": "Controls the draw distance of ground clutter items like grass and foliage. Decrease to improve performance.",
+  "default": "70.0",
+  "min": 70,
+  "max": 140,
+  "step": 10
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "particleDensity",
+  "label": "Particle Density",
+  "tip": "Controls the number of particles used in effects caused by spells, fires, etc. Decrease to improve performance.",
+  "default": "1.0",
+  "min": 0.1,
+  "max": 1,
+  "step": 0.1
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "componentTextureLevel",
+  "label": "Player Textures",
+  "tip": "Controls the resolution of player textures. Decreasing this may slightly improve performance.",
+  "default": "8",
+  "min": 8,
+  "max": 9,
+  "step": 1,
+  "restart": true
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "projectedTextures",
+  "label": "Projected Textures",
+  "tip": "Enables the projecting of textures to the environment. Disabling this may greatly improve performance.",
+  "default": "0"
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "extShadowQuality",
+  "label": "Shadow Quality",
+  "tip": "Controls the quality of rendered character and environment shadows. Decrease to improve performance.",
+  "default": "0",
+  "min": 0,
+  "max": 4,
+  "step": 1
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "specular",
+  "label": "Specular Lighting",
+  "tip": "Enables specular highlights on terrain. Disabling this can sometimes improve performance.",
+  "default": null,
+  "logout": true
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "TerrainMip",
+  "label": "Terrain Blending",
+  "tip": "Sets the rate at which one type of terrain blends to another.",
+  "default": "0",
+  "min": 0,
+  "max": 1,
+  "step": 1,
+  "logout": true
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "textureFilteringMode",
+  "label": "Texture Filtering",
+  "tip": "Increases texture sharpness, particularly for textures viewed at an angle. Decrease to improve performance.",
+  "default": "1",
+  "min": 0,
+  "max": 5,
+  "step": 1,
+  "restart": true
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "baseMip",
+  "label": "Texture Resolution",
+  "tip": "Controls the level of all texture detail. Decreasing this may slightly improve performance.",
+  "default": "0",
+  "min": 0,
+  "max": 1,
+  "step": 1
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "farclip",
+  "label": "View Distance",
+  "tip": "Changes how far you can see. Decreasing this may greatly improve performance.",
+  "default": "777",
+  "min": 177,
+  "max": 1277,
+  "step": 10
+ },
+ {
+  "group": "Video",
+  "section": "Graphics",
+  "cvar": "weatherDensity",
+  "label": "Weather Intensity",
+  "tip": "Controls the intensity of weather effects. Decrease to improve performance.",
+  "default": null,
+  "min": 0,
+  "max": 3,
+  "step": 1
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_AmbienceVolume",
+  "label": "Ambience volume",
+  "tip": "Adjusts the ambient sound volume.",
+  "default": "0.6",
+  "min": 0,
+  "max": 1,
+  "step": 0.1
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableAmbience",
+  "label": "Ambient Sounds",
+  "tip": "Enable ambient sounds.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableDSPEffects",
+  "label": "Death Knight Voices",
+  "tip": "Special voice modulation effects for Death Knights. Disable to improve performance.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableEmoteSounds",
+  "label": "Emote Sounds",
+  "tip": "Toggles emote sounds on and off.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnablePetSounds",
+  "label": "Enable Pet Sounds",
+  "tip": "Toggles pet idle and aggro sounds on and off.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableReverb",
+  "label": "Enable Reverb",
+  "tip": "Enables reverb sound effects. This will affect performance.",
+  "default": "0"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableAllSound",
+  "label": "Enable Sound",
+  "tip": "Enables or disables all sound.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableErrorSpeech",
+  "label": "Error Speech",
+  "tip": "Enables speech from errors (e.g. \"Target out of range\").",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableSoftwareHRTF",
+  "label": "Headphone mode",
+  "tip": "Enables software emulation for headphone surround sound.",
+  "default": "0"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_ZoneMusicNoDelay",
+  "label": "Loop Music",
+  "tip": "Enable to continuously play background music.",
+  "default": "0"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_MasterVolume",
+  "label": "Master Volume",
+  "tip": "Adjusts the master sound volume.",
+  "default": "1.0",
+  "min": 0,
+  "max": 1,
+  "step": 0.1
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableMusic",
+  "label": "Music",
+  "tip": "Enable background music.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_MusicVolume",
+  "label": "Music volume",
+  "tip": "Adjusts the background music volume.",
+  "default": "0.4",
+  "min": 0,
+  "max": 1,
+  "step": 0.1
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_SFXVolume",
+  "label": "Sound volume",
+  "tip": "Adjusts the sound effect volume.",
+  "default": "1.0",
+  "min": 0,
+  "max": 1,
+  "step": 0.1
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_ListenerAtCharacter",
+  "label": "Sound at Character",
+  "tip": "Listen to sound from the character's point of view rather than the camera.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_NumChannels",
+  "label": "Sound Channels",
+  "tip": "Changes the number of active software sound channels.",
+  "default": "32",
+  "min": 32,
+  "max": 64,
+  "step": 32
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableSFX",
+  "label": "Sound Effects",
+  "tip": "Enables or disables game sound effects.",
+  "default": "1"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableSoundWhenGameIsInBG",
+  "label": "Sound in Background",
+  "tip": "Enable to allow sounds to play even when World of Warcraft is in the background.",
+  "default": "0"
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_OutputQuality",
+  "label": "Sound Quality",
+  "tip": "Adjusts the quality of game sounds. Decrease to improve performance.",
+  "default": "1",
+  "min": 0,
+  "max": 2,
+  "step": 1
+ },
+ {
+  "group": "Sound",
+  "section": "Sound",
+  "cvar": "Sound_EnableHardware",
+  "label": "Use Hardware",
+  "tip": "Enables the use of hardware for 3D sound management. This may alter your sound performance.",
+  "default": "0"
+ }
+]

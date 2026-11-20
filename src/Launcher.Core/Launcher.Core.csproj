@@ -6,4 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- every option of the game's Interface, Video and Sound windows (see GameOptions.cs) -->
+    <EmbeddedResource Include="game-options.json" LogicalName="Launcher.Core.game-options.json" />
+  </ItemGroup>
+
 </Project>

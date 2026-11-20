@@ -23,6 +23,10 @@ public sealed class ConfigWtf : ITweakFile
 
     ConfigWtf(string file, List<string> lines) { File = file; _lines = lines; }
 
+    /// <summary>Any file of SET lines (an account's config-cache.wtf).</summary>
+    public static ConfigWtf LoadFile(string file) =>
+        new(file, System.IO.File.Exists(file) ? System.IO.File.ReadAllLines(file).ToList() : []);
+
     public static ConfigWtf Load(string wowFolder)
     {
         string file = Path.Combine(wowFolder, "WTF", "Config.wtf");

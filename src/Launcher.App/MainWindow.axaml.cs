@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         LoadDownloadHistory();
+        HookTweaksSearch();
         Logger.Written += ShowLogLine;
         Logger.Written += ToastOnError;
         _settings = UserSettings.Load(_settingsFile);
@@ -2066,8 +2067,10 @@ public partial class MainWindow : Window
         TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
         _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
+        BuildGameOptions();
         ShowGatedTweaks();
         LoadTweaks();
+        FilterTweaks(TweaksSearch.Text);
     }
 
     /// <summary>Whether an Options group (DXVK, Awesome WotLK...) is on. Before the launcher has talked to the server
@@ -2196,6 +2199,7 @@ public partial class MainWindow : Window
         if (fresh && !_settings.TweakPresetChosen) FillPreset(_policy.Tweaks.Count > 0 ? "server" : "default");
         LockEnforcedTweaks();
         MarkPreset(MatchingPreset());
+        LoadGameOptions();
         UpdateTweaksDirty();
     }
 
@@ -2366,6 +2370,7 @@ public partial class MainWindow : Window
             _policy.ApplyEnforcedTweaks(dxvk, "dxvk");
             config.Save();
             dxvk.Save();
+            SaveGameOptions();   // the game's own options, before anything else can fail
             if (_laaBox is not null) LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true);
             List<string> scenes = _sceneBoxes.Where(b => b.Value.IsChecked == true).Select(b => b.Key).ToList();
             if (_sceneBoxes.Count > 0 && scenes.Count > 0 && LoginScreens.Read(Folder).Where(x => x.On).Select(x => x.Code).Order().SequenceEqual(scenes.Order()) == false)
