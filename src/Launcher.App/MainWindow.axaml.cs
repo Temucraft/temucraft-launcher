@@ -1431,7 +1431,11 @@ public partial class MainWindow : Window
                 return;
             }
             IReadOnlyList<PlannedFile> outdated = await PlanAsync(manifest, choice, token);
-            List<CatalogAddon> required = _catalog.Where(a => a.Required && choice.Addons).ToList();
+            // needed addons always; default ones (debugging tools) once, so removing them sticks
+            bool withRecommended = _settings.InstallRecommendedNext;
+            List<CatalogAddon> required = _catalog.Where(a => choice.Addons && (a.Required
+                || (a.Default && !_settings.DefaultAddonsDone.Contains(a.Name, StringComparer.OrdinalIgnoreCase))
+                || (a.Recommended && withRecommended))).ToList();
             await RefreshCommitsAsync(required, token);
             List<CatalogAddon> addonUpdates = required.Where(a => NeedsInstall(a, folder)).ToList();
             Logger.Info($"{Words.Files(outdated.Count)} and {Words.Addons(addonUpdates.Count)} out of date", toWindow: false);
@@ -1461,6 +1465,9 @@ public partial class MainWindow : Window
             keptCache.Save();
             await InstallAsync(client, outdated, folder, token);
             foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, folder, token);
+            foreach (CatalogAddon addon in required.Where(a => a.Default && !a.Required))
+                if (!_settings.DefaultAddonsDone.Contains(addon.Name)) _settings.DefaultAddonsDone.Add(addon.Name);
+            if (withRecommended) _settings.InstallRecommendedNext = false;
             GameFolder.WriteRealmlist(folder, manifest.Realmlist);
             ApplyEnforcedToGame(folder);
             ApplyLoginScenes(folder);
@@ -1556,6 +1563,7 @@ public partial class MainWindow : Window
     readonly HashSet<string> _installLocales = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> _installOptions = [];
     bool _installAddons = true;
+    bool _installRecommended = true;
 
     static string DefaultInstallFolder() => OperatingSystem.IsWindows()
         ? @"C:\Games\Temucraft"
@@ -1664,6 +1672,14 @@ public partial class MainWindow : Window
             box.IsCheckedChanged += (_, _) => { _installAddons = box.IsChecked == true; ShowInstallTotal(manifest); };
             InstallParts.Children.Add(PartRow(box, addons));
         }
+        int recommended = _catalog.Count(a => a.Recommended);
+        if (recommended > 0)
+        {
+            CheckBox rec = new() { Content = string.Format(Translation.T("Also install the {0} recommended addons (quality of life)"), recommended), IsChecked = _installRecommended };
+            ToolTip.SetTip(rec, string.Join(", ", _catalog.Where(a => a.Recommended).Select(a => a.Name)));
+            rec.IsCheckedChanged += (_, _) => _installRecommended = rec.IsChecked == true;
+            InstallParts.Children.Add(rec);
+        }
         ShowInstallTotal(manifest);
     }
 
@@ -1740,6 +1756,7 @@ public partial class MainWindow : Window
         if (done)
         {
             WowFolderBox.Text = folder;
+            _settings.InstallRecommendedNext = _installRecommended;
             SaveSettings();
             _pendingFiles = 1;
             ShowPlayState();
@@ -2417,11 +2434,12 @@ public partial class MainWindow : Window
         }
         AddCategory("", "All", found.Count);
         if (found.Any(a => a.Required)) AddCategory("\u0001", "Needed", found.Count(a => a.Required));
+        if (found.Any(a => a.Recommended)) AddCategory("\u0002", "Recommended", found.Count(a => a.Recommended));
         foreach (var group in found.Where(a => a.Category.Length > 0).GroupBy(a => a.Category, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key))
             AddCategory(group.Key, group.Key, group.Count());
 
         List<CatalogAddon> shown = [.. found.Where(a => _catalogCategory.Length == 0
-            || (_catalogCategory == "\u0001" ? a.Required : a.Category.Equals(_catalogCategory, StringComparison.OrdinalIgnoreCase)))];
+            || (_catalogCategory == "\u0001" ? a.Required : _catalogCategory == "\u0002" ? a.Recommended : a.Category.Equals(_catalogCategory, StringComparison.OrdinalIgnoreCase)))];
         if (shown.Count == 0)
         {
             CatalogList.Children.Add(new TextBlock { Text = "No addons match.", Classes = { "dim" } });
@@ -2440,7 +2458,7 @@ public partial class MainWindow : Window
             Grid row = new() { ColumnDefinitions = new ColumnDefinitions("2*,3*,Auto"), Margin = new Thickness(0, 2), Background = Brushes.Transparent };
             row.Children.Add(new TextBlock
             {
-                Text = addon.Name + (addon.Required ? "  (needed)" : ""), FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center,
+                Text = addon.Name + (addon.Required ? "  (needed)" : addon.Recommended ? "  (recommended)" : addon.Default ? "  (default)" : ""), FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center,
                 Classes = { addon.Required ? "good" : "text" },
             });
             TextBlock description = new() { Text = addon.Description, Classes = { "dim" }, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };

@@ -22,6 +22,10 @@ public sealed class CatalogAddon
     public string Category { get; set; } = "";
     /// <summary>Needed to play on the server: installed and kept up to date automatically.</summary>
     public bool Required { get; set; }
+    /// <summary>Quality-of-life pick the server suggests: marked in the list and ticked first when installing.</summary>
+    public bool Recommended { get; set; }
+    /// <summary>Installed once by default (debugging tools such as BugSack and idTip); the player can remove it.</summary>
+    public bool Default { get; set; }
 
     public string Url => $"https://github.com/{Repo}";
     public string ReadmeUrl => $"https://raw.githubusercontent.com/{Repo}/{Branch}/README.md";

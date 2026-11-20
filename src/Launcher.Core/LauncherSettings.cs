@@ -184,6 +184,10 @@ public sealed class UserSettings
     public int BackupsToKeep { get; set; } = 10;
     /// <summary>Installed catalog addons and the commit they were installed from (to offer updates).</summary>
     public Dictionary<string, string> AddonCommits { get; set; } = [];
+    /// <summary>Default addons already installed once (not installed again if the player removes them).</summary>
+    public List<string> DefaultAddonsDone { get; set; } = [];
+    /// <summary>Set by the install window: the next update also installs the recommended addons (once).</summary>
+    public bool InstallRecommendedNext { get; set; }
 
     /// <summary>A random ID for this launcher install (made once; sent only when a server collects "installId").</summary>
     public string InstallId { get; set; } = "";
