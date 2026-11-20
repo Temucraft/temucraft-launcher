@@ -10,6 +10,12 @@ namespace Launcher.Core;
 
 public sealed class LoginFailedException(string message) : Exception(message);
 
+/// <summary>A new launcher was installed: start it and close this one.</summary>
+public sealed class LauncherRestartException(string exe) : Exception("A new launcher was installed.")
+{
+    public string Exe { get; } = exe;
+}
+
 /// <summary>
 /// Talks to the Apache folder: the manifest and the files, with the username and password Apache asks for (HTTP
 /// basic auth, over https). The server also only lets in known addresses; a refused login and a refused address get the

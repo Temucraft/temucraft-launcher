@@ -78,6 +78,7 @@ recommendation (and as the value outright where the launcher has no box for it).
 |---|---|---|
 | `installAddons`, `clearCache`, `reopenAfterGame`, `rememberWindow`, `backupBeforeUpdate` | true / false | the launcher's switches |
 | `largeAddressAware` | true / false | Wow.exe's 4 GB switch; enforced, it's set again after every update |
+| `launcherUpdate` | "required" / "recommended" | A new launcher: installed before anything else (the default), or only a banner |
 | `backupsToKeep` | a number | how many backups the launcher keeps |
 | `defaultLocale` | e.g. `"enUS"` | the server's default language (its base client's): always installed, ticked and greyed out; `enUS` when not set. The game's own language is always kept too. |
 | `requiredLocales` | e.g. `["deDE"]` | extra languages everyone gets (players can still add more) |

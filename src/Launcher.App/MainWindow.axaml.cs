@@ -324,6 +324,12 @@ public partial class MainWindow : Window
             Status("Cancelled.");
             Log($"{what}: cancelled");
         }
+        catch (LauncherRestartException restart)
+        {
+            Log("Launcher updated; starting the new one");
+            _work = null;
+            RestartInto(restart.Exe);
+        }
         catch (LoginFailedException e)
         {
             Logger.Warning($"{what}: {e.Message}");
@@ -661,6 +667,14 @@ public partial class MainWindow : Window
             RefreshUntrackedButton();
         });
         if (!launcherOk) Log("Self-check: this launcher differs from the server's copy");
+        if (!launcherOk && manifest.Launcher is not null && manifest.Rules.LauncherUpdateFirst)
+        {
+            // the server wants the new launcher first: get it now, then start it (nothing else runs before)
+            Status("Updating the launcher first…");
+            string exe = await SelfCheck.UpdateAsync(client, manifest, new UiProgress<(long Done, long Total)>(p =>
+                Progress.Value = p.Total == 0 ? 1 : (double)p.Done / p.Total), token);
+            throw new LauncherRestartException(exe);
+        }
         return manifest;
     }
 
@@ -1099,6 +1113,12 @@ public partial class MainWindow : Window
         });
         if (!done || exe is null) return;
         Log("Launcher updated; starting the new one");
+        RestartInto(exe);
+    }
+
+    /// <summary>Starts the new launcher and closes this one.</summary>
+    void RestartInto(string exe)
+    {
         SaveSettings();
         try
         {
@@ -1703,8 +1723,10 @@ public partial class MainWindow : Window
             if (ClearCacheBox.IsChecked == true) GameFolder.ClearCache(Folder);
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
             ShareSettings(Folder);
+            EnableRequiredAddons(Folder);
             await RequestPlayTicketAsync();
             Process? game = GameFolder.Start(Folder);
+            DateTime started = DateTime.Now;
             Log("Started the game");
             if (game is null) return;
             switch (_settings.OnGameLaunch)
@@ -1723,6 +1745,12 @@ public partial class MainWindow : Window
             }
             _gameRunning = false;
             Log($"The game closed (exit code {game.ExitCode})");
+            if (game.ExitCode != 0 && DateTime.Now - started < TimeSpan.FromSeconds(90))
+            {
+                // closed with an error right after starting: most often an extra under Mods, or a broken file
+                if (_settings.OnGameLaunch is "minimize" or "hide") BringBack();
+                Status(Translation.T("The game closed right after starting. Try turning off the extras under Mods, then Verify game files. Still broken? Press Copy diagnostics on the Launcher page and send it to the server's admin."));
+            }
             ShareSettings(Folder);
             if (_settings.OnGameLaunch is "minimize" or "hide" && ReopenBox.IsChecked == true) BringBack();
         }
@@ -1731,6 +1759,42 @@ public partial class MainWindow : Window
             Status(error.Message);
             Logger.Error("Couldn't start the game", error);
         }
+    }
+
+    /// <summary>The addons the server needs are turned back on in the game's AddOns.txt files (the game's
+    /// character screen can turn them off).</summary>
+    void EnableRequiredAddons(string folder)
+    {
+        if (_manifest is null) return;
+        IEnumerable<string> needed = _manifest.Files.Where(f => f.Category == FileCategory.Addon)
+            .Select(f => f.Path.Split('/')).Where(p => p.Length > 2).Select(p => p[2])
+            .Concat(_catalog.Where(a => a.Required).SelectMany(a => a.Folders));
+        int changed = AddonsTxt.EnableRequired(folder, needed);
+        if (changed > 0) Log($"Turned {changed} needed addon(s) back on");
+    }
+
+    async void OnCopyDiagnostics(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+        string folder = Folder;
+        Manifest? manifest = _manifest;
+        List<string> extra = [$"Mods: {(_settings.Options.Count == 0 ? "(none)" : string.Join(", ", _settings.Options.Select(o => $"{o.Key} = {o.Value}")))}"];
+        try
+        {
+            DiagnosticsButton.IsEnabled = false;
+            string text = await Task.Run(() => Diagnostics.BuildAsync(folder, manifest, extra));
+            await clipboard.SetTextAsync(text);
+            DiagnosticsButton.Content = Translation.T("Copied");
+            Status(Translation.T("Diagnostics copied. Paste them in a message to the server's admin."));
+            await Task.Delay(1500);
+            DiagnosticsButton.Content = Translation.T("Copy diagnostics");
+        }
+        catch (Exception error)
+        {
+            Logger.Warning("Couldn't make the diagnostics", error);
+            Status(error.Message);
+        }
+        finally { DiagnosticsButton.IsEnabled = true; }
     }
 
     async void OnBrowseWow(object? sender, RoutedEventArgs e)
@@ -1827,14 +1891,8 @@ public partial class MainWindow : Window
                 };
             TextBlock description = new() { Text = t.Description, Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
             Control info = description;
-            if (t.Compare.Length > 0)
-            {
-                // how other WoW versions do it, under the description (for comparison only)
-                StackPanel both = new() { VerticalAlignment = VerticalAlignment.Center };
-                both.Children.Add(description);
-                both.Children.Add(new TextBlock { Text = t.Compare, FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = (IBrush?)this.FindResource("T.dimmer") });
-                info = both;
-            }
+            // how other WoW versions do it: on hover, so the row stays short
+            if (t.Compare.Length > 0) { ToolTip.SetTip(description, t.Compare); ToolTip.SetTip(control, t.Compare); }
             Grid.SetColumn(info, 2);
             row.Children.Add(info);
             TweaksList.Children.Add(row);

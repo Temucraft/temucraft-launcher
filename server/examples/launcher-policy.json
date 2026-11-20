@@ -4,6 +4,10 @@
 //   enforce true  = the server's value is always used and the player's switch is greyed out
 // Leave a setting out to let the launcher use its own default.
 {
+  // A new launcher on the server: "required" installs it before the player can do anything else,
+  // "recommended" only shows a banner the player can put off. Left out: required.
+  "launcherUpdate": { "value": "required" },
+
   // Install and update the addons that come with the server (Interface/AddOns)
   "installAddons": { "value": true, "enforce": false },
 

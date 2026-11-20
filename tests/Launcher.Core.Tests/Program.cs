@@ -54,6 +54,9 @@ List<(string Name, Func<Task> Body)> tests =
     ("Settings, key bindings and macros are shared between accounts", SharingSettings),
     ("Changelog tags are found and coloured", NewsTags),
     ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
+    ("Needed addons are turned back on in every AddOns.txt", RequiredAddonsEnabled),
+    ("Diagnostics mark files against the server's copy", DiagnosticsMarks),
+    ("A new launcher is required unless the server says recommended", LauncherUpdateRule),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -986,6 +989,53 @@ static Task NewsTags()
     Assert(values.Any(p => p.Text == "350 mana" && p.Color == NewsItem.Worse) && values.Any(p => p.Text == "661" && p.Color == NewsItem.Better), "better/worse");
     var lines = NewsItem.Lines("• [New] Racial heals\n  - Human: Light's Mending\n  • Dwarf: Stoneform Mend\n• [New] Other");
     Assert(lines.Count == 2 && lines[0].Details.SequenceEqual(["Human: Light's Mending", "Dwarf: Stoneform Mend"]) && lines[1].Details.Count == 0, "details");
+    return Task.CompletedTask;
+}
+
+static Task RequiredAddonsEnabled()
+{
+    string wow = TempDir();
+    string account = Path.Combine(wow, "WTF", "Account", "RYAN"), character = Path.Combine(account, "Realm 1", "Arthas");
+    Directory.CreateDirectory(character);
+    File.WriteAllText(Path.Combine(account, "AddOns.txt"), "Questie: disabled\nDetails: disabled\nTemucraft: enabled\n");
+    File.WriteAllText(Path.Combine(character, "AddOns.txt"), "Temucraft: disabled\n");
+    int changed = AddonsTxt.EnableRequired(wow, ["Temucraft", "Questie"]);
+    Check(changed == 2, $"changed {changed}");
+    string top = File.ReadAllText(Path.Combine(account, "AddOns.txt"));
+    Check(top.Contains("Questie: enabled") && top.Contains("Details: disabled"), top);
+    Check(File.ReadAllText(Path.Combine(character, "AddOns.txt")).Contains("Temucraft: enabled"), "character file");
+    Check(AddonsTxt.EnableRequired(wow, ["Temucraft"]) == 0, "second run changes nothing");
+    return Task.CompletedTask;
+}
+
+static async Task DiagnosticsMarks()
+{
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "Data"));
+    File.WriteAllBytes(Path.Combine(wow, "Data", "patch-T.MPQ"), [1, 2, 3]);
+    File.WriteAllBytes(Path.Combine(wow, "Data", "patch-X.MPQ"), [9]);
+    File.WriteAllBytes(Path.Combine(wow, "extra.dll"), [4]);
+    string sha = Convert.ToHexStringLower(SHA256.HashData(new byte[] { 1, 2, 3 }));
+    Manifest manifest = new() { Files = [
+        new ManifestFile { Path = "Data/patch-T.MPQ", Size = 3, Sha256 = sha, Category = FileCategory.Patch },
+        new ManifestFile { Path = "Data/patch-X.MPQ", Size = 1, Sha256 = new string('0', 64), Category = FileCategory.Patch },
+        new ManifestFile { Path = "Data/patch-Y.MPQ", Size = 1, Sha256 = new string('0', 64), Category = FileCategory.Patch } ] };
+    string text = await Diagnostics.BuildAsync(wow, manifest, ["Mods: (none)"]);
+    Check(text.Contains("Data/patch-T.MPQ") && text.Contains("same as the server"), text);
+    Check(text.Contains("DIFFERENT from the server"), text);
+    Check(text.Contains("extra.dll") && text.Contains("not from the server"), text);
+    Check(text.Contains("Data/patch-Y.MPQ: missing") && text.Contains("Wow.exe: not found"), text);
+}
+
+static Task LauncherUpdateRule()
+{
+    Check(LauncherPolicy.From(null).LauncherUpdateFirst, "default");
+    LauncherPolicy recommended = LauncherPolicy.From(new Dictionary<string, System.Text.Json.JsonElement>
+        { ["launcherUpdate"] = System.Text.Json.JsonDocument.Parse("{\"value\": \"recommended\"}").RootElement });
+    Check(!recommended.LauncherUpdateFirst, "recommended");
+    LauncherPolicy off = LauncherPolicy.From(new Dictionary<string, System.Text.Json.JsonElement>
+        { ["launcherUpdate"] = System.Text.Json.JsonDocument.Parse("false").RootElement });
+    Check(!off.LauncherUpdateFirst && off.Unknown.Count == 0, "false");
     return Task.CompletedTask;
 }
 
