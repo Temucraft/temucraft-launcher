@@ -11,7 +11,7 @@ namespace Launcher.App;
 
 /// <summary>
 /// Every option of the game's Interface, Video and Sound windows on the Game settings page, below the launcher's
-/// quick settings: a side menu to jump to a section, a search box (Ctrl+F), and Apply / Discard for all of them.
+/// launcher's own settings: a side menu to jump to a section, a search box (Ctrl+F), and Apply / Discard for all of them.
 /// </summary>
 public partial class MainWindow
 {
@@ -30,7 +30,7 @@ public partial class MainWindow
         HashSet<string> quick = new(Tweaks.All.Select(t => t.CVar), StringComparer.OrdinalIgnoreCase);
         string? group = null, section = null;
         WrapPanel rows = new();
-        BuildOptionsFor();
+        bool first = true;
         foreach (GameOption o in GameOptions.All)
         {
             if (o.ModifiedClick is null && quick.Contains(o.CVar)) continue;
@@ -41,6 +41,9 @@ public partial class MainWindow
                 {
                     Text = Translation.T(group).ToUpperInvariant(), Classes = { "title", "group" }, Margin = new Thickness(0, 22, 0, 0),
                 });
+                // "Settings for" goes under the first group's heading, before its sections, so it never folds away
+                if (first) BuildOptionsFor();
+                first = false;
                 section = null;
             }
             if (o.Section != section)
@@ -83,7 +86,7 @@ public partial class MainWindow
         TweaksList.Children.Add(new TextBlock
         {
             Text = Translation.T("* needs a game restart   ° needs a log out. Account settings are also written to WTF\\Account\\<name>\\config-cache.wtf."),
-            Classes = { "dim" }, FontSize = 12, Margin = new Thickness(0, 10, 0, 0),
+            Classes = { "dim", "keep" }, FontSize = 12, Margin = new Thickness(0, 10, 0, 0),
         });
         BuildKeyBindings();
         BuildMacros();
@@ -249,11 +252,79 @@ public partial class MainWindow
     }
 
     // ------------------------------------------------------------------------------------------- menu and search
-    /// <summary>The side menu: a link per section of the page, under its group.</summary>
+    readonly List<(string Key, TextBlock Head)> _sectionHeads = [];
+    HashSet<string>? _openSections;   // null until the page is first built: then only the first section is open
+
+    /// <summary>Gives every section heading its plain name (in Tag, for the menu) and a click to open or close it.</summary>
+    void PrepareSections()
+    {
+        _sectionHeads.Clear();
+        string group = "";
+        foreach (Control child in TweaksList.Children)
+        {
+            if (child is not TextBlock block) continue;
+            if (block.Classes.Contains("group")) { group = block.Text ?? ""; continue; }
+            if (!block.Classes.Contains("section")) continue;
+            block.Tag ??= block.Text ?? "";
+            string key = group + "/" + block.Tag;
+            _sectionHeads.Add((key, block));
+            block.Cursor = new Cursor(StandardCursorType.Hand);
+            block.Background = Brushes.Transparent;   // the whole heading line takes the click, not just its letters
+            block.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(block).Properties.IsLeftButtonPressed || IsSearching) return;
+                if (!OpenSections.Remove(key)) OpenSections.Add(key);
+                FilterTweaks(TweaksSearch.Text);
+                e.Handled = true;
+            };
+        }
+        _openSections ??= _sectionHeads.Count > 0 ? [_sectionHeads[0].Key] : [];
+    }
+
+    HashSet<string> OpenSections => _openSections ??= [];
+
+    bool IsSearching => !string.IsNullOrWhiteSpace(TweaksSearch.Text);
+
+    /// <summary>Hides what is under a closed section's heading (the heading stays, with an arrow). While searching
+    /// every match shows, opened.</summary>
+    void ApplyCollapsed()
+    {
+        bool searching = IsSearching;
+        TextBlock? head = null;
+        bool open = true;
+        foreach (Control child in TweaksList.Children)
+        {
+            if (child is TextBlock block && block.Classes.Contains("group")) { head = null; continue; }
+            if (child is TextBlock section && _sectionHeads.FindIndex(h => h.Head == section) is int i and >= 0)
+            {
+                head = section;
+                open = searching || OpenSections.Contains(_sectionHeads[i].Key);
+                section.Text = (open ? "\u25BE  " : "\u25B8  ") + section.Tag;
+                continue;
+            }
+            if (head is null || child.Classes.Contains("keep")) continue;
+            if (!open) child.IsVisible = false;
+        }
+    }
+
+    /// <summary>The side menu: a link per section of the page, under its group, and Expand all / Collapse all.</summary>
     void BuildTweaksMenu()
     {
         TweaksMenu.Children.Clear();
-        TweaksMenu.Children.Add(new TextBlock { Text = Translation.T("QUICK SETTINGS"), Classes = { "dim" }, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        List<string> shown = _sectionHeads.Where(h => h.Head.IsVisible).Select(h => h.Key).ToList();
+        bool allOpen = shown.Count > 0 && shown.All(OpenSections.Contains);
+        Button all = new()
+        {
+            Content = Translation.T(allOpen ? "Collapse all" : "Expand all"), FontSize = 12, Padding = new Thickness(8, 2),
+            Margin = new Thickness(0, 0, 0, 8), IsEnabled = !IsSearching && shown.Count > 0,
+        };
+        all.Click += (_, _) =>
+        {
+            if (allOpen) OpenSections.Clear();
+            else OpenSections.UnionWith(_sectionHeads.Select(h => h.Key));
+            FilterTweaks(TweaksSearch.Text);
+        };
+        TweaksMenu.Children.Add(all);
         foreach (Control child in TweaksList.Children)
         {
             if (child is not TextBlock { Text: { } text } block || !child.IsVisible) continue;
@@ -261,12 +332,19 @@ public partial class MainWindow
                 TweaksMenu.Children.Add(new TextBlock { Text = text, Classes = { "dim" }, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 10, 0, 2) });
             else if (block.Classes.Contains("section"))
             {
+                string name = block.Tag as string ?? text;
+                if (name.Length == 0) continue;
                 Button link = new()
                 {
-                    Content = char.ToUpper(text[0]) + text[1..].ToLowerInvariant(), Classes = { "link" }, FontSize = 13,
+                    Content = char.ToUpper(name[0]) + name[1..].ToLowerInvariant(), Classes = { "link" }, FontSize = 13,
                     Padding = new Thickness(6, 2), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left,
                 };
-                link.Click += (_, _) => block.BringIntoView();
+                link.Click += (_, _) =>
+                {
+                    // open it first, then scroll once the page has laid it out
+                    if (_sectionHeads.FirstOrDefault(h => h.Head == block).Key is { } key && OpenSections.Add(key)) FilterTweaks(TweaksSearch.Text);
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => block.BringIntoView(), Avalonia.Threading.DispatcherPriority.Background);
+                };
                 TweaksMenu.Children.Add(link);
             }
         }
@@ -322,6 +400,7 @@ public partial class MainWindow
         if (group is not null) group.IsVisible = any || words.Length == 0;
         TweaksSearchCount.Text = words.Length == 0 ? "" : string.Format(Translation.T("{0} found"),
             TweaksList.Children.OfType<WrapPanel>().Where(p => p.IsVisible).Sum(p => p.Children.Count(r => r.IsVisible)));
+        ApplyCollapsed();
         BuildTweaksMenu();
     }
 

@@ -2025,9 +2025,47 @@ public partial class MainWindow : Window
         _tweakControls.Clear();
         _gatedTweakRows.Clear();
         _tweakRows.Clear();
+        _sectionHeads.Clear();
         string? section = null;
         WrapPanel rows = new();
-        foreach (Tweak t in Tweaks.All)
+        // launcher settings first (what the launcher itself does), then the game's own settings
+        TweaksList.Children.Add(new TextBlock { Text = "LAUNCHER SETTINGS", Classes = { "title", "group" }, Margin = new Thickness(0, 4, 0, 0) });
+        BuildLoginScenes();
+        TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
+        _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
+        TweaksList.Children.Add(_laaBox);
+        foreach (Tweak t in Tweaks.All.Where(t => t.Requires is not null)) AddTweak(t);
+        _serverTweaks.Clear();
+        List<string> extra = _policy.Tweaks.Keys.Where(k => !Tweaks.All.Any(t => t.CVar.Equals(k, StringComparison.OrdinalIgnoreCase))).Order().ToList();
+        if (extra.Count > 0)
+        {
+            TweaksList.Children.Add(new TextBlock { Text = "FROM THE SERVER", Classes = { "section" } });
+            foreach (string cvar in extra)
+            {
+                Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
+                row.Children.Add(new TextBlock { Text = cvar, VerticalAlignment = VerticalAlignment.Center, Classes = { "text" } });
+                TextBox box = new() { Width = 132, HorizontalAlignment = HorizontalAlignment.Left,
+                                      Watermark = $"Server recommends: {_policy.Tweaks[cvar].CVarText}" };
+                Grid.SetColumn(box, 1);
+                row.Children.Add(box);
+                TextBlock note = new() { Text = "Set by the server. Empty uses the game's own value.", Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
+                Grid.SetColumn(note, 2);
+                row.Children.Add(note);
+                TweaksList.Children.Add(row);
+                _tweakControls[cvar] = box;
+                _serverTweaks.Add(cvar);
+            }
+        }
+        TweaksList.Children.Add(new TextBlock { Text = "IN-GAME SETTINGS", Classes = { "title", "group" }, Margin = new Thickness(0, 22, 0, 0) });
+        section = null;
+        foreach (Tweak t in Tweaks.All.Where(t => t.Requires is null)) AddTweak(t);
+        BuildGameOptions();
+        PrepareSections();
+        ShowGatedTweaks();
+        LoadTweaks();
+        FilterTweaks(TweaksSearch.Text);
+
+        void AddTweak(Tweak t)
         {
             if (t.Section != section)
             {
@@ -2078,35 +2116,6 @@ public partial class MainWindow : Window
             rows.Children.Add(row);
             _tweakControls[t.CVar] = control;
         }
-        _serverTweaks.Clear();
-        List<string> extra = _policy.Tweaks.Keys.Where(k => !Tweaks.All.Any(t => t.CVar.Equals(k, StringComparison.OrdinalIgnoreCase))).Order().ToList();
-        if (extra.Count > 0)
-        {
-            TweaksList.Children.Add(new TextBlock { Text = "FROM THE SERVER", Classes = { "section" } });
-            foreach (string cvar in extra)
-            {
-                Grid row = new() { ColumnDefinitions = new ColumnDefinitions("230,150,*"), Margin = new Thickness(0, 3) };
-                row.Children.Add(new TextBlock { Text = cvar, VerticalAlignment = VerticalAlignment.Center, Classes = { "text" } });
-                TextBox box = new() { Width = 132, HorizontalAlignment = HorizontalAlignment.Left,
-                                      Watermark = $"Server recommends: {_policy.Tweaks[cvar].CVarText}" };
-                Grid.SetColumn(box, 1);
-                row.Children.Add(box);
-                TextBlock note = new() { Text = "Set by the server. Empty uses the game's own value.", Classes = { "dim" }, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
-                Grid.SetColumn(note, 2);
-                row.Children.Add(note);
-                TweaksList.Children.Add(row);
-                _tweakControls[cvar] = box;
-                _serverTweaks.Add(cvar);
-            }
-        }
-        BuildLoginScenes();
-        TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
-        _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
-        TweaksList.Children.Add(_laaBox);
-        BuildGameOptions();
-        ShowGatedTweaks();
-        LoadTweaks();
-        FilterTweaks(TweaksSearch.Text);
     }
 
     /// <summary>Whether an Options group (DXVK, Awesome WotLK...) is on. Before the launcher has talked to the server
@@ -2194,6 +2203,7 @@ public partial class MainWindow : Window
             _scenePanel.Children.Add(new TextBlock { Text = local
                 ? "The list of backgrounds comes with the next update."
                 : "Connect to the server to see the backgrounds.", Classes = { "dim" }, FontSize = 12 });
+            FilterTweaks(TweaksSearch.Text);   // the section shows (or stays folded) now that it has something in it
             return;
         }
         foreach (LoginScene scene in scenes)
@@ -2215,6 +2225,7 @@ public partial class MainWindow : Window
         if (!local)
             _scenePanel.Children.Add(new TextBlock { Text = "No game installed yet: your picks are used when it is.", Classes = { "dim" },
                                                      FontSize = 12, Width = 600, TextWrapping = TextWrapping.Wrap });
+        FilterTweaks(TweaksSearch.Text);
     }
 
     /// <summary>The player's scenes into loginui.lua; the file still counts as the server's (it isn't downloaded again).</summary>
