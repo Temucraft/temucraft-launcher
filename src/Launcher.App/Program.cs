@@ -7,11 +7,21 @@ internal static class Program
 {
     static Mutex? _single;
 
+    /// <summary>Argument the old launcher passes to the new one after a self update.</summary>
+    public const string AfterUpdate = "--after-update";
+
     [STAThread]
     public static int Main(string[] args)
     {
         // one launcher at a time: a second start brings the first one to the front and closes
         _single = new Mutex(true, @"Local\TemucraftLauncher", out bool first);
+        if (!first && args.Contains(AfterUpdate))
+        {
+            // started by the old launcher after a self update: it is still closing and holds the mutex, so wait for
+            // it instead of handing over to it (it would close and leave no launcher open)
+            try { first = _single.WaitOne(TimeSpan.FromSeconds(30)); }
+            catch (AbandonedMutexException) { first = true; }   // the old one ended without letting go: ours now
+        }
         if (!first)
         {
             SingleInstance.SignalFirst();

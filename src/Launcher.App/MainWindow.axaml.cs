@@ -1181,7 +1181,7 @@ public partial class MainWindow : Window
         SaveSettings();
         try
         {
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory });
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory, ArgumentList = { Program.AfterUpdate } });
             _quitting = true;
             Close();
         }
