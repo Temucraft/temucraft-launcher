@@ -95,11 +95,13 @@ public partial class MainWindow
     void LoadSelectedBindings()
     {
         BindingsFile? file = SelectedBindings is { } f ? BindingsFile.Load(f.File, f.Name) : null;
-        _bindKeys = file?.Keys() ?? new(StringComparer.OrdinalIgnoreCase);
+        // no file yet: the game's own keys, shown greyed out (the boxes are off until the game has made the file)
+        _bindKeys = file?.Keys() ?? KeyDefaults.Effective([]);
         _bindShown = _bindKeys.ToDictionary(k => k.Key, k => string.Join(" ", k.Value), StringComparer.OrdinalIgnoreCase);
-        bool usable = file is { HasBindings: true };
+        // the account folder exists once the game has been logged in to; the file itself only lists changed keys
+        bool usable = file is not null && Directory.Exists(Path.GetDirectoryName(file.File));
         if (_bindNote is not null)
-            _bindNote.Text = !usable ? Translation.T("No key bindings yet: start the game once and log in, then they show here.")
+            _bindNote.Text = !usable ? Translation.T("These are the game's own keys. Start the game once and log in, then you can change them here.")
                 : _bindFiles.Count > 1 ? Translation.T("A character with its own key bindings uses them instead of the account's.")
                 : Translation.T("Saved in the account's bindings-cache.wtf. Close the game before you press Apply.");
         foreach ((string command, Button[] buttons) in _keyButtons)

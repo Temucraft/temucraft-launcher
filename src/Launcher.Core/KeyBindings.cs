@@ -25,6 +25,45 @@ public static class KeyCommands
 }
 
 /// <summary>
+/// The 3.3.5 game's own key bindings. bindings-cache.wtf only lists what differs from these (a key on another command,
+/// or <c>bind KEY NONE</c> for a key taken off), so the keys a command really has are these, changed by the file.
+/// </summary>
+public static class KeyDefaults
+{
+    const string Table = "BUTTON3 MOVEANDSTEER|W MOVEFORWARD|UP MOVEFORWARD|S MOVEBACKWARD|DOWN MOVEBACKWARD|A TURNLEFT|LEFT TURNLEFT|D TURNRIGHT|RIGHT TURNRIGHT|Q STRAFELEFT|E STRAFERIGHT|SPACE JUMP|NUMPAD0 JUMP|X SITORSTAND|Z TOGGLESHEATH|NUMLOCK TOGGLEAUTORUN|BUTTON4 TOGGLEAUTORUN|INSERT PITCHUP|DELETE PITCHDOWN|NUMPADDIVIDE TOGGLERUN|ENTER OPENCHAT|/ OPENCHATSLASH|PAGEUP CHATPAGEUP|PAGEDOWN CHATPAGEDOWN|SHIFT-PAGEDOWN CHATBOTTOM|CTRL-PAGEUP COMBATLOGPAGEUP|CTRL-PAGEDOWN COMBATLOGPAGEDOWN|CTRL-SHIFT-PAGEDOWN COMBATLOGBOTTOM|R REPLY|SHIFT-R REPLY2|1 ACTIONBUTTON1|2 ACTIONBUTTON2|3 ACTIONBUTTON3|4 ACTIONBUTTON4|5 ACTIONBUTTON5|6 ACTIONBUTTON6|7 ACTIONBUTTON7|8 ACTIONBUTTON8|9 ACTIONBUTTON9|0 ACTIONBUTTON10|- ACTIONBUTTON11|= ACTIONBUTTON12|CTRL-F1 SHAPESHIFTBUTTON1|CTRL-F2 SHAPESHIFTBUTTON2|CTRL-F3 SHAPESHIFTBUTTON3|CTRL-F4 SHAPESHIFTBUTTON4|CTRL-F5 SHAPESHIFTBUTTON5|CTRL-F6 SHAPESHIFTBUTTON6|CTRL-F7 SHAPESHIFTBUTTON7|CTRL-F8 SHAPESHIFTBUTTON8|CTRL-F9 SHAPESHIFTBUTTON9|CTRL-F10 SHAPESHIFTBUTTON10|CTRL-1 BONUSACTIONBUTTON1|CTRL-2 BONUSACTIONBUTTON2|CTRL-3 BONUSACTIONBUTTON3|CTRL-4 BONUSACTIONBUTTON4|CTRL-5 BONUSACTIONBUTTON5|CTRL-6 BONUSACTIONBUTTON6|CTRL-7 BONUSACTIONBUTTON7|CTRL-8 BONUSACTIONBUTTON8|CTRL-9 BONUSACTIONBUTTON9|CTRL-0 BONUSACTIONBUTTON10|SHIFT-1 ACTIONPAGE1|SHIFT-2 ACTIONPAGE2|SHIFT-3 ACTIONPAGE3|SHIFT-4 ACTIONPAGE4|SHIFT-5 ACTIONPAGE5|SHIFT-6 ACTIONPAGE6|SHIFT-UP PREVIOUSACTIONPAGE|SHIFT-MOUSEWHEELUP PREVIOUSACTIONPAGE|SHIFT-DOWN NEXTACTIONPAGE|SHIFT-MOUSEWHEELDOWN NEXTACTIONPAGE|TAB TARGETNEARESTENEMY|SHIFT-TAB TARGETPREVIOUSENEMY|CTRL-TAB TARGETNEARESTFRIEND|CTRL-SHIFT-TAB TARGETPREVIOUSFRIEND|F1 TARGETSELF|SHIFT-F1 TARGETPET|F2 TARGETPARTYMEMBER1|F3 TARGETPARTYMEMBER2|F4 TARGETPARTYMEMBER3|F5 TARGETPARTYMEMBER4|SHIFT-F2 TARGETPARTYPET1|SHIFT-F3 TARGETPARTYPET2|SHIFT-F4 TARGETPARTYPET3|SHIFT-F5 TARGETPARTYPET4|G TARGETLASTHOSTILE|F ASSISTTARGET|V NAMEPLATES|SHIFT-V FRIENDNAMEPLATES|CTRL-V ALLNAMEPLATES|T ATTACKTARGET|SHIFT-T PETATTACK|C TOGGLECHARACTER0|B TOGGLEBACKPACK|F12 TOGGLEBACKPACK|F8 TOGGLEBAG1|F9 TOGGLEBAG2|F10 TOGGLEBAG3|F11 TOGGLEBAG4|SHIFT-B OPENALLBAGS|P TOGGLESPELLBOOK|SHIFT-I TOGGLEPETBOOK|SHIFT-P TOGGLECHARACTER3|SHIFT-SPACE TOGGLEWORLDSTATESCORES|SHIFT-M TOGGLEBATTLEFIELDMINIMAP|H TOGGLECHARACTER4|N TOGGLETALENTS|U TOGGLECHARACTER2|K TOGGLECHARACTER1|O TOGGLESOCIAL|L TOGGLEQUESTLOG|Y TOGGLEACHIEVEMENT|I TOGGLELFGPARENT|SHIFT-C TOGGLECOMBATLOG|ESCAPE TOGGLEGAMEMENU|M TOGGLEWORLDMAP|PRINTSCREEN SCREENSHOT|NUMPADPLUS MINIMAPZOOMIN|NUMPADMINUS MINIMAPZOOMOUT|CTRL-M TOGGLEMUSIC|CTRL-S TOGGLESOUND|CTRL-= MASTERVOLUMEUP|CTRL-- MASTERVOLUMEDOWN|ALT-Z TOGGLEUI|MOUSEWHEELUP CAMERAZOOMIN|MOUSEWHEELDOWN CAMERAZOOMOUT|END NEXTVIEW|HOME PREVVIEW|CTRL-R TOGGLEFPS|BUTTON2 TURNORACTION|BUTTON1 CAMERAORSELECTORMOVE|ALT-1 SELFACTIONBUTTON1|ALT-2 SELFACTIONBUTTON2|ALT-3 SELFACTIONBUTTON3|ALT-4 SELFACTIONBUTTON4|ALT-5 SELFACTIONBUTTON5|ALT-6 SELFACTIONBUTTON6|ALT-7 SELFACTIONBUTTON7|ALT-8 SELFACTIONBUTTON8|ALT-9 SELFACTIONBUTTON9|ALT-0 SELFACTIONBUTTON10|ALT-- SELFACTIONBUTTON11|ALT-= SELFACTIONBUTTON12|CTRL-BUTTON1 CAMERAORSELECTORMOVESTICKY";
+
+    /// <summary>Key -> command.</summary>
+    public static IReadOnlyDictionary<string, string> ByKey { get; } = Table.Split('|')
+        .Select(p => p.Split(' ', 2)).ToDictionary(p => p[0], p => p[1], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Command -> its default keys, in the game's order.</summary>
+    public static IReadOnlyDictionary<string, List<string>> ByCommand { get; } = Table.Split('|')
+        .Select(p => p.Split(' ', 2)).GroupBy(p => p[1], StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(g => g.Key, g => g.Select(p => p[0]).ToList(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The keys every command has once a file's lines are put over the defaults.</summary>
+    public static Dictionary<string, List<string>> Effective(IEnumerable<(string Key, string Command)> fileLines)
+    {
+        Dictionary<string, string> byKey = new(ByKey, StringComparer.OrdinalIgnoreCase);
+        List<string> order = [.. ByKey.Keys];
+        foreach ((string key, string command) in fileLines)
+        {
+            if (command.Equals("NONE", StringComparison.OrdinalIgnoreCase)) { byKey.Remove(key); continue; }
+            if (!byKey.ContainsKey(key)) order.Add(key);
+            byKey[key] = command;
+        }
+        Dictionary<string, List<string>> keys = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string key in order)
+            if (byKey.TryGetValue(key, out string? command))
+            {
+                if (!keys.TryGetValue(command, out List<string>? list)) keys[command] = list = [];
+                if (!list.Contains(key, StringComparer.OrdinalIgnoreCase)) list.Add(key);
+            }
+        return keys;
+    }
+}
+
+/// <summary>
 /// A bindings-cache.wtf: lines of <c>bind KEY COMMAND</c> (plus BINDINGMODE and modifiedclick lines). The game writes
 /// every key there once it has run; the account's file is for all characters, a character's own file wins when it
 /// has lines (character specific key bindings).
@@ -51,8 +90,12 @@ public sealed class BindingsFile
         return (rest[..space], rest[(space + 1)..].Trim());
     }
 
-    /// <summary>Every command and its keys, in the file's order.</summary>
-    public Dictionary<string, List<string>> Keys()
+    /// <summary>Every command and the keys it really has: the game's defaults with this file's lines put over them.</summary>
+    public Dictionary<string, List<string>> Keys() =>
+        KeyDefaults.Effective(_lines.Select(Parse).Where(p => p is not null).Select(p => p!.Value));
+
+    /// <summary>Only the lines of this file, command -> keys (no defaults).</summary>
+    public Dictionary<string, List<string>> FileKeys()
     {
         Dictionary<string, List<string>> keys = new(StringComparer.OrdinalIgnoreCase);
         foreach (string line in _lines)
@@ -73,6 +116,11 @@ public sealed class BindingsFile
         foreach ((string command, List<string> keys) in changed)
             foreach (string key in keys.Where(k => k.Length > 0))
                 _lines.Add($"bind {key} {command}");
+        // a default key of a changed command that no command has now: the game would give it back without a NONE line
+        foreach (string command in commands)
+            foreach (string key in KeyDefaults.ByCommand.GetValueOrDefault(command) ?? [])
+                if (!taken.Contains(key) && !_lines.Any(l => Parse(l) is (string k, _) && k.Equals(key, StringComparison.OrdinalIgnoreCase)))
+                    _lines.Add($"bind {key} NONE");
     }
 
     /// <summary>The key of a modified click (<c>modifiedclick SELFCAST ALT</c>), null when the file doesn't set it.</summary>

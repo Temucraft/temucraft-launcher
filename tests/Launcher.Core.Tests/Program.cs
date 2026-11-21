@@ -60,6 +60,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("A new launcher is required unless the server says recommended", LauncherUpdateRule),
     ("Login screen scenes are read and turned on or off", LoginScenes),
     ("Self cast, focus cast and auto loot keys go to bindings-cache.wtf", ModifiedClicks),
+    ("Key bindings are the game's defaults with the file's changes over them", DefaultKeyBindings),
     ("Macro files read and write back the same; new ids and limits", MacroFileRoundTrip),
     ("Per character settings go to the character's config-cache.wtf", PerCharacterOptions),
 ];
@@ -1216,6 +1217,25 @@ static async Task CertPinOverTls()
         listener.Stop();
         await server;
     }
+}
+
+static Task DefaultKeyBindings()
+{
+    string file = Path.Combine(Path.GetTempPath(), "kb" + Guid.NewGuid().ToString("N") + ".wtf");
+    File.WriteAllText(file, "BINDINGMODE 0\nbind A STRAFELEFT\nbind Q NONE\n");
+    BindingsFile b = BindingsFile.Load(file, "test");
+    Dictionary<string, List<string>> keys = b.Keys();
+    Check(keys["MOVEFORWARD"].SequenceEqual(["W", "UP"]), "defaults show without file lines");
+    Check(keys["STRAFELEFT"].SequenceEqual(["A"]) && keys["TURNLEFT"].SequenceEqual(["LEFT"]), "a file line moves a key");
+    Check(!keys.ContainsKey("NONE") && !keys.Values.Any(k => k.Contains("Q")), "NONE takes a key off");
+    // taking a default key off a command writes a NONE line, or the game gives it back
+    b.Set(new Dictionary<string, List<string>> { ["MOVEFORWARD"] = ["W"] });
+    b.Save();
+    string text = File.ReadAllText(file);
+    Check(text.Contains("bind W MOVEFORWARD") && text.Contains("bind UP NONE"), text);
+    Check(BindingsFile.Load(file, "test").Keys()["MOVEFORWARD"].SequenceEqual(["W"]), "read back");
+    File.Delete(file);
+    return Task.CompletedTask;
 }
 
 static Task ModifiedClicks()
