@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -366,8 +367,16 @@ public partial class MainWindow : Window
         if (GameFolder.LooksLikeClient(Folder)) return false;
         Status(Folder.Length == 0
             ? "Pick your WoW folder under Game files, or an empty folder to install the game into."
-            : "There's no game in your WoW folder yet: press INSTALL to download it there.");
+            : string.Format(Translation.T("There's no game in your WoW folder yet: press INSTALL to download it there{0}."), InstallSizeHint(_manifest, Choice())));
         return true;
+    }
+
+    /// <summary>" (+2.6 GB)": how much a full install with these choices downloads (the game included), or "".</summary>
+    static string InstallSizeHint(Manifest? manifest, InstallChoice choice)
+    {
+        if (manifest is null || !manifest.Files.Any(f => f.Category == FileCategory.Base)) return "";
+        long total = InstallSizes.Total(manifest, choice with { BaseFolder = choice.WowFolder });
+        return total > 0 ? $" (+{Words.Size(total)})" : "";
     }
 
     /// <summary>A server connection with the login typed in the window (call on the window's thread).</summary>
@@ -1235,7 +1244,7 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------------------------------- language and theme
-    sealed record LookChoice(string Value, string Text) { public override string ToString() => Text; }
+    sealed record LookChoice(string Value, string Text, bool Recommended = false) { public override string ToString() => Text; }
     bool _fillingLook;
 
     /// <summary>The Language, Theme and Mode boxes on the Launcher page (greyed out when the server enforces its look).</summary>
@@ -1430,7 +1439,7 @@ public partial class MainWindow : Window
             {
                 // connected, but no game yet: the tabs are filled in; the game files come from Install game files…
                 Status(folder.Length > 0   // the value read before the job: the folder box only works on the window's thread
-                    ? "Connected. There's no game in your WoW folder yet: press INSTALL to download it there."
+                    ? string.Format(Translation.T("Connected. There's no game in your WoW folder yet: press INSTALL to download it there{0}."), InstallSizeHint(manifest, choice))
                     : "Connected. Pick your WoW folder under Game files, or an empty folder to install the game into.");
                 await Dispatcher.UIThread.InvokeAsync(ShowPlayState);
                 await Dispatcher.UIThread.InvokeAsync(RefreshMods);
@@ -1514,7 +1523,8 @@ public partial class MainWindow : Window
     async Task InstallAsync(ServerClient client, IReadOnlyList<PlannedFile> outdated, string? wowFolder, CancellationToken token)
     {
         HashCache cache = HashCache.Load(_cacheFile);
-        Dictionary<PlannedFile, DownloadRow> rows = StartDownloadList(outdated);
+        // the list is made of controls: built on the window's thread (this runs in the background)
+        Dictionary<PlannedFile, DownloadRow> rows = await Dispatcher.UIThread.InvokeAsync(() => StartDownloadList(outdated));
         DownloadRow? currentRow = null;
         try
         {
@@ -1625,7 +1635,13 @@ public partial class MainWindow : Window
         foreach (string l in SelectedLocales().Concat(LockedLocales(Folder).Keys)) _installLocales.Add(l);
         _installOptions.Clear();
         foreach (OptionGroup g in manifest.OptionGroups)
-            if (UpdatePlanner.ChosenOption(manifest, _settings.Options, g.Name) is { } chosen) _installOptions[g.Name] = chosen;
+        {
+            // the server's recommended pick for a group the player never chose
+            if (!g.Enforce && g.Recommended.Length > 0 && !_settings.Options.ContainsKey(g.Name)
+                && g.Options.Contains(g.Recommended, StringComparer.OrdinalIgnoreCase))
+                _installOptions[g.Name] = g.Recommended;
+            else if (UpdatePlanner.ChosenOption(manifest, _settings.Options, g.Name) is { } chosen) _installOptions[g.Name] = chosen;
+        }
         _installAddons = AddonsBox.IsChecked == true;
         BuildInstallParts(manifest);
         InstallOverlay.IsVisible = true;
@@ -1635,7 +1651,8 @@ public partial class MainWindow : Window
     {
         Grid row = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 1) };
         row.Children.Add(left);
-        TextBlock size = new() { Text = Words.Size(bytes), VerticalAlignment = VerticalAlignment.Center, Classes = { strong ? "text" : "soft" } };
+        TextBlock size = new() { Text = Words.Size(bytes), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0),
+                                 MinWidth = 56, TextAlignment = TextAlignment.Right, Classes = { strong ? "text" : "soft" } };
         Grid.SetColumn(size, 1);
         row.Children.Add(size);
         return row;
@@ -1674,7 +1691,7 @@ public partial class MainWindow : Window
                 {
                     string on = group.Options[0], off = onOff ? group.Options[1] : "";
                     CheckBox box;
-                    using (Look.Untranslated()) box = new CheckBox { Content = group.Name };
+                    using (Look.Untranslated()) box = new CheckBox { Content = NameWithTag(group.Name, group.Recommended.Equals(on, StringComparison.OrdinalIgnoreCase)) };
                     box.IsChecked = current.Equals(on, StringComparison.OrdinalIgnoreCase);
                     box.IsEnabled = !group.Enforce;
                     ToolTip.SetTip(box, group.Description.Length > 0 ? group.Description : null);
@@ -1686,8 +1703,10 @@ public partial class MainWindow : Window
                     // a real choice: the group's name, then each option with its size
                     using (Look.Untranslated()) InstallParts.Children.Add(new TextBlock { Text = group.Name, Margin = new Thickness(0, 4, 0, 0) });
                     List<LookChoice> items = [.. (group.Optional ? new[] { new LookChoice("", Translation.T("(none)")) } : []),
-                                              .. group.Options.Select(o => new LookChoice(o, $"{o}  ({Words.ShortSize(InstallSizes.Option(manifest, group.Name, o))})"))];
-                    ComboBox combo = new() { ItemsSource = items, MinWidth = 200, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = !group.Enforce };
+                                              .. group.Options.Select(o => new LookChoice(o, $"{o}  ({Words.ShortSize(InstallSizes.Option(manifest, group.Name, o))})",
+                                                                                          group.Recommended.Equals(o, StringComparison.OrdinalIgnoreCase)))];
+                    ComboBox combo = new() { ItemsSource = items, MinWidth = 200, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = !group.Enforce,
+                                             ItemTemplate = new FuncDataTemplate<LookChoice>((c, _) => NameWithTag(c?.Text ?? "", c?.Recommended == true)) };
                     combo.SelectedItem = items.FirstOrDefault(c => c.Value.Equals(current, StringComparison.OrdinalIgnoreCase)) ?? items[0];
                     Grid row = PartRow(combo, InstallSizes.Option(manifest, group.Name, current));
                     combo.SelectionChanged += (_, _) =>
@@ -1719,6 +1738,16 @@ public partial class MainWindow : Window
             InstallParts.Children.Add(rec);
         }
         ShowInstallTotal(manifest);
+    }
+
+    /// <summary>A name, followed by a dimmed "recommended" when the server recommends it.</summary>
+    static Control NameWithTag(string name, bool recommended)
+    {
+        StackPanel line = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
+        line.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+        if (recommended)
+            line.Children.Add(new TextBlock { Text = Translation.T("recommended"), Classes = { "dim" }, FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
+        return line;
     }
 
     InstallChoice InstallPlan(string folder) =>
@@ -1967,8 +1996,15 @@ public partial class MainWindow : Window
     }
     static void OpenFolder(string folder)
     {
-        Directory.CreateDirectory(folder);
-        OpenUrl(folder);
+        try
+        {
+            Directory.CreateDirectory(folder);
+            ProcessStartInfo start = OperatingSystem.IsWindows() ? new ProcessStartInfo("explorer.exe") { UseShellExecute = false }
+                : new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open") { UseShellExecute = false };
+            start.ArgumentList.Add(Path.GetFullPath(folder));
+            Process.Start(start)?.Dispose();
+        }
+        catch (Exception e) { Logger.Warning($"Couldn't open the folder {folder}", e); }
     }
 
     // ------------------------------------------------------------------------------------------- tweaks
@@ -2709,7 +2745,12 @@ public partial class MainWindow : Window
 
     void OnOpenGameFolder(object? sender, RoutedEventArgs e)
     {
-        if (NeedFolder()) return;
+        // works before the game is installed too: the folder is made if it isn't there yet
+        if (Folder.Length == 0)
+        {
+            Status("Pick your WoW folder under Game files, or an empty folder to install the game into.");
+            return;
+        }
         Log($"Opened the game folder: {Folder}");
         OpenFolder(Folder);
     }
@@ -2744,6 +2785,8 @@ public partial class MainWindow : Window
                     panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
             }
             // how big each choice is ("On" / "Off" groups: only the size of On)
+            if (group.Recommended.Length > 0)
+                panel.Children.Add(new TextBlock { Text = string.Format(Translation.T("Recommended: {0}"), group.Recommended), Classes = { "dim" }, FontSize = 11 });
             List<string> sized = [.. group.Options.Where(o => InstallSizes.Option(_manifest!, group.Name, o) > 0)];
             if (sized.Count > 0)
                 panel.Children.Add(new TextBlock

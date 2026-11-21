@@ -14,7 +14,7 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
         options/<Group>/<Option>/<path inside the WoW folder>            cosmetic patches only (darker nights...), installed
                                                                          when the player picks that option
                                       (e.g. options/Login screen/Classic/Data/patch-L.MPQ); options/<Group>/group.json
-                                      may hold {"description": "...", "optional": true, "order": ["Classic", ...],
+                                      may hold {"description": "...", "optional": true, "order": ["Classic", ...], "recommended": "HD",
                                       "links": {"GitHub": "https://..."}};
                                       an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
@@ -200,7 +200,9 @@ def build(files_dir, realmlist, cache):
                            "links": links,
                            # "requires": {"Character models": "HD"}: the group can only be turned on with that pick
                            "requires": {str(k): str(v) for k, v in (info.get("requires") or {}).items()},
-                           "previews": previews})
+                           "previews": previews,
+                           # "recommended": "HD": marked in the launcher and picked for new installs
+                           "recommended": str(info.get("recommended", "") or "")})
 
     # previews/login/<code>.png or .jpg (the scene's code in loginui.lua, e.g. "lk"): shown on the login screen list
     login_previews = {}

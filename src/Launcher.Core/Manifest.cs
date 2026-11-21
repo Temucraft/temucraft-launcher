@@ -95,6 +95,8 @@ public sealed class OptionGroup
     public Dictionary<string, string> Requires { get; set; } = [];
     /// <summary>Preview images next to the manifest, by option ("" = one picture for the whole group).</summary>
     public Dictionary<string, string> Previews { get; set; } = [];
+    /// <summary>The option the server recommends ("" = none): marked in the launcher and picked for new installs.</summary>
+    public string Recommended { get; set; } = "";
 }
 
 public sealed class OptionLink
