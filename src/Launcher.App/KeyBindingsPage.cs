@@ -39,6 +39,11 @@ public partial class MainWindow
         Grid.SetColumn(_bindNote, 2);
         top.Children.Add(_bindNote);
         TweaksList.Children.Add(top);
+        TweaksList.Children.Add(new TextBlock
+        {
+            Text = Translation.T("Bright keys are your own, dimmed keys are the game's defaults, and \"Not bound\" means no key."),
+            Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4),
+        });
         string? header = null;
         WrapPanel rows = new();
         foreach (KeyCommand c in KeyCommands.All)
@@ -116,8 +121,19 @@ public partial class MainWindow
     {
         List<string> keys = _bindKeys.GetValueOrDefault(command) ?? [];
         Button[] buttons = _keyButtons[command];
+        List<string> defaults = KeyDefaults.ByCommand.GetValueOrDefault(command) ?? [];
         for (int slot = 0; slot < KeySlots; slot++)
-            buttons[slot].Content = slot < keys.Count && keys[slot].Length > 0 ? keys[slot] : Translation.T("Not bound");
+        {
+            // your own key: bright; the game's default key: dimmed; no key: faint and slanted, so the three never look alike
+            string key = slot < keys.Count ? keys[slot] : "";
+            bool isDefault = key.Length > 0 && defaults.Contains(key, StringComparer.OrdinalIgnoreCase);
+            TextBlock text = key.Length == 0
+                ? new TextBlock { Text = Translation.T("Not bound"), Classes = { "dim" }, FontStyle = FontStyle.Italic, Opacity = 0.6 }
+                : new TextBlock { Text = key, Classes = { isDefault ? "dim" : "text" }, FontWeight = isDefault ? FontWeight.Normal : FontWeight.SemiBold };
+            buttons[slot].Content = text;
+            ToolTip.SetTip(buttons[slot], (key.Length == 0 ? Translation.T("No key.") : isDefault ? Translation.T("The game's default key.") : Translation.T("Your own key."))
+                                          + " " + Translation.T("Click, then press a key, mouse button or wheel. Right-click to clear. Escape cancels."));
+        }
         Grid row = _keyRows[command];
         KeyCommand c = KeyCommands.All.First(k => k.Command.Equals(command, StringComparison.OrdinalIgnoreCase));
         row.Tag = $"{c.Label} {c.Command} {c.Header} {string.Join(" ", keys)}";
