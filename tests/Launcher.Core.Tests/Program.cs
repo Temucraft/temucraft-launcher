@@ -63,6 +63,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Key bindings are the game's defaults with the file's changes over them", DefaultKeyBindings),
     ("Macro files read and write back the same; new ids and limits", MacroFileRoundTrip),
     ("Per character settings go to the character's config-cache.wtf", PerCharacterOptions),
+    ("The old launcher a self update leaves behind is removed at the next start", SelfUpdateLeftovers),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -1053,6 +1054,20 @@ static Task NavAndHeader()
     ServerSettings d = ServerSettings.Parse(["SERVER_URL=https://f.example/"]);
     Assert(d.Nav.Count == 0 && d.ShowIp && d.ShowUsername && d.NavShowUrl, "defaults");
     return Task.CompletedTask;
+}
+
+static async Task SelfUpdateLeftovers()
+{
+    string dir = TempDir(), exe = Path.Combine(dir, "TemucraftLauncher.exe");
+    File.WriteAllText(exe, "running");
+    foreach (string f in SelfCheck.Leftovers(exe)) File.WriteAllText(f, "left");
+    Check(SelfCheck.CleanUp(exe) == 0, "every leftover removed");
+    Check(SelfCheck.Leftovers(exe).All(f => !File.Exists(f)), "no leftover is still there");
+    Check(File.ReadAllText(exe) == "running", "the running launcher is kept");
+    Check(SelfCheck.CleanUp(exe) == 0 && SelfCheck.CleanUp(Path.Combine(dir, "missing", "x.exe")) == 0, "nothing to remove is fine");
+    File.WriteAllText(exe + ".old", "left");
+    await SelfCheck.CleanUpAtStartAsync(exe, tries: 2, delayMs: 10);
+    Check(!File.Exists(exe + ".old"), "removed at start");
 }
 
 static Task NewsTags()

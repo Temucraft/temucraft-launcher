@@ -105,6 +105,7 @@ public partial class MainWindow : Window
             Width = _settings.WindowWidth;
             Height = _settings.WindowHeight;
         }
+        _ = Task.Run(() => SelfCheck.CleanUpAtStartAsync());   // the copy the last self update left behind
         ShowTagLegend();
         ShowFeeds(FeedCache.Load(_feedFile));   // the last news and changelog, until the server sends new ones
         FillLookBoxes();

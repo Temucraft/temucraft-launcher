@@ -282,12 +282,37 @@ public static class SelfCheck
         return exe;
     }
 
-    /// <summary>Removes the launcher an update left behind (.old) and any half-downloaded new one.</summary>
-    public static void CleanUp()
+    /// <summary>What a self update can leave next to the launcher: the previous copy (.old), a new copy that never took
+    /// the exe's place (.new) and a half-downloaded one (.new.part).</summary>
+    public static IReadOnlyList<string> Leftovers(string exe) => [exe + ".old", exe + ".new", exe + ".new.part"];
+
+    /// <summary>Removes the launcher an update left behind and any unfinished new one; returns how many are still
+    /// there (locked, for example while the previous launcher is still closing). Never throws.</summary>
+    public static int CleanUp(string? exe = null)
     {
-        if (CurrentExe is null) return;
-        foreach (string leftover in new[] { CurrentExe + ".old", CurrentExe + ".new.part" })
-            try { if (File.Exists(leftover)) File.Delete(leftover); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        exe ??= CurrentExe;
+        if (exe is null) return 0;
+        int left = 0;
+        foreach (string leftover in Leftovers(exe))
+            try { if (File.Exists(leftover)) File.Delete(leftover); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { left++; }
+        return left;
+    }
+
+    /// <summary>At start: removes the leftovers of the last self update, trying again quietly for a while when the
+    /// previous launcher still holds its file. Never throws, so it can't stop the launcher from starting.</summary>
+    public static async Task CleanUpAtStartAsync(string? exe = null, int tries = 10, int delayMs = 2000)
+    {
+        try
+        {
+            for (int i = 0; i < tries; i++)
+            {
+                if (CleanUp(exe) == 0) return;
+                await Task.Delay(delayMs);
+            }
+            Logger.Info("An old launcher file is still in use; it is removed at a later start.");
+        }
+        catch (Exception e) { Logger.Warning("Couldn't remove the old launcher file", e); }
     }
 
     public static async Task<bool> MatchesAsync(Manifest manifest, CancellationToken token = default)
