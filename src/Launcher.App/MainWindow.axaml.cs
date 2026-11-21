@@ -1175,6 +1175,12 @@ public partial class MainWindow : Window
         RestartInto(exe);
     }
 
+    DateTime _progressTextAt = DateTime.MinValue;
+
+    /// <summary>Pads changing numbers ("8.2 MB/s", "34 min left") to a fixed width with figure spaces, so the text
+    /// after them doesn't jump left and right while they change (with the digits drawn at one width, tnum).</summary>
+    internal static string Steady(string text, int width) => text.Length >= width ? text : new string('\u2007', width - text.Length) + text;
+
     /// <summary>Starts the new launcher and closes this one.</summary>
     void RestartInto(string exe)
     {
@@ -1556,12 +1562,15 @@ public partial class MainWindow : Window
                     Progress.Value = total == 0 ? 1 : (double)done / total;
                     // this file and the whole update, the speed and the time left
                     double speed = meter.Add(done);
-                    string rate = speed > 0 ? $"  ·  {SpeedLimit.Format(speed, _settings.SpeedInBits)}" : "";
-                    string left = SpeedLimit.TimeLeft(total - done, speed);
+                    // the numbers change once a second (the bar keeps moving), so they can be read
+                    if (p.Done < p.Total && DateTime.UtcNow - _progressTextAt < TimeSpan.FromSeconds(1)) return;
+                    _progressTextAt = DateTime.UtcNow;
+                    string rate = speed > 0 ? $"  ·  {Steady(SpeedLimit.Format(speed, _settings.SpeedInBits), 11)}" : "";
+                    string left = Steady(SpeedLimit.TimeLeft(total - done, speed), 12);
                     if (rows.TryGetValue(planned, out DownloadRow? row))
                         SetRow(row, RowState.Downloading, p.Done, p.Total, SpeedLimit.TimeLeft(p.Total - p.Done, speed));
                     StatusText.Text = string.Format(Translation.T("Downloading {0} ({1}/{2})"), planned.File.Path, Index(planned), outdated.Count)
-                                      + $"  {Words.ShortSize(p.Done)} / {Words.ShortSize(p.Total)}{rate}" + (left.Length > 0 ? $"  ·  {left}" : "");
+                                      + $"  {Steady(Words.ShortSize(p.Done), 9)} / {Words.ShortSize(p.Total)}{rate}" + (left.Trim().Length > 0 ? $"  ·  {left}" : "");
                     ToolTip.SetTip(Progress, $"{Words.ShortSize(done)} / {Words.Size(total)}");
                 }),
                 token: token);

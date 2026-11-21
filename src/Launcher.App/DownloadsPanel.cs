@@ -14,6 +14,9 @@ namespace Launcher.App;
 /// </summary>
 public partial class MainWindow
 {
+    /// <summary>Digits drawn at one width, so changing numbers don't shift the text (OpenType tnum).</summary>
+    static readonly FontFeatureCollection TabularDigits = new() { FontFeature.Parse("tnum") };
+
     enum RowState { Waiting, Downloading, Copying, Done, Copied, Failed, Stopped }
 
     sealed class DownloadEntry
@@ -111,8 +114,8 @@ public partial class MainWindow
         return e.State switch
         {
             RowState.Waiting => $"{kind}  ·  {size}  ·  {Translation.T("Waiting")}",
-            RowState.Downloading => $"{kind}  ·  ↓ {Words.ShortSize(done)} / {Words.ShortSize(total > 0 ? total : e.Size)}"
-                                    + (left.Length > 0 ? $"  ·  {left}" : ""),
+            RowState.Downloading => $"{kind}  ·  ↓ {MainWindow.Steady(Words.ShortSize(done), 9)} / {Words.ShortSize(total > 0 ? total : e.Size)}"
+                                    + (left.Length > 0 ? $"  ·  {MainWindow.Steady(left, 12)}" : ""),
             RowState.Copying => $"{kind}  ·  {size}  ·  {Translation.T("Copying from your disk")}",
             RowState.Done => $"{kind}  ·  {size}  ·  {Translation.T("Done")}  ·  {e.When:dd-MM-yyyy HH:mm}",
             RowState.Copied => $"{kind}  ·  {size}  ·  {Translation.T("Done (copied from your disk)")}  ·  {e.When:dd-MM-yyyy HH:mm}",
@@ -163,7 +166,7 @@ public partial class MainWindow
             Foreground = (IBrush?)Application.Current!.FindResource("T.text"),
         };
         ToolTip.SetTip(name, e.Path);
-        row.Detail = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap };
+        row.Detail = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, FontFeatures = TabularDigits };
         row.Detail.Classes.Add("dim");
         row.Bar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, Margin = new Thickness(0, 4, 0, 0),
             Foreground = (IBrush?)Application.Current!.FindResource("T.section") };

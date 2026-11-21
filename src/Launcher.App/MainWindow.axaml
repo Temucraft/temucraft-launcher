@@ -162,7 +162,7 @@
       <!-- footer -->
       <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
         <StackPanel VerticalAlignment="Center" Spacing="2">
-          <TextBlock Name="StatusText" Text="Ready." FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource T.text}" TextWrapping="Wrap" />
+          <TextBlock Name="StatusText" Text="Ready." FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource T.text}" TextWrapping="Wrap" FontFeatures="tnum" />
           <TextBlock Name="VersionText" Classes="dim" FontSize="12" />
           <ProgressBar Name="Progress" Minimum="0" Maximum="1" Height="6" Foreground="{DynamicResource T.section}" Margin="0,4,12,0" />
         </StackPanel>
