@@ -141,30 +141,103 @@ public partial class MainWindow
         close.Click += (_, _) => { _sceneDetail.IsVisible = false; };
         head.Children.Add(close);
         _sceneDetail.Children.Add(head);
-        WrapPanel cards = new();
-        foreach ((string code, string label) in versions)
+        if (name == RacesGroup)
+            _sceneDetail.Children.Add(RaceTable(versions));
+        else
         {
-            StackPanel card = new() { Spacing = 3, Width = 324, Margin = new Thickness(0, 0, 14, 6) };
-            Grid frame = new() { Width = 320, Height = 180, HorizontalAlignment = HorizontalAlignment.Left, Background = Brushes.Black,
-                                 Cursor = new Cursor(StandardCursorType.Hand) };
-            Image picture = new() { Stretch = Stretch.Fill };
-            if (_manifest?.LoginScreenPreviews.TryGetValue(code, out string? url) == true) _ = SetSceneImageAsync(picture, url);
-            frame.Children.Add(picture);
-            Control layer = LoginButtonsOverlay.Build();
-            layer.IsVisible = _sceneOverlayOn;
-            _sceneOverlays.Add(layer);
-            frame.Children.Add(layer);
-            int index = _sceneOrder.FindIndex(s => s.Code == code);
-            frame.PointerPressed += (_, _) => _ = OpenScenePreviewAsync(index);
-            ToolTip.SetTip(frame, "Click to see it big");
-            card.Children.Add(frame);
-            card.Children.Add(new TextBlock { Text = label, FontWeight = FontWeight.Bold });
-            if (_sceneBoxes.TryGetValue(code, out CheckBox? box)) card.Children.Add(box);
-            cards.Children.Add(card);
+            WrapPanel cards = new();
+            foreach ((string code, string label) in versions) cards.Children.Add(SceneCard(code, label, 320));
+            _sceneDetail.Children.Add(cards);
         }
-        _sceneDetail.Children.Add(cards);
         _sceneDetail.IsVisible = true;
         _sceneDetail.BringIntoView();
+    }
+
+    const string RacesGroup = "Races and factions";
+
+    /// <summary>Races by faction: (race, original scene code, HD scene code); "" when the race has only one scene.
+    /// Codes and "(old)" marks as in Interface\loginui.lua.</summary>
+    static readonly (string Faction, (string Race, string Original, string Hd)[] Rows)[] RaceRows =
+    [
+        ("Alliance", [("Alliance", "", "al"), ("Human", "hu", "hm"), ("Dwarf", "dw", "dg"), ("Night Elf", "nl", "ne"),
+                      ("Gnome", "", "gn"), ("Draenei", "", "dr"), ("Worgen", "", "wr"), ("Pandaren", "", "pd"),
+                      ("Void Elf", "", "ve"), ("Lightforged Draenei", "", "ld"), ("Kul Tiran", "", "kt"),
+                      ("Mechagnome", "", "mg"), ("Earthen", "", "ea")]),
+        ("Horde", [("Horde", "", "ho"), ("Orc", "or", "ot"), ("Undead", "sc", "ud"), ("Tauren", "ta", "tr"),
+                   ("Troll", "", "tl"), ("Blood Elf", "", "be"), ("Goblin", "", "gb"), ("Pandaren", "", "pn"),
+                   ("Nightborne", "", "nf"), ("Highmountain Tauren", "", "hr"), ("Mag'har Orc", "", "oc"),
+                   ("Vulpera", "", "vp")]),
+        ("Classes and others", [("Death Knight", "dk", "dt"), ("Demon Hunter", "", "dh"), ("Dracthyr", "", "dy"),
+                                ("Pirate", "", "tp"), ("Character select", "", "cs")]),
+    ];
+
+    /// <summary>Alliance | Horde side by side (classes and others under them); each race on a row with its Original and
+    /// HD scenes. Scenes not in RaceRows go at the end.</summary>
+    Control RaceTable(List<(string Code, string Label)> versions)
+    {
+        HashSet<string> have = new(versions.Select(v => v.Code), StringComparer.OrdinalIgnoreCase);
+        HashSet<string> shown = new(StringComparer.OrdinalIgnoreCase);
+        StackPanel Column((string Race, string Original, string Hd)[] rows, string title)
+        {
+            StackPanel column = new() { Spacing = 6, Margin = new Thickness(0, 0, 24, 12) };
+            column.Children.Add(new TextBlock { Text = title.ToUpperInvariant(), Classes = { "section" } });
+            foreach ((string race, string original, string hd) in rows)
+            {
+                List<(string Code, string Label)> scenes = [];
+                if (original.Length > 0 && have.Contains(original)) scenes.Add((original, "Original"));
+                if (have.Contains(hd)) scenes.Add((hd, original.Length > 0 ? "HD" : ""));
+                if (scenes.Count == 0) continue;
+                StackPanel row = new() { Spacing = 2 };
+                row.Children.Add(new TextBlock { Text = race, FontWeight = FontWeight.Bold });
+                StackPanel pair = new() { Orientation = Orientation.Horizontal };
+                foreach ((string code, string label) in scenes)
+                {
+                    pair.Children.Add(SceneCard(code, label, 200));
+                    shown.Add(code);
+                }
+                row.Children.Add(pair);
+                column.Children.Add(row);
+            }
+            return column;
+        }
+        Grid sides = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto") };
+        StackPanel alliance = Column(RaceRows[0].Rows, RaceRows[0].Faction), horde = Column(RaceRows[1].Rows, RaceRows[1].Faction);
+        Grid.SetColumn(horde, 1);
+        sides.Children.Add(alliance);
+        sides.Children.Add(horde);
+        StackPanel all = new() { Children = { sides, Column(RaceRows[2].Rows, RaceRows[2].Faction) } };
+        List<(string Code, string Label)> rest = [.. versions.Where(v => !shown.Contains(v.Code))];
+        if (rest.Count > 0)
+        {
+            WrapPanel others = new();
+            foreach ((string code, string label) in rest) others.Children.Add(SceneCard(code, label, 200));
+            all.Children.Add(new TextBlock { Text = "OTHER", Classes = { "section" } });
+            all.Children.Add(others);
+        }
+        return all;
+    }
+
+    /// <summary>One scene: its picture (click for the big view, login buttons on top when wanted), label and tick box.</summary>
+    Control SceneCard(string code, string label, double width)
+    {
+        double height = Math.Round(width * 9 / 16);
+        StackPanel card = new() { Spacing = 3, Width = width + 4, Margin = new Thickness(0, 0, 10, 6) };
+        Grid frame = new() { Width = width, Height = height, HorizontalAlignment = HorizontalAlignment.Left, Background = Brushes.Black,
+                             Cursor = new Cursor(StandardCursorType.Hand) };
+        Image picture = new() { Stretch = Stretch.Fill };
+        if (_manifest?.LoginScreenPreviews.TryGetValue(code, out string? url) == true) _ = SetSceneImageAsync(picture, url);
+        frame.Children.Add(picture);
+        Control layer = LoginButtonsOverlay.Build();
+        layer.IsVisible = _sceneOverlayOn;
+        _sceneOverlays.Add(layer);
+        frame.Children.Add(layer);
+        int index = _sceneOrder.FindIndex(s => s.Code == code);
+        frame.PointerPressed += (_, _) => _ = OpenScenePreviewAsync(index);
+        ToolTip.SetTip(frame, "Click to see it big");
+        card.Children.Add(frame);
+        if (label.Length > 0) card.Children.Add(new TextBlock { Text = label, FontWeight = FontWeight.Bold, FontSize = width < 300 ? 12 : 14 });
+        if (_sceneBoxes.TryGetValue(code, out CheckBox? box)) card.Children.Add(box);
+        return card;
     }
 
     async Task SetSceneImageAsync(Image picture, string url)
