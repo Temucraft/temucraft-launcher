@@ -2160,6 +2160,9 @@ public partial class MainWindow : Window
     readonly Dictionary<string, CheckBox> _sceneBoxes = [];
     WrapPanel? _scenePanel;
     StackPanel? _sceneButtons;
+    // drawn login buttons over the scene pictures ("Preview with the login buttons")
+    readonly List<Control> _sceneOverlays = [];
+    bool _sceneOverlayOn;
 
     /// <summary>The login screen section: one box per scene in the game's loginui.lua (one is picked at random).</summary>
     void BuildLoginScenes()
@@ -2175,8 +2178,16 @@ public partial class MainWindow : Window
         Button server = new() { Content = "Use the server's picks", FontSize = 12, Padding = new Thickness(8, 2) };
         ToolTip.SetTip(server, "Go back to the backgrounds the server picked (they come back with the next update)");
         server.Click += (_, _) => ResetLoginScenes();
+        CheckBox overlay = new() { Content = "Preview with the login buttons", FontSize = 12, IsChecked = _sceneOverlayOn };
+        ToolTip.SetTip(overlay, "Shows the pictures with the login screen's buttons and boxes on top, as you'll see them in the game");
+        overlay.IsCheckedChanged += (_, _) =>
+        {
+            _sceneOverlayOn = overlay.IsChecked == true;
+            foreach (Control layer in _sceneOverlays) layer.IsVisible = _sceneOverlayOn;
+        };
         buttons.Children.Add(all);
         buttons.Children.Add(server);
+        buttons.Children.Add(overlay);
         _sceneButtons = buttons;
         TweaksList.Children.Add(buttons);
     }
@@ -2209,6 +2220,7 @@ public partial class MainWindow : Window
             scenes = [.. scenes.Select(x => x with { On = mine.Contains(x.Code) })];
         _scenePanel.Children.Clear();
         _sceneBoxes.Clear();
+        _sceneOverlays.Clear();
         if (_sceneButtons is not null) _sceneButtons.IsVisible = scenes.Count > 0;
         if (scenes.Count == 0)
         {
@@ -2225,11 +2237,18 @@ public partial class MainWindow : Window
             StackPanel tile = new() { Spacing = 2, Margin = new Thickness(0, 0, 12, 8), Width = 184 };
             if (_manifest?.LoginScreenPreviews.TryGetValue(scene.Code, out string? url) == true)
             {
-                Image picture = new() { Width = 180, Height = 100, Stretch = Stretch.UniformToFill, IsVisible = false,
+                Image picture = new() { Width = 180, Height = 100, Stretch = Stretch.Fill, IsVisible = false,
                                         Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
                 picture.PointerPressed += (_, _) => box.IsChecked = box.IsChecked != true;
-                tile.Children.Add(picture);
-                _ = SetPictureAsync(picture, url);
+                Control layer = LoginButtonsOverlay.Build();
+                layer.Width = 180; layer.Height = 100; layer.IsVisible = _sceneOverlayOn;
+                _sceneOverlays.Add(layer);
+                Grid frame = new() { Width = 180, Height = 100, HorizontalAlignment = HorizontalAlignment.Left };
+                frame.Children.Add(picture);
+                frame.Children.Add(layer);
+                frame.Bind(IsVisibleProperty, picture.GetObservable(IsVisibleProperty));
+                tile.Children.Add(frame);
+                _ = SetPictureAsync(picture, url, withOverlay: true);
             }
             tile.Children.Add(box);
             _scenePanel.Children.Add(tile);
@@ -2981,14 +3000,26 @@ public partial class MainWindow : Window
         return bitmap;
     }
 
-    async Task SetPictureAsync(Image picture, string url)
+    async Task SetPictureAsync(Image picture, string url, bool withOverlay = false)
     {
         if (_server is null) return;
         Bitmap? bitmap = await PictureAsync(url);
         picture.Source = bitmap;
         picture.IsVisible = bitmap is not null;
-        if (bitmap is not null)
+        if (bitmap is null) return;
+        if (!withOverlay)
+        {
             ToolTip.SetTip(picture, new Image { Source = bitmap, MaxWidth = 900, MaxHeight = 600, Stretch = Stretch.Uniform });
+            return;
+        }
+        // the big picture on hover, with the login buttons on top when "Preview with the login buttons" is ticked
+        Grid big = new() { Width = 800, Height = 450 };
+        big.Children.Add(new Image { Source = bitmap, Stretch = Stretch.Fill });
+        Control layer = LoginButtonsOverlay.Build();
+        layer.IsVisible = _sceneOverlayOn;
+        _sceneOverlays.Add(layer);
+        big.Children.Add(layer);
+        ToolTip.SetTip(picture, big);
     }
 
     /// <summary>The preview picture for an option (its own, else the group's), loaded once from the server.</summary>
