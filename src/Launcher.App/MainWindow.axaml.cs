@@ -45,6 +45,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // testing mode: Shift + click on PLAY starts the game without updating (to test local files)
+        PlayButton.AddHandler(PointerPressedEvent, (_, e) => _shiftPlay = e.KeyModifiers.HasFlag(Avalonia.Input.KeyModifiers.Shift),
+                              Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         LoadDownloadHistory();
         HookTweaksSearch();
         Logger.Written += ShowLogLine;
@@ -1865,6 +1868,8 @@ public partial class MainWindow : Window
     bool NoGameYet => Folder.Length > 0 && !GameFolder.LooksLikeClient(Folder);
 
     // ------------------------------------------------------------------------------------------- play
+    bool _shiftPlay;
+
     async void OnPlay(object? sender, RoutedEventArgs e)
     {
         if ((NoGameYet || Folder.Length == 0) && _server is not null)
@@ -1874,7 +1879,10 @@ public partial class MainWindow : Window
             return;
         }
         if (NeedFolder()) return;
-        if (_pendingFiles > 0 && _server is not null)
+        bool skipUpdate = _shiftPlay && TestingFiles.Enabled(AppContext.BaseDirectory);
+        _shiftPlay = false;
+        if (skipUpdate && _pendingFiles > 0) Log("Testing mode: playing without the update (Shift + PLAY)");
+        if (_pendingFiles > 0 && _server is not null && !skipUpdate)
         {
             // first what the update will change, unless the player said not to ask
             if (!_settings.SkipUpdateInfo && _pendingUpdate is not null) { ShowUpdateInfo(fromUpdate: true); return; }
