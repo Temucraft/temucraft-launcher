@@ -23,6 +23,10 @@ public partial class MainWindow
     string _pickedScene = "";
     bool _raceRefresh;
 
+    // faction colours (Alliance / Horde) and the death knight class colour; black text on them reads best
+    static readonly Color AllianceColor = Color.Parse("#3FACF4"), HordeColor = Color.Parse("#FF653D"), DeathKnightColor = Color.Parse("#DD1B3C");
+    static Color FactionColor(string faction) => faction == "Alliance" ? AllianceColor : faction == "Horde" ? HordeColor : DeathKnightColor;
+
     bool HdModels => _manifest is not null && UpdatePlanner.ChosenOption(_manifest, _settings.Options, "Character models") == "HD";
 
     /// <summary>The section under Login screen.</summary>
@@ -64,10 +68,8 @@ public partial class MainWindow
             {
                 ToggleButton button = new() { FontSize = 12, Padding = new Thickness(8, 2), MinWidth = 260,
                                               HorizontalContentAlignment = HorizontalAlignment.Left,
-                                              BorderBrush = new SolidColorBrush(faction == "Alliance" ? Color.FromRgb(0x2f, 0x5f, 0xc0)
-                                                                              : faction == "Horde" ? Color.FromRgb(0xb0, 0x28, 0x28)
-                                                                              : Color.FromRgb(0x70, 0x70, 0x70)),
-                                              BorderThickness = new Thickness(3, 0, 0, 0) };
+                                              BorderBrush = new SolidColorBrush(FactionColor(faction)),
+                                              BorderThickness = new Thickness(4, 0, 0, 0) };
                 string key = race.Key;
                 button.IsCheckedChanged += (_, _) => { if (!_raceRefresh) ToggleRace(key); };
                 _raceButtons[key] = button;
@@ -136,13 +138,15 @@ public partial class MainWindow
             foreach (CharacterRace race in CharacterScenes.Races.Where(r => SceneOf(r.Key, hd).Equals(folder, StringComparison.OrdinalIgnoreCase)))
             {
                 bool own = !_scenePicksDraft.ContainsKey(race.Key);
+                // a pick of the player's: filled with the colour; the race's own scene: outlined
+                Color color = FactionColor(race.Faction);
                 races.Children.Add(new Border
                 {
-                    Background = new SolidColorBrush(race.Faction == "Alliance" ? Color.FromArgb(own ? (byte)0x60 : (byte)0xd0, 0x2f, 0x5f, 0xc0)
-                                                   : race.Faction == "Horde" ? Color.FromArgb(own ? (byte)0x60 : (byte)0xd0, 0xb0, 0x28, 0x28)
-                                                   : Color.FromArgb(own ? (byte)0x60 : (byte)0xd0, 0x70, 0x70, 0x70)),
+                    Background = own ? Brushes.Transparent : new SolidColorBrush(color),
+                    BorderBrush = new SolidColorBrush(color), BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0), Margin = new Thickness(0, 2, 3, 0),
-                    Child = new TextBlock { Text = race.Label, FontSize = 10, Foreground = Brushes.White },
+                    Child = new TextBlock { Text = race.Label, FontSize = 10, FontWeight = FontWeight.SemiBold,
+                                            Foreground = own ? new SolidColorBrush(color) : race.Faction == "Class" ? Brushes.White : Brushes.Black },
                 });
             }
         }

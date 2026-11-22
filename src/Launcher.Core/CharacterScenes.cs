@@ -39,19 +39,17 @@ public static class CharacterScenes
         new("CharacterSelect", "Character select", "cs"),
     ];
 
+    /// <summary>The playable races (ChrRaces 1-20 with their file strings), then death knights.</summary>
     public static readonly CharacterRace[] Races =
     [
         new("HUMAN", "Human", "Alliance"), new("DWARF", "Dwarf", "Alliance"), new("NIGHTELF", "Night Elf", "Alliance"),
         new("GNOME", "Gnome", "Alliance"), new("DRAENEI", "Draenei", "Alliance"), new("WORGEN", "Worgen", "Alliance"),
-        new("HIGHELF", "High Elf", "Alliance"), new("VOIDELF", "Void Elf", "Alliance"),
-        new("LIGHTFORGEDDRAENEI", "Lightforged Draenei", "Alliance"), new("DARKIRONDWARF", "Dark Iron Dwarf", "Alliance"),
-        new("KULTIRAN", "Kul Tiran", "Alliance"), new("MECHAGNOME", "Mechagnome", "Alliance"),
-        new("ALLIANCEPANDAREN", "Pandaren", "Alliance"), new("ALLIANCEEARTHEN", "Earthen", "Alliance"),
+        new("ALLIANCEPANDAREN", "Pandaren", "Alliance"), new("VOIDELF", "Void Elf", "Alliance"),
+        new("LIGHTFORGEDDRAENEI", "Lightforged Draenei", "Alliance"), new("KULTIRAN", "Kul Tiran", "Alliance"),
         new("ORC", "Orc", "Horde"), new("SCOURGE", "Undead", "Horde"), new("TAUREN", "Tauren", "Horde"),
-        new("TROLL", "Troll", "Horde"), new("BLOODELF", "Blood Elf", "Horde"), new("GOBLIN", "Goblin", "Horde"),
-        new("NIGHTBORNE", "Nightborne", "Horde"), new("HIGHMOUNTAINTAUREN", "Highmountain Tauren", "Horde"),
-        new("MAGHAR", "Mag'har Orc", "Horde"), new("ZANDALARITROLL", "Zandalari Troll", "Horde"),
-        new("VULPERA", "Vulpera", "Horde"), new("HORDEPANDAREN", "Pandaren", "Horde"), new("HORDEEARTHEN", "Earthen", "Horde"),
+        new("TROLL", "Troll", "Horde"), new("GOBLIN", "Goblin", "Horde"), new("BLOODELF", "Blood Elf", "Horde"),
+        new("HORDEPANDAREN", "Pandaren", "Horde"), new("NIGHTBORNE", "Nightborne", "Horde"),
+        new("HIGHMOUNTAINTAUREN", "Highmountain Tauren", "Horde"), new("ZANDALARITROLL", "Zandalari Troll", "Horde"),
         new("DEATHKNIGHT", "Death Knight", "Class"),
     ];
 
