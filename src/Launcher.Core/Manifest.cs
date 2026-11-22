@@ -40,6 +40,8 @@ public sealed class Manifest
     public List<OptionGroup> OptionGroups { get; set; } = [];
     /// <summary>Pictures of the login screen scenes, by scene code ("lk"), next to the manifest.</summary>
     public Dictionary<string, string> LoginScreenPreviews { get; set; } = [];
+    /// <summary>Short clips of the scene music, by scene code (previews/music/&lt;code&gt;.mp3), for the music choices.</summary>
+    public Dictionary<string, string> MusicPreviews { get; set; } = [];
 
     public List<ManifestFile> Files { get; set; } = [];
 

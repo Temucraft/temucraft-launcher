@@ -61,6 +61,37 @@ public static partial class LoginScreens
         return true;
     }
 
+    const string MusicMark = "-- Temucraft launcher";
+
+    /// <summary>Sets the login screen music (LoginMusic = { ... }) to one scene code's music, or back to each scene's own
+    /// ("" ). Only the launcher's own line is touched. Returns whether the file changed.</summary>
+    public static bool WriteMusic(string wowFolder, string code)
+    {
+        string file = PathIn(wowFolder);
+        if (!File.Exists(file) || (code.Length > 0 && !code.All(char.IsAsciiLetterOrDigit))) return false;
+        byte[] raw = File.ReadAllBytes(file);
+        bool bom = raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF;
+        string text = Encoding.UTF8.GetString(raw, bom ? 3 : 0, raw.Length - (bom ? 3 : 0));
+        string newline = text.Contains("\r\n") ? "\r\n" : "\n";
+        List<string> lines = [.. text.Split(newline)];
+        int start = lines.FindIndex(l => l.Contains("\"LoginMusic\""));
+        if (start < 0) return false;
+        string wanted = code.Length > 0 ? $"\t\t\"{code.ToLowerInvariant()}\", {MusicMark}" : "";
+        int mine = -1;
+        for (int i = start + 1; i < lines.Count && !lines[i].Trim().StartsWith('}'); i++)
+            if (lines[i].Contains(MusicMark)) { mine = i; break; }
+        if (mine >= 0)
+        {
+            if (lines[mine] == wanted) return false;
+            if (wanted.Length > 0) lines[mine] = wanted; else lines.RemoveAt(mine);
+        }
+        else if (wanted.Length > 0) lines.Insert(start + 1, wanted);
+        else return false;
+        byte[] body = Encoding.UTF8.GetBytes(string.Join(newline, lines));
+        File.WriteAllBytes(file, bom ? [0xEF, 0xBB, 0xBF, .. body] : body);
+        return true;
+    }
+
     /// <summary>The scene lines inside SceneList = { ... }.</summary>
     static IEnumerable<(int Index, Match Match)> SceneLines(string[] lines)
     {

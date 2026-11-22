@@ -16,7 +16,9 @@ public partial class MainWindow
         ScreensLoginList.Children.Clear();
         ScreensCharList.Children.Clear();
         BuildLoginScenes(ScreensLoginList);
+        BuildLoginMusic(ScreensLoginList);
         BuildCharacterScenes(ScreensCharList);
+        BuildCharacterMusic(ScreensCharList);
         ShowScreensView(login: true);
     }
 

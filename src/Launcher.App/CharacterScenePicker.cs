@@ -113,18 +113,17 @@ public partial class MainWindow
     /// <summary>Scene rows: (race, original scene folder, HD scene folder); "" when there is only one.</summary>
     static readonly (string Title, (string Race, string Original, string Hd)[] Rows)[] SceneRows =
     [
-        ("Alliance", [("Alliance", "", "Alliance"), ("Human", "Huma2", "Human"), ("Dwarf and Gnome", "Dwar2", "Dwarf"),
-                      ("Night Elf", "NightEl2", "NightElf"), ("Gnome", "", "Gnome"), ("Draenei", "", "Draenei"),
+        // only playable races; each row named for what its file really shows in this client (UI_Human is Boralus,
+        // UI_Tauren Highmountain, UI_Troll Zandalar, UI_Dwarf and UI_NightElf the Dark Iron and Nightborne scenes)
+        ("Alliance", [("Alliance", "", "Alliance"), ("Human", "", "Huma2"), ("Dwarf and Gnome", "", "Dwar2"),
+                      ("Night Elf", "", "NightEl2"), ("Gnome", "", "Gnome"), ("Draenei and Lightforged", "", "Draenei"),
                       ("Worgen", "", "Worgen"), ("Pandaren", "", "Pandaren"), ("Void Elf", "", "VoidElf"),
-                      ("Lightforged Draenei", "", "LightforgedDraenei"), ("Kul Tiran", "", "KulTiran"),
-                      ("Mechagnome", "", "Mechagnome"), ("Earthen", "", "Earthen")]),
+                      ("Kul Tiran (Boralus)", "", "Human")]),
         ("Horde", [("Horde", "", "Horde"), ("Orc and Troll", "Or2", "Orc"), ("Undead", "Scourg2", "Scourge"),
-                   ("Tauren", "Taure2", "Tauren"), ("Troll", "", "Troll"), ("Blood Elf", "", "BloodElf"),
-                   ("Goblin", "", "Goblin"), ("Pandaren (temple)", "", "PandarenCharacterSelect"),
-                   ("Nightborne", "", "NightborneElf"), ("Highmountain Tauren", "", "HighmountainTauren"),
-                   ("Mag'har Orc", "", "OrcClan"), ("Vulpera", "", "Vulpera")]),
-        ("Classes and others", [("Death Knight", "DeathKnight", "DeathKnigh2"), ("Demon Hunter", "", "DemonHunter"),
-                                ("Dracthyr", "", "Dracthyr"), ("Pirate", "", "Pirate"), ("Character select", "", "CharacterSelect")]),
+                   ("Tauren (Mulgore)", "", "Taure2"), ("Blood Elf", "", "BloodElf"), ("Goblin", "", "Goblin"),
+                   ("Pandaren (temple)", "", "PandarenCharacterSelect"), ("Nightborne (Suramar)", "", "NightborneElf"),
+                   ("Highmountain Tauren", "", "Tauren"), ("Zandalari Troll (Zandalar)", "", "Troll")]),
+        ("Classes and others", [("Death Knight", "DeathKnight", "DeathKnigh2"), ("Character select", "", "CharacterSelect")]),
     ];
 
     StackPanel SceneColumn(string title, (string Race, string Original, string Hd)[] rows, bool wrap = false)
@@ -252,7 +251,7 @@ public partial class MainWindow
         if (_manifest is null || !GameFolder.LooksLikeClient(folder)) return;
         try
         {
-            if (CharacterScenes.Write(folder, SceneMode, _settings.ScenePicks))
+            if (CharacterScenes.Write(folder, SceneMode, _settings.ScenePicks, _settings.MusicPicks))
                 Log($"Character screens: {CharacterScenes.ModeName(SceneMode)} scenes" + (_settings.ScenePicks.Count > 0
                     ? ", " + string.Join(", ", _settings.ScenePicks.Select(p => $"{p.Key} = {p.Value}")) : ""));
         }

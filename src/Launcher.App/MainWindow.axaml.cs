@@ -2253,6 +2253,7 @@ public partial class MainWindow : Window
     /// <summary>The player's scenes into loginui.lua; the file still counts as the server's (it isn't downloaded again).</summary>
     void ApplyLoginScenes(string folder)
     {
+        ApplyLoginMusic(folder);   // the update may have put a fresh loginui.lua in place
         if (_settings.LoginScenes is not { Count: > 0 } scenes) return;
         try
         {
@@ -2807,6 +2808,13 @@ public partial class MainWindow : Window
         _previewTiles.Clear();
         if (_manifest is null || _manifest.OptionGroups.Count == 0)
             OptionsList.Children.Add(new TextBlock { Text = "The server offers no cosmetic patches (or the launcher hasn't connected yet).", Classes = { "dim" } });
+        else
+        {
+            // one preset for everything first (Classic | HD | Custom), as wide as the page
+            Control presets = PresetBar();
+            if (presets is Layoutable l) l.Width = Math.Max(200, OptionsList.Bounds.Width - 12);
+            OptionsList.Children.Add(presets);
+        }
         // cards under their category's heading (Characters, World, Interface, Performance and fixes, then others, Other last)
         string[] categoryOrder = ["Characters", "World", "Interface", "Performance and fixes"];
         int Rank(OptionGroup g) => g.Category.Length == 0 ? 1000
@@ -2872,6 +2880,7 @@ public partial class MainWindow : Window
             {
                 _settings.Options[group.Name] = value;
                 SaveSettings();
+                if (PresetGroups().Contains(group)) Dispatcher.UIThread.Post(RefreshMods);   // the preset may turn Custom
                 if (group.Previews.Count > 0) { _ = ShowPreviewAsync(group, value); MarkPicked(group.Name, value); }
                 // groups that need this one turn usable (or not)
                 if (_manifest!.OptionGroups.Any(g => g.Requires.ContainsKey(group.Name)))

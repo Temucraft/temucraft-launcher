@@ -102,7 +102,7 @@ public static class CharacterScenes
     static bool Safe(string text) => text.Length is > 0 and < 64 && text.All(char.IsAsciiLetterOrDigit);
 
     /// <summary>The file's text: the mode, then the player's picks.</summary>
-    public static string Text(string mode, IReadOnlyDictionary<string, string> picks)
+    public static string Text(string mode, IReadOnlyDictionary<string, string> picks, IReadOnlyDictionary<string, string>? music = null)
     {
         StringBuilder text = new();
         text.Append("-- Written by the Temucraft launcher (Login screen > Character screens). See GlueParent.lua.\r\n");
@@ -111,14 +111,19 @@ public static class CharacterScenes
         foreach ((string race, string scene) in picks.OrderBy(p => p.Key, StringComparer.Ordinal))
             if (Safe(race) && Safe(scene)) text.Append($"\t[\"{race.ToUpperInvariant()}\"] = \"{scene}\",\r\n");
         text.Append("};\r\n");
+        // music per race: the scene code whose music plays (GlueParent's TemucraftMusicTracks)
+        text.Append("TEMUCRAFT_MUSIC_PICKS = {\r\n");
+        foreach ((string race, string code) in (music ?? new Dictionary<string, string>()).OrderBy(p => p.Key, StringComparer.Ordinal))
+            if (Safe(race) && Safe(code)) text.Append($"\t[\"{race.ToUpperInvariant()}\"] = \"{code.ToLowerInvariant()}\",\r\n");
+        text.Append("};\r\n");
         return text.ToString();
     }
 
     /// <summary>Writes Interface\TemucraftScenes.lua when it changed; true when it did.</summary>
-    public static bool Write(string wowFolder, string mode, IReadOnlyDictionary<string, string> picks)
+    public static bool Write(string wowFolder, string mode, IReadOnlyDictionary<string, string> picks, IReadOnlyDictionary<string, string>? music = null)
     {
         string path = Path.Combine(wowFolder, "Interface", "TemucraftScenes.lua");
-        string text = Text(mode, picks);
+        string text = Text(mode, picks, music);
         if (File.Exists(path) && File.ReadAllText(path) == text) return false;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path + ".tmp", text);

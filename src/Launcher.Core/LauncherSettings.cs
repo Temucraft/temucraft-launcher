@@ -143,6 +143,11 @@ public sealed class UserSettings
     public Dictionary<string, string> ScenePicks { get; set; } = [];
     /// <summary>Character models: HD, but these races (HdModels.Parts) stay Classic.</summary>
     public List<string> HdClassicParts { get; set; } = [];
+    /// <summary>Character screen music per race (race file string upper case -> scene code whose music plays); none =
+    /// the music of the scene shown.</summary>
+    public Dictionary<string, string> MusicPicks { get; set; } = [];
+    /// <summary>Login screen music: a scene code whose music plays on the login screen; "" = each scene's own.</summary>
+    public string LoginMusic { get; set; } = "";
     public bool ReopenAfterGame { get; set; } = true;
     public bool RememberWindow { get; set; }
     /// <summary>The remembered window position; null until "Remember window position" has saved one.</summary>

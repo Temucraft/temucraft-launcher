@@ -238,6 +238,14 @@ def build(files_dir, realmlist, cache):
             stem, ext = os.path.splitext(name)
             if os.path.isfile(os.path.join(pdir, name)) and ext.lower() in (".png", ".jpg", ".jpeg"):
                 login_previews[stem.lower()] = url_of(files_dir, os.path.join(pdir, name))
+    # previews/music/<code>.mp3: a short clip of a scene's music, played by the launcher's music choices
+    music_previews = {}
+    mdir = os.path.join(files_dir, "previews", "music")
+    if os.path.isdir(mdir):
+        for name in sorted(os.listdir(mdir)):
+            stem, ext = os.path.splitext(name)
+            if os.path.isfile(os.path.join(mdir, name)) and ext.lower() in (".mp3", ".ogg"):
+                music_previews[stem.lower()] = url_of(files_dir, os.path.join(mdir, name))
 
     # An option file that lands on the same path as a normal file (a stale option left on the server after a patch got
     # its letter, for example) would make the launcher swap the two on every check. The normal file wins.
@@ -250,6 +258,7 @@ def build(files_dir, realmlist, cache):
 
     manifest = {"version": 1, "realmlist": realmlist, "clientVersion": "", "optionGroups": groups,
                 "loginScreenPreviews": login_previews,
+                "musicPreviews": music_previews,
                 "files": files, "obsolete": [], "policy": {}}
     # launcher-policy.json: {"installAddons": {"value": true, "enforce": true}, ...}; enforced settings can't be changed
     policy_file = os.path.join(files_dir, "launcher-policy.json")
