@@ -29,7 +29,19 @@ public partial class MainWindow
     static readonly Color AllianceColor = Color.Parse("#3FACF4"), HordeColor = Color.Parse("#FF653D"), DeathKnightColor = Color.Parse("#DD1B3C");
     static Color FactionColor(string faction) => faction == "Alliance" ? AllianceColor : faction == "Horde" ? HordeColor : DeathKnightColor;
 
-    bool HdModels => _manifest is not null && UpdatePlanner.ChosenOption(_manifest, _settings.Options, "Character models") == "HD";
+    /// <summary>HD scenes when the "Character screens" option is HD (servers without that option: Character models HD).</summary>
+    bool HdModels => _manifest is not null && (_manifest.OptionGroups.Any(g => g.Name == "Character screens")
+        ? UpdatePlanner.ChosenOption(_manifest, _settings.Options, "Character screens") == "HD"
+        : UpdatePlanner.ChosenOption(_manifest, _settings.Options, "Character models") == "HD");
+
+    /// <summary>The big preview: each race's scene, Classic or HD, with the player's picks.</summary>
+    Task OpenCharacterScenePreviewAsync(bool hd) => new CharacterScenePreviewWindow(hd,
+        (race, mode) => _scenePicksDraft.TryGetValue(race, out string? pick) ? pick : CharacterScenes.DefaultScene(race, mode),
+        async folder =>
+        {
+            string? code = CharacterScenes.Scenes.FirstOrDefault(x => x.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase))?.Preview;
+            return code is not null && _manifest?.LoginScreenPreviews.TryGetValue(code, out string? url) == true ? await PictureAsync(url) : null;
+        }).ShowDialog(this);
 
     /// <summary>The section under Login screen.</summary>
     void BuildCharacterScenes()
@@ -38,51 +50,43 @@ public partial class MainWindow
         _characterScenesNote = new TextBlock { Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap };
         TweaksList.Children.Add(_characterScenesNote);
 
-        // the scenes: Alliance | Horde side by side, each race on a row with its Classic and HD scene; then the rest
-        Grid sides = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), Margin = new Thickness(0, 4, 0, 0) };
+        // the scenes: Alliance | Horde side by side, each race on a row with its Classic and HD scene; on the right the
+        // race buttons; under them the classes and other scenes
+        Grid sides = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), Margin = new Thickness(0, 4, 0, 0) };
         for (int i = 0; i < 2; i++)
         {
             StackPanel side = SceneColumn(SceneRows[i].Title, SceneRows[i].Rows);
             Grid.SetColumn(side, i);
             sides.Children.Add(side);
         }
-        TweaksList.Children.Add(sides);
-        TweaksList.Children.Add(SceneColumn(SceneRows[2].Title, SceneRows[2].Rows, wrap: true));
-
-        // the races, Alliance | Horde, then classes
-        TweaksList.Children.Add(new TextBlock { Text = "RACES", Classes = { "section" } });
-        Grid palette = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), Margin = new Thickness(0, 4, 0, 0) };
-        int column = 0;
+        StackPanel palette = new() { Spacing = 3, Margin = new Thickness(4, 0, 0, 0) };
+        palette.Children.Add(new TextBlock { Text = "Click a scene, then the races that use it", FontWeight = FontWeight.Bold, FontSize = 13,
+                                             TextWrapping = TextWrapping.Wrap, Width = 250 });
         foreach (string faction in new[] { "Alliance", "Horde", "Class" })
         {
-            StackPanel list = new() { Spacing = 3, Margin = new Thickness(0, 0, 24, 0) };
-            list.Children.Add(new TextBlock { Text = faction == "Class" ? "CLASSES" : faction.ToUpperInvariant(), Classes = { "section" } });
+            palette.Children.Add(new TextBlock { Text = faction == "Class" ? "Classes" : faction, FontSize = 12, FontWeight = FontWeight.SemiBold,
+                                                 Foreground = new SolidColorBrush(FactionColor(faction)), Margin = new Thickness(0, 6, 0, 0) });
             foreach (CharacterRace race in CharacterScenes.Races.Where(r => r.Faction == faction))
             {
-                ToggleButton button = new() { FontSize = 12, Padding = new Thickness(8, 2), MinWidth = 260,
+                ToggleButton button = new() { FontSize = 12, Padding = new Thickness(8, 2), Width = 250,
                                               HorizontalContentAlignment = HorizontalAlignment.Left,
                                               BorderBrush = new SolidColorBrush(FactionColor(faction)),
                                               BorderThickness = new Thickness(4, 0, 0, 0) };
                 string key = race.Key;
                 button.IsCheckedChanged += (_, _) => { if (!_raceRefresh) ToggleRace(key); };
                 _raceButtons[key] = button;
-                list.Children.Add(button);
+                palette.Children.Add(button);
             }
-            Grid.SetColumn(list, column++);
-            palette.Children.Add(list);
         }
-        TweaksList.Children.Add(palette);
+        Grid.SetColumn(palette, 2);
+        sides.Children.Add(palette);
+        TweaksList.Children.Add(sides);
+        TweaksList.Children.Add(SceneColumn(SceneRows[2].Title, SceneRows[2].Rows, wrap: true));
 
         StackPanel buttons = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
         Button preview = new() { Content = "Preview", FontSize = 12, Padding = new Thickness(8, 2) };
         ToolTip.SetTip(preview, "See each race's character screen big, with Classic or HD and your picks");
-        preview.Click += async (_, _) => await new CharacterScenePreviewWindow(HdModels,
-            (race, hd) => _scenePicksDraft.TryGetValue(race, out string? pick) ? pick : CharacterScenes.DefaultScene(race, hd),
-            async folder =>
-            {
-                string? code = CharacterScenes.Scenes.FirstOrDefault(x => x.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase))?.Preview;
-                return code is not null && _manifest?.LoginScreenPreviews.TryGetValue(code, out string? url) == true ? await PictureAsync(url) : null;
-            }).ShowDialog(this);
+        preview.Click += async (_, _) => await OpenCharacterScenePreviewAsync(HdModels);
         buttons.Children.Add(preview);
         Button reset = new() { Content = "Each race its own scene again", FontSize = 12, Padding = new Thickness(8, 2) };
         reset.Click += (_, _) => { _scenePicksDraft.Clear(); RefreshCharacterScenes(); };
@@ -122,7 +126,7 @@ public partial class MainWindow
 
     StackPanel SceneColumn(string title, (string Race, string Original, string Hd)[] rows, bool wrap = false)
     {
-        StackPanel column = new() { Spacing = 4, Margin = new Thickness(0, 0, 28, 8) };
+        StackPanel column = new() { Spacing = 4, Margin = new Thickness(0, 0, 18, 8) };
         column.Children.Add(new TextBlock { Text = title.ToUpperInvariant(), Classes = { "section" } });
         Panel list = wrap ? new WrapPanel() : new StackPanel { Spacing = 4 };
         foreach ((string race, string original, string hd) in rows)
@@ -142,8 +146,8 @@ public partial class MainWindow
     /// <summary>A scene's picture, its label and the races using it; click to pick it.</summary>
     Control SceneTile(string folder, string label)
     {
-        StackPanel inner = new() { Spacing = 2, Width = 168 };
-        Image picture = new() { Width = 168, Height = 94, Stretch = Stretch.UniformToFill };
+        StackPanel inner = new() { Spacing = 2, Width = 150 };
+        Image picture = new() { Width = 150, Height = 84, Stretch = Stretch.UniformToFill };
         _sceneTilePictures[folder] = picture;
         inner.Children.Add(new Border { Child = picture, Background = Brushes.Black, ClipToBounds = true });
         if (label.Length > 0) inner.Children.Add(new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeight.SemiBold });
@@ -185,7 +189,7 @@ public partial class MainWindow
     {
         if (_characterScenesNote is null) return;
         bool hd = HdModels;
-        _characterScenesNote.Text = $"Each race shows its own scene on character select and create: {(hd ? "HD" : "Classic")} scenes, because Character models is {(hd ? "HD" : "Classic")}. "
+        _characterScenesNote.Text = $"Each race shows its own scene on character select and create: {(hd ? "HD" : "Classic")} scenes, because the Character screens option is {(hd ? "HD" : "Classic")}. "
             + "To change it, click a scene, then click the races that should use it (click a race again to give it back its own). Press Save to keep your choice."
             + (_pickedScene.Length > 0 ? $"   Picked: {CharacterScenes.Label(_pickedScene)}" : "");
         foreach ((string folder, Border tile) in _sceneTiles)

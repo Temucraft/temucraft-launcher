@@ -253,7 +253,7 @@ public partial class MainWindow
 
     // ------------------------------------------------------------------------------------------- menu and search
     readonly List<(string Key, TextBlock Head)> _sectionHeads = [];
-    HashSet<string>? _openSections;   // null until the page is first built: then only the first section is open
+    HashSet<string>? _openSections;   // null until the page is first built: then the CLIENT sections are open, the rest closed
 
     /// <summary>Gives every section heading its plain name (in Tag, for the menu) and a click to open or close it.</summary>
     void PrepareSections()
@@ -278,7 +278,7 @@ public partial class MainWindow
                 e.Handled = true;
             };
         }
-        _openSections ??= _sectionHeads.Count > 0 ? [_sectionHeads[0].Key] : [];
+        _openSections ??= [.. _sectionHeads.Where(h => h.Key.StartsWith("CLIENT/", StringComparison.Ordinal)).Select(h => h.Key)];
     }
 
     HashSet<string> OpenSections => _openSections ??= [];

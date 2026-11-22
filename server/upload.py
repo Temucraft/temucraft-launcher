@@ -16,7 +16,9 @@ Ctrl+C carries on where it stopped the next time you run the same command (and i
 The full client in base/ goes last, so the files every player needs arrive first. Files are sent with the system's
 own sftp (OpenSSH, built into Windows 10/11) when it's there: it is several times faster than paramiko over a long
 connection. Files under 16 MB go over the already open connection instead, since each OpenSSH run logs in again. USE_OPENSSH=0 in upload.env uses paramiko for everything. --delete also removes files on the VPS that
-are gone locally, except hidden files and, for `server`, *.conf, *.log and the logs/ and data/ folders.
+are gone locally, except hidden files and, for `server`, *.conf, *.log and the logs/ and data/ folders. For `files`,
+files under options/ that are gone locally are always removed (an option you dropped must leave the manifest);
+--keep-old-options keeps them.
 --dry-run shows what would happen. For `server`, PRE_SERVER_CMD / POST_SERVER_CMD run before and
 after (e.g. stop and start the worldserver service).
 """
@@ -270,7 +272,7 @@ def put(client, sftp, path, target, size, already, openssh=None):
         already = 0
 
 
-def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None):
+def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None, delete_under=()):
     sftp = client.open_sftp()
     if openssh and not dry:
         print("Sending big files with the system's sftp (OpenSSH), small ones over the open connection.")
@@ -317,8 +319,10 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
     if pending:
         print(f"  [{sent}/{len(pending)} 100%] done")
     removed = 0
-    if delete:
-        for rel in sorted(set(have) - local_set):
+    if delete or delete_under:
+        # delete_under: only these top folders (options/ for "files": an option or choice removed locally goes away on
+        # the server too, or the manifest would still offer it)
+        for rel in sorted(r for r in set(have) - local_set if delete or r.split("/")[0] in delete_under):
             if protected(rel, server):
                 if server:
                     print(f"  keep   {rel}")
@@ -358,6 +362,8 @@ def main():
     parser.add_argument("--env", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "upload.env"))
     parser.add_argument("--delete", action="store_true", help="remove files on the VPS that are gone locally")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--keep-old-options", action="store_true",
+                        help="files: don't remove options/ files on the VPS that are gone locally (removed by default)")
     args = parser.parse_args()
     env = load_env(args.env)
     client = connect(env)
@@ -369,7 +375,7 @@ def main():
             sys.exit("Give the local folder to upload.")
         if args.what == "files":
             sync(client, args.folder, env["REMOTE_FILES_DIR"], args.delete, args.dry_run, skip={"manifest.json"},
-                 openssh=openssh_command(env))
+                 openssh=openssh_command(env), delete_under=() if args.keep_old_options else ("options",))
             manifest(client, env, args.dry_run)
         else:
             if not env.get("REMOTE_SERVER_DIR"):

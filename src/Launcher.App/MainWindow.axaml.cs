@@ -2874,6 +2874,15 @@ public partial class MainWindow : Window
                 control = box;
             }
             if (group.Enforce) ToolTip.SetTip(control, "Set by the server");
+            if (group.Name == "Character screens")
+            {
+                // the character screens: each race's scene big, Classic or HD (starts on the choice shown in the box)
+                Button look = new() { Content = "Preview", FontSize = 12 };
+                OptionGroup screens = group;
+                look.Click += async (_, _) => await OpenCharacterScenePreviewAsync(
+                    UpdatePlanner.ChosenOption(_manifest!, _settings.Options, screens.Name) == "HD");
+                panel.Children.Add(look);
+            }
             if (group.Gallery.Count > 0)
             {
                 // more pictures of the choices (character screens for Character models, for example)
