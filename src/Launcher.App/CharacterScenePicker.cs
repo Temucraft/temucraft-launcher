@@ -36,29 +36,20 @@ public partial class MainWindow
         _characterScenesNote = new TextBlock { Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap };
         TweaksList.Children.Add(_characterScenesNote);
 
-        WrapPanel tiles = new() { Margin = new Thickness(0, 4, 0, 0) };
-        foreach (CharacterScene scene in CharacterScenes.Scenes)
+        // the scenes: Alliance | Horde side by side, each race on a row with its Original and HD scene; then the rest
+        Grid sides = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), Margin = new Thickness(0, 4, 0, 0) };
+        for (int i = 0; i < 2; i++)
         {
-            StackPanel inner = new() { Spacing = 2, Width = 176 };
-            Image picture = new() { Width = 176, Height = 99, Stretch = Stretch.UniformToFill };
-            _sceneTilePictures[scene.Folder] = picture;
-            inner.Children.Add(new Border { Child = picture, Background = Brushes.Black, ClipToBounds = true });
-            inner.Children.Add(new TextBlock { Text = scene.Label, FontSize = 12, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
-            WrapPanel races = new();
-            inner.Children.Add(races);
-            Border tile = new() { Child = inner, Classes = { "tile" }, Margin = new Thickness(0, 0, 6, 6),
-                                  Cursor = new Cursor(StandardCursorType.Hand) };
-            string folder = scene.Folder;
-            tile.PointerPressed += (_, _) => PickScene(folder);
-            ToolTip.SetTip(tile, "Click, then click the races below that should use this scene");
-            _sceneTiles[folder] = tile;
-            _sceneTileRaces[folder] = races;
-            tiles.Children.Add(tile);
+            StackPanel side = SceneColumn(SceneRows[i].Title, SceneRows[i].Rows);
+            Grid.SetColumn(side, i);
+            sides.Children.Add(side);
         }
-        TweaksList.Children.Add(tiles);
+        TweaksList.Children.Add(sides);
+        TweaksList.Children.Add(SceneColumn(SceneRows[2].Title, SceneRows[2].Rows, wrap: true));
 
         // the races, Alliance | Horde, then classes
-        Grid sides = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), Margin = new Thickness(0, 4, 0, 0) };
+        TweaksList.Children.Add(new TextBlock { Text = "RACES", Classes = { "section" } });
+        Grid palette = new() { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), Margin = new Thickness(0, 4, 0, 0) };
         int column = 0;
         foreach (string faction in new[] { "Alliance", "Horde", "Class" })
         {
@@ -76,9 +67,9 @@ public partial class MainWindow
                 list.Children.Add(button);
             }
             Grid.SetColumn(list, column++);
-            sides.Children.Add(list);
+            palette.Children.Add(list);
         }
-        TweaksList.Children.Add(sides);
+        TweaksList.Children.Add(palette);
 
         StackPanel buttons = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
         Button reset = new() { Content = "Each race its own scene again", FontSize = 12, Padding = new Thickness(8, 2) };
@@ -98,6 +89,61 @@ public partial class MainWindow
                 && _manifest?.LoginScreenPreviews.TryGetValue(scene.Preview, out string? url) == true)
                 _ = SetSceneImageAsync(picture, url);
         RefreshCharacterScenes();
+    }
+
+    /// <summary>Scene rows: (race, original scene folder, HD scene folder); "" when there is only one.</summary>
+    static readonly (string Title, (string Race, string Original, string Hd)[] Rows)[] SceneRows =
+    [
+        ("Alliance", [("Alliance", "", "Alliance"), ("Human", "Huma2", "Human"), ("Dwarf and Gnome", "Dwar2", "Dwarf"),
+                      ("Night Elf", "NightEl2", "NightElf"), ("Gnome", "", "Gnome"), ("Draenei", "", "Draenei"),
+                      ("Worgen", "", "Worgen"), ("Pandaren", "", "Pandaren"), ("Void Elf", "", "VoidElf"),
+                      ("Lightforged Draenei", "", "LightforgedDraenei"), ("Kul Tiran", "", "KulTiran"),
+                      ("Mechagnome", "", "Mechagnome"), ("Earthen", "", "Earthen")]),
+        ("Horde", [("Horde", "", "Horde"), ("Orc and Troll", "Or2", "Orc"), ("Undead", "Scourg2", "Scourge"),
+                   ("Tauren", "Taure2", "Tauren"), ("Troll", "", "Troll"), ("Blood Elf", "", "BloodElf"),
+                   ("Goblin", "", "Goblin"), ("Pandaren (temple)", "", "PandarenCharacterSelect"),
+                   ("Nightborne", "", "NightborneElf"), ("Highmountain Tauren", "", "HighmountainTauren"),
+                   ("Mag'har Orc", "", "OrcClan"), ("Vulpera", "", "Vulpera")]),
+        ("Classes and others", [("Death Knight", "DeathKnight", "DeathKnigh2"), ("Demon Hunter", "", "DemonHunter"),
+                                ("Dracthyr", "", "Dracthyr"), ("Pirate", "", "Pirate"), ("Character select", "", "CharacterSelect")]),
+    ];
+
+    StackPanel SceneColumn(string title, (string Race, string Original, string Hd)[] rows, bool wrap = false)
+    {
+        StackPanel column = new() { Spacing = 4, Margin = new Thickness(0, 0, 28, 8) };
+        column.Children.Add(new TextBlock { Text = title.ToUpperInvariant(), Classes = { "section" } });
+        Panel list = wrap ? new WrapPanel() : new StackPanel { Spacing = 4 };
+        foreach ((string race, string original, string hd) in rows)
+        {
+            StackPanel row = new() { Spacing = 1, Margin = wrap ? new Thickness(0, 0, 16, 4) : new Thickness(0) };
+            row.Children.Add(new TextBlock { Text = race, FontWeight = FontWeight.Bold, FontSize = 13 });
+            StackPanel pair = new() { Orientation = Orientation.Horizontal };
+            if (original.Length > 0) pair.Children.Add(SceneTile(original, "Original"));
+            pair.Children.Add(SceneTile(hd, original.Length > 0 ? "HD" : ""));
+            row.Children.Add(pair);
+            list.Children.Add(row);
+        }
+        column.Children.Add(list);
+        return column;
+    }
+
+    /// <summary>A scene's picture, its label and the races using it; click to pick it.</summary>
+    Control SceneTile(string folder, string label)
+    {
+        StackPanel inner = new() { Spacing = 2, Width = 168 };
+        Image picture = new() { Width = 168, Height = 94, Stretch = Stretch.UniformToFill };
+        _sceneTilePictures[folder] = picture;
+        inner.Children.Add(new Border { Child = picture, Background = Brushes.Black, ClipToBounds = true });
+        if (label.Length > 0) inner.Children.Add(new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeight.SemiBold });
+        WrapPanel races = new();
+        inner.Children.Add(races);
+        Border tile = new() { Child = inner, Classes = { "tile" }, Margin = new Thickness(0, 0, 6, 4),
+                              Cursor = new Cursor(StandardCursorType.Hand) };
+        tile.PointerPressed += (_, _) => PickScene(folder);
+        ToolTip.SetTip(tile, $"{CharacterScenes.Label(folder)}: click, then click the races below that should use it");
+        _sceneTiles[folder] = tile;
+        _sceneTileRaces[folder] = races;
+        return tile;
     }
 
     void PickScene(string folder)
