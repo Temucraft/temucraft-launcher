@@ -167,10 +167,13 @@ public static class LargeAddressAware
     static long CharacteristicsOffset(Stream stream)
     {
         using BinaryReader reader = new(stream, Encoding.ASCII, leaveOpen: true);
+        // a missing, empty or cut-off Wow.exe gets a clear message instead of "unable to read beyond the end of the stream"
+        if (stream.Length < 0x40) throw new InvalidDataException("Wow.exe isn't a Windows program (the file is too small).");
         stream.Position = 0;
         if (reader.ReadUInt16() != 0x5A4D) throw new InvalidDataException("Wow.exe isn't a Windows program.");
         stream.Position = 0x3C;
         int pe = reader.ReadInt32();
+        if (pe < 0x40 || pe > stream.Length - 24) throw new InvalidDataException("Wow.exe has no PE header.");
         stream.Position = pe;
         if (reader.ReadUInt32() != 0x00004550) throw new InvalidDataException("Wow.exe has no PE header.");
         return pe + 4 + 18;   // IMAGE_FILE_HEADER.Characteristics

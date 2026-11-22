@@ -259,7 +259,12 @@ public static class CredentialStore
 /// <summary>Compares the running launcher with the one the server hands out.</summary>
 public static class SelfCheck
 {
-    public static string? CurrentExe => Environment.ProcessPath;
+    /// <summary>The launcher's own exe, or null when it isn't running as TemucraftLauncher(.exe) itself: started with
+    /// "dotnet TemucraftLauncher.dll" (or from a test or tool), ProcessPath is the dotnet host, and a self update would
+    /// replace dotnet with the launcher.</summary>
+    public static string? CurrentExe =>
+        Environment.ProcessPath is { } path
+        && Path.GetFileNameWithoutExtension(path).Equals("TemucraftLauncher", StringComparison.OrdinalIgnoreCase) ? path : null;
 
     /// <summary>The newest changelog entry about the launcher ("Launcher 1.3.0"), to show what a new launcher brings.</summary>
     public static NewsItem? WhatsNew(IEnumerable<NewsItem> changelog) =>

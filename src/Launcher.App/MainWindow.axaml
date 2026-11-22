@@ -7,13 +7,36 @@
     <Style Selector="Button.tab">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource T.text}" />
-      <Setter Property="FontSize" Value="15" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="FontFamily" Value="{DynamicResource T.titleFont}" />
-      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.tab:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource T.card}" />
     </Style>
     <Style Selector="Button.tab.selected">
-      <Setter Property="Foreground" Value="{DynamicResource T.accent}" />
+      <Setter Property="Background" Value="{DynamicResource T.card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource T.accent}" />
+    </Style>
+    <Style Selector="TextBlock.tabName">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontFamily" Value="{DynamicResource T.titleFont}" />
+    </Style>
+    <Style Selector="Button.tab.selected TextBlock.tabName"><Setter Property="Foreground" Value="{DynamicResource T.accent}" /></Style>
+    <Style Selector="TextBlock.tabNote">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource T.dim}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- two or more views of one page (Screens: Login screen | Character screens) -->
+    <Style Selector="ToggleButton.seg">
+      <Setter Property="Padding" Value="14,6" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <!-- page content stays clear of the scroll bar -->
     <Style Selector="ScrollViewer.page"><Setter Property="Padding" Value="0,0,18,0" /></Style>
@@ -149,20 +172,7 @@
             <TextBlock Name="ServerText" Classes="dim" FontSize="11" Margin="2,0,0,0" />
           </StackPanel>
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="24,0,0,0" VerticalAlignment="Center" Spacing="0">
-          <Button Name="NewsTab" Classes="tab selected" Content="NEWS" Click="OnTab" Tag="0"
-                  ToolTip.Tip="News and what changed" />
-          <Button Name="SettingsTab" Classes="tab" Content="GAME FILES" Click="OnTab" Tag="4"
-                  ToolTip.Tip="Where the game is, its languages, downloads, updates and backups" />
-          <Button Name="ModsTab" Classes="tab" Content="MODS" Click="OnTab" Tag="3"
-                  ToolTip.Tip="Fixes and extras for the game (DXVK, nicer water...), on or off" />
-          <Button Name="AddonsTab" Classes="tab" Content="ADDONS" Click="OnTab" Tag="2"
-                  ToolTip.Tip="Interface addons" />
-          <Button Name="TweaksTab" Classes="tab" Content="GAME SETTINGS" Click="OnTab" Tag="1"
-                  ToolTip.Tip="The game's own settings: view distance, frame rate, camera, sound" />
-          <Button Name="LauncherTab" Classes="tab" Content="LAUNCHER" Click="OnTab" Tag="5"
-                  ToolTip.Tip="The launcher itself: your login, language, look, window and privacy" />
-        </StackPanel>
+
         <!-- right: the username, and the server's website links under it -->
         <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
           <TextBlock Name="AccountText" Foreground="{DynamicResource T.text}" HorizontalAlignment="Right" FontSize="13" />
@@ -191,6 +201,34 @@
                   ToolTip.Tip="Report bug: copies a short report about your game files and the last log lines to paste in your message" />
         </StackPanel>
       </Grid>
+
+      <!-- the pages, down the left side: a name and what is on it -->
+      <Border DockPanel.Dock="Left" Classes="panel" Width="206" Margin="0,0,12,0" Padding="8,10">
+        <StackPanel Spacing="2">
+          <Button Name="NewsTab" Classes="tab selected" Click="OnTab" Tag="0">
+            <StackPanel><TextBlock Classes="tabName" Text="HOME" /><TextBlock Classes="tabNote" Text="News, changes, realms" /></StackPanel>
+          </Button>
+          <Button Name="ModsTab" Classes="tab" Click="OnTab" Tag="3">
+            <StackPanel><TextBlock Classes="tabName" Text="MODS" /><TextBlock Classes="tabNote" Text="Models, water, DXVK and more" /></StackPanel>
+          </Button>
+          <Button Name="AddonsTab" Classes="tab" Click="OnTab" Tag="2">
+            <StackPanel><TextBlock Classes="tabName" Text="ADDONS" /><TextBlock Classes="tabNote" Text="Interface addons" /></StackPanel>
+          </Button>
+          <Button Name="ScreensTab" Classes="tab" Click="OnTab" Tag="6">
+            <StackPanel><TextBlock Classes="tabName" Text="SCREENS" /><TextBlock Classes="tabNote" Text="Login and character screens" /></StackPanel>
+          </Button>
+          <Button Name="TweaksTab" Classes="tab" Click="OnTab" Tag="1">
+            <StackPanel><TextBlock Classes="tabName" Text="GAME SETTINGS" /><TextBlock Classes="tabNote" Text="Graphics, sound, interface" /></StackPanel>
+          </Button>
+          <Border Height="1" Background="{DynamicResource T.border}" Margin="6,8" />
+          <Button Name="SettingsTab" Classes="tab" Click="OnTab" Tag="4">
+            <StackPanel><TextBlock Classes="tabName" Text="GAME FILES" /><TextBlock Classes="tabNote" Text="Folder, languages, updates" /></StackPanel>
+          </Button>
+          <Button Name="LauncherTab" Classes="tab" Click="OnTab" Tag="5">
+            <StackPanel><TextBlock Classes="tabName" Text="LAUNCHER" /><TextBlock Classes="tabNote" Text="Account, look, privacy, log" /></StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
 
       <Border DockPanel.Dock="Top" Name="WarningBanner" IsVisible="False" Background="{DynamicResource T.warning}" CornerRadius="4" Padding="10,6" Margin="0,0,0,8">
         <StackPanel Spacing="6">
@@ -240,7 +278,7 @@
           <DockPanel>
             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
               <TextBlock Classes="title" Text="GAME SETTINGS" Margin="0,0,0,2" />
-              <TextBlock Classes="dim" Text="The launcher's quick settings, then every option of the game's Interface, Video and Sound windows (WTF\Config.wtf), and those of DXVK and Awesome WotLK while they are on." />
+              <TextBlock Classes="dim" TextWrapping="Wrap" Text="Wow.exe, DXVK and Awesome WotLK (while they are on), then every option of the game's Interface, Video and Sound windows (WTF\Config.wtf)." />
               <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
                 <TextBox Name="TweaksSearch" Watermark="Search all settings (Ctrl+F)" MaxWidth="520" HorizontalAlignment="Left" Width="520" />
                 <TextBlock Grid.Column="1" Name="TweaksSearchCount" Classes="dim" VerticalAlignment="Center" Margin="10,0,0,0" />
@@ -284,6 +322,31 @@
                 <ScrollViewer Classes="page"><StackPanel Name="TweaksList" /></ScrollViewer>
               </Border>
             </Grid>
+          </DockPanel>
+        </Border>
+
+        <!-- 6 screens -->
+        <Border Name="ScreensPage" Classes="panel" IsVisible="False">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+              <TextBlock Classes="title" Text="SCREENS" Margin="0,0,0,2" />
+              <TextBlock Classes="dim" TextWrapping="Wrap" Text="What you see before you enter the world: the login screen and the scene behind each race on character select and create." />
+              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,10,0,0">
+                <ToggleButton Name="ScreensLoginTab" Classes="seg" Content="Login screen" Click="OnScreensTab" />
+                <ToggleButton Name="ScreensCharTab" Classes="seg" Content="Character screens" Click="OnScreensTab" />
+              </StackPanel>
+            </StackPanel>
+            <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+              <TextBlock Classes="dim" VerticalAlignment="Center" TextWrapping="Wrap"
+                         Text="Save writes your picks into the game folder; they show the next time the game starts." />
+              <Button Grid.Column="1" Classes="accentButton" Content="Save" Padding="22,6" Click="OnSaveScreens" />
+            </Grid>
+            <ScrollViewer Classes="page">
+              <StackPanel>
+                <StackPanel Name="ScreensLoginList" />
+                <StackPanel Name="ScreensCharList" IsVisible="False" />
+              </StackPanel>
+            </ScrollViewer>
           </DockPanel>
         </Border>
 
@@ -346,7 +409,9 @@
               <TextBlock Classes="title" Text="GAME FILES" Margin="0,0,0,2" />
               <TextBlock Classes="dim" Text="Where the game is, which languages to install, downloads, updates and backups." />
 
-              <TextBlock Classes="section" Text="WORLD OF WARCRAFT 3.3.5a FOLDER" />
+              <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,10,0,12">
+              <StackPanel>
+              <TextBlock Classes="section" Margin="0,0,0,6" Text="WORLD OF WARCRAFT 3.3.5a FOLDER" />
               <Grid ColumnDefinitions="*,8,Auto,8,Auto,8,Auto">
                 <TextBox Name="WowFolderBox" Watermark="C:\Games\World of Warcraft" />
                 <Button Grid.Column="2" Content="Browse…" Click="OnBrowseWow" />
@@ -354,26 +419,39 @@
                 <Button Grid.Column="6" Name="ClientButton" Content="Install game files…" Click="OnDownloadClient" />
               </Grid>
               <TextBlock Classes="dim" Margin="0,4,0,0" Text="No game yet? Press Install game files… and pick an empty folder: the whole client is downloaded there." />
+              </StackPanel>
+              </Border>
 
               <Grid ColumnDefinitions="*,32,*">
                 <StackPanel>
-                  <TextBlock Classes="section" Text="LANGUAGES" />
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="LANGUAGES" />
                   <TextBlock Classes="dim" Text="The game languages to install." />
                   <WrapPanel Name="LocalePanel" Margin="0,4,0,0" />
-
-                  <TextBlock Classes="section" Text="GAME" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="GAME" />
                   <CheckBox Name="AddonsBox" Content="Install the addons the server needs" IsChecked="True" />
                   <CheckBox Name="ClearCacheBox" Content="Clean the client's Cache (WDB) on each launch" IsChecked="True" />
-
-                  <TextBlock Classes="section" Text="SHARED SETTINGS" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="SHARED SETTINGS" />
                   <CheckBox Name="ShareBox"><TextBlock TextWrapping="Wrap" Text="Keep my settings (like auto loot), key bindings and macros the same on all my accounts on this PC" /></CheckBox>
                   <CheckBox Name="ShareAddonsBox" Margin="24,0,0,0" Content="Also addon settings" />
                   <CheckBox Name="ShareCharsBox" Margin="24,0,0,0"><TextBlock TextWrapping="Wrap" Text="Also between my characters (their own key bindings and macros)" /></CheckBox>
                   <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap"
                              Text="The newest copy wins, before the game starts and after it closes; a backup is made first. The server can do the same between PCs." />
                   <Button Content="Share now" Click="OnShareNow" Margin="0,6,0,0" />
-
-                  <TextBlock Classes="section" Text="BACKUPS" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="BACKUPS" />
                   <TextBlock Classes="dim" Text="Your settings, macros, key bindings and addons (WTF and Interface\AddOns)." />
                   <CheckBox Name="BackupBox" Content="Back up before every update" IsChecked="True" />
                   <ComboBox Name="BackupList" HorizontalAlignment="Stretch" Margin="0,6,0,0" ToolTip.Tip="Date format: DD-MM-YYYY HH:MM:SS" />
@@ -387,15 +465,23 @@
                     <Button Content="Import macros and key bindings…" Click="OnImportMacros" Margin="0,0,8,6" />
                   </WrapPanel>
 
+                
+                  </StackPanel>
+                  </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                  <TextBlock Classes="section" Text="CHECK THE GAME FILES" />
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="CHECK THE GAME FILES" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Verify game files" Click="OnVerify" />
                     <Button Name="UpdateButton" Content="Check for updates" Click="OnUpdate" />
                   </StackPanel>
-
-                  <TextBlock Classes="section" Text="DOWNLOADS" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="DOWNLOADS" />
                   <StackPanel Orientation="Horizontal" Spacing="10">
                     <CheckBox Name="LimitBox" Content="Limit download speed" />
                     <NumericUpDown Name="LimitNumber" Width="150" Height="32" MinHeight="32" Minimum="1" Maximum="10000000" Increment="100"
@@ -415,8 +501,11 @@
                   <TextBlock Classes="dim" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
                              Text="Forgets which files were already checked and removes unfinished downloads. Can fix updates that keep failing." />
                   <Button Name="ClearKeptButton" Content="Remove kept option files" Click="OnClearKept" Margin="0,8,0,0" ToolTip.Tip="Files of mods you turned off are kept so switching back needs no download. This frees that space." />
-
-                  <TextBlock Classes="section" Text="UPDATES" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="UPDATES" />
                   <CheckBox Name="AutoUpdateBox"><TextBlock TextWrapping="Wrap" Text="Update by itself (when the launcher opens, and every 30 minutes while it is open)" /></CheckBox>
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <CheckBox Name="HoursBox" Content="Only between" />
@@ -426,6 +515,9 @@
                     <TextBlock Name="HoursNote" Classes="dim" FontSize="12" VerticalAlignment="Center" />
                   </StackPanel>
                   <TextBlock Classes="dim" FontSize="12" Text="Automatic updates wait while the game is running." />
+                
+                  </StackPanel>
+                  </Border>
                 </StackPanel>
               </Grid>
             </StackPanel>
@@ -440,8 +532,10 @@
               <TextBlock Classes="dim" Text="The launcher itself: your login, language, look, window and privacy." />
               <Grid ColumnDefinitions="*,32,*">
                 <StackPanel>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
                   <StackPanel Name="AccountSection">
-                  <TextBlock Classes="section" Text="ACCOUNT (the login for the server's game files)" />
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="ACCOUNT (the login for the server's game files)" />
                   <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
                     <TextBox Name="UsernameBox" Watermark="Username" />
                     <TextBox Grid.Column="2" Name="PasswordBox" Watermark="Password" PasswordChar="•" />
@@ -450,8 +544,11 @@
                   </Grid>
                   <TextBlock Classes="dim" Margin="0,4,0,0" Text="Your own login from the server's owner." />
                   </StackPanel>
-
-                  <TextBlock Classes="section" Text="LOOK" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="LOOK" />
                   <CheckBox Name="ReopenBox" Content="Bring the launcher back when WoW closes" IsChecked="True" />
                   <CheckBox Name="RememberWindowBox" Content="Remember position and size of the launcher window" />
                   <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
@@ -473,7 +570,11 @@
                     <Button Content="Import settings" Click="OnImportSettings"
                             ToolTip.Tip="Fill in settings copied with Copy settings (from the clipboard)" />
                   </StackPanel>
-                  <TextBlock Classes="section" Text="WINDOW" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="WINDOW" />
                   <Grid ColumnDefinitions="Auto,12,*" RowDefinitions="Auto,Auto,Auto">
                     <TextBlock Text="When the game starts:" VerticalAlignment="Center" />
                     <ComboBox Grid.Column="2" Name="GameLaunchBox" HorizontalAlignment="Stretch" />
@@ -489,9 +590,14 @@
                              Text="The new language shows fully after restarting the launcher." />
                   <TextBlock Name="LauncherVersionText" Classes="dim" Margin="0,10,0,0" />
 
+                
+                  </StackPanel>
+                  </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                  <TextBlock Classes="section" Text="WHAT THIS SERVER COLLECTS (THE LOGIN NOTICE)" />
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="WHAT THIS SERVER COLLECTS (THE LOGIN NOTICE)" />
                   <SelectableTextBlock Name="PrivacyText" TextWrapping="Wrap" Foreground="{DynamicResource T.textSoft}" FontSize="12" />
                   <StackPanel Name="PrivacyValuesTitle" Orientation="Horizontal" Spacing="10" Margin="0,10,0,4">
                     <TextBlock Text="What this PC sends:" Foreground="{DynamicResource T.textSoft}" FontSize="12" VerticalAlignment="Center" />
@@ -500,8 +606,11 @@
                   <Grid Name="PrivacyValuesBox" ColumnDefinitions="Auto,12,*" />
                   <TextBlock Text="Date format: &quot;DD-MM-YYYY HH:MM:SS&quot;" Foreground="{DynamicResource T.dimmer}" FontSize="11" Margin="0,8,0,0" />
                   <TextBlock Name="PrivacyAgreed" Foreground="{DynamicResource T.textSoft}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
-
-                  <TextBlock Classes="section" Text="LOG" />
+                  </StackPanel>
+                  </Border>
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="LOG" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Open log file" Click="OnOpenLog" />
                     <Button Content="Open file location" Click="OnOpenLogFolder" ToolTip.Tip="Show the log file in its folder" />
@@ -510,6 +619,9 @@
                   </StackPanel>
                   <TextBox Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="220" Margin="0,8,0,0"
                            FontFamily="Consolas, Cascadia Mono, monospace" FontSize="12" MinHeight="220" />
+                
+                  </StackPanel>
+                  </Border>
                 </StackPanel>
               </Grid>
             </StackPanel>

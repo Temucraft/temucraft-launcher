@@ -11,7 +11,7 @@ public sealed record CharacterRace(string Key, string Label, string Faction);
 
 /// <summary>
 /// The character select / create scenes. Each race shows its own scene: the original 3.3.5 one with Character models
-/// Classic, the newer one with HD. The player can pick another scene per race; the launcher writes it all to
+/// Classic, the newer one with HD; with Faction every race gets the Alliance or Horde scene. The player can pick another scene per race; the launcher writes it all to
 /// Interface\TemucraftScenes.lua next to LoginUI.lua, which the game's GlueParent.lua reads.
 /// </summary>
 public static class CharacterScenes
@@ -72,9 +72,26 @@ public static class CharacterScenes
         ["DRAENEI"] = "Draenei", ["BLOODELF"] = "BloodElf", ["DEATHKNIGHT"] = "DeathKnight", ["HIGHELF"] = "Human",
     };
 
-    /// <summary>The scene a race gets without a pick of the player's.</summary>
-    public static string DefaultScene(string race, bool hd) =>
-        (hd ? Hd.GetValueOrDefault(race) : Original.GetValueOrDefault(race) ?? Hd.GetValueOrDefault(race)) ?? "";
+    /// <summary>The game's name of a choice of the "Character screens" option: HD = "new", Faction = "faction",
+    /// anything else (Classic) = "old".</summary>
+    public static string ModeOf(string? option) => option switch
+    {
+        "HD" => "new",
+        "Faction" => "faction",
+        _ => "old",
+    };
+
+    /// <summary>"old" / "new" / "faction" as the player sees it: Classic / HD / Faction.</summary>
+    public static string ModeName(string mode) => mode switch { "new" => "HD", "faction" => "Faction", _ => "Classic" };
+
+    /// <summary>The scene a race gets without a pick of the player's. Faction: Alliance or Horde by the race; death
+    /// knights go by their race, so "" (it depends).</summary>
+    public static string DefaultScene(string race, string mode) => mode switch
+    {
+        "new" => Hd.GetValueOrDefault(race) ?? "",
+        "faction" => Races.FirstOrDefault(r => r.Key == race)?.Faction is { } f && f is "Alliance" or "Horde" ? f : "",
+        _ => Original.GetValueOrDefault(race) ?? Hd.GetValueOrDefault(race) ?? "",
+    };
 
     public static string Label(string folder) =>
         Scenes.FirstOrDefault(s => s.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase))?.Label ?? folder;
@@ -82,11 +99,11 @@ public static class CharacterScenes
     static bool Safe(string text) => text.Length is > 0 and < 64 && text.All(char.IsAsciiLetterOrDigit);
 
     /// <summary>The file's text: the mode, then the player's picks.</summary>
-    public static string Text(bool hd, IReadOnlyDictionary<string, string> picks)
+    public static string Text(string mode, IReadOnlyDictionary<string, string> picks)
     {
         StringBuilder text = new();
         text.Append("-- Written by the Temucraft launcher (Login screen > Character screens). See GlueParent.lua.\r\n");
-        text.Append($"TEMUCRAFT_CHARACTER_SCENES = \"{(hd ? "new" : "old")}\";\r\n");
+        text.Append($"TEMUCRAFT_CHARACTER_SCENES = \"{(mode is "new" or "faction" ? mode : "old")}\";\r\n");
         text.Append("TEMUCRAFT_SCENE_PICKS = {\r\n");
         foreach ((string race, string scene) in picks.OrderBy(p => p.Key, StringComparer.Ordinal))
             if (Safe(race) && Safe(scene)) text.Append($"\t[\"{race.ToUpperInvariant()}\"] = \"{scene}\",\r\n");
@@ -95,10 +112,10 @@ public static class CharacterScenes
     }
 
     /// <summary>Writes Interface\TemucraftScenes.lua when it changed; true when it did.</summary>
-    public static bool Write(string wowFolder, bool hd, IReadOnlyDictionary<string, string> picks)
+    public static bool Write(string wowFolder, string mode, IReadOnlyDictionary<string, string> picks)
     {
         string path = Path.Combine(wowFolder, "Interface", "TemucraftScenes.lua");
-        string text = Text(hd, picks);
+        string text = Text(mode, picks);
         if (File.Exists(path) && File.ReadAllText(path) == text) return false;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path + ".tmp", text);

@@ -212,6 +212,8 @@ def build(files_dir, realmlist, cache):
                            # "requires": {"Character models": "HD"}: the group can only be turned on with that pick
                            "requires": {str(k): str(v) for k, v in (info.get("requires") or {}).items()},
                            "previews": previews,
+                           # "category": "World": the heading the card goes under on the Mods page
+                           "category": str(info.get("category", "") or ""),
                            "gallery": gallery, "galleryTitle": str(info.get("galleryTitle", "") or ""),
                            # "recommended": "HD": marked in the launcher and picked for new installs
                            "recommended": str(info.get("recommended", "") or "")})

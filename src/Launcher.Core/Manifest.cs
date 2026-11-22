@@ -95,6 +95,8 @@ public sealed class OptionGroup
     public Dictionary<string, string> Requires { get; set; } = [];
     /// <summary>Preview images next to the manifest, by option ("" = one picture for the whole group).</summary>
     public Dictionary<string, string> Previews { get; set; } = [];
+    /// <summary>The heading the card goes under on the Mods page ("World", "Interface"...); "" = Other.</summary>
+    public string Category { get; set; } = "";
     /// <summary>More pictures by option (gallery-&lt;Option&gt;-&lt;NN&gt;-&lt;Label&gt; next to group.json), shown in a window that
     /// opens from a button on the card; Name is the picture's label.</summary>
     public Dictionary<string, List<OptionLink>> Gallery { get; set; } = [];

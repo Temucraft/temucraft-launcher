@@ -72,17 +72,19 @@ static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
 
 static Task CharacterScenesFile()
 {
-    Check(CharacterScenes.DefaultScene("HUMAN", false) == "Huma2" && CharacterScenes.DefaultScene("HUMAN", true) == "Human", "human defaults");
-    Check(CharacterScenes.DefaultScene("GNOME", false) == "Dwar2" && CharacterScenes.DefaultScene("TROLL", false) == "Or2", "shared originals");
-    Check(CharacterScenes.DefaultScene("VULPERA", false) == "Vulpera", "no original: its own newer scene");
-    string text = CharacterScenes.Text(true, new Dictionary<string, string> { ["draenei"] = "Human", ["GNOME"] = "Or2", ["BAD\\"] = "x", ["ORC"] = "a\"b" });
+    Check(CharacterScenes.DefaultScene("HUMAN", "old") == "Huma2" && CharacterScenes.DefaultScene("HUMAN", "new") == "Human", "human defaults");
+    Check(CharacterScenes.DefaultScene("GNOME", "old") == "Dwar2" && CharacterScenes.DefaultScene("TROLL", "old") == "Or2", "shared originals");
+    Check(CharacterScenes.DefaultScene("ORC", "faction") == "Horde" && CharacterScenes.DefaultScene("DRAENEI", "faction") == "Alliance", "faction scenes");
+    string text = CharacterScenes.Text("new", new Dictionary<string, string> { ["draenei"] = "Human", ["GNOME"] = "Or2", ["BAD\\"] = "x", ["ORC"] = "a\"b" });
     Check(text.Contains("TEMUCRAFT_CHARACTER_SCENES = \"new\";") && text.Contains("[\"DRAENEI\"] = \"Human\",") && text.Contains("[\"GNOME\"] = \"Or2\","), "picks written: " + text);
     Check(!text.Contains("BAD") && !text.Contains("ORC"), "unsafe names left out");
+    Check(CharacterScenes.Text("faction", new Dictionary<string, string>()).Contains("\"faction\""), "faction mode written");
+    Check(CharacterScenes.ModeOf("HD") == "new" && CharacterScenes.ModeOf("Faction") == "faction" && CharacterScenes.ModeOf("Classic") == "old", "option to mode");
     string wow = Path.Combine(Path.GetTempPath(), "tc-scenes-" + Guid.NewGuid().ToString("N"));
     try
     {
-        Check(CharacterScenes.Write(wow, false, new Dictionary<string, string>()), "first write");
-        Check(!CharacterScenes.Write(wow, false, new Dictionary<string, string>()), "unchanged: not written again");
+        Check(CharacterScenes.Write(wow, "old", new Dictionary<string, string>()), "first write");
+        Check(!CharacterScenes.Write(wow, "old", new Dictionary<string, string>()), "unchanged: not written again");
         Check(File.ReadAllText(Path.Combine(wow, "Interface", "TemucraftScenes.lua")).Contains("\"old\""), "Classic = old");
     }
     finally { try { Directory.Delete(wow, true); } catch (IOException) { } }

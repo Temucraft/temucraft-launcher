@@ -109,6 +109,7 @@ public partial class MainWindow : Window
         ShowTagLegend();
         ShowFeeds(FeedCache.Load(_feedFile));   // the last news and changelog, until the server sends new ones
         FillLookBoxes();
+        BuildScreens();
         BuildTweaks();
         RefreshInstalledAddons();
         RefreshBackups();
@@ -123,14 +124,20 @@ public partial class MainWindow : Window
             _tray?.Dispose();
         };
         FillWindowSettings();
-        if (_settings.StartPage == "last" && _settings.LastPage is > 0 and <= 5)
+        if (_settings.StartPage == "last" && _settings.LastPage is > 0 and <= 6)
             OnTab(TabButton(_settings.LastPage), new RoutedEventArgs());
         _autoUpdateTimer.Tick += async (_, _) => await AutoUpdateAsync();
         _autoUpdateTimer.Start();
         _launcherTimer.Tick += async (_, _) => await CheckLauncherAsync();
         _launcherTimer.Start();
         TweaksList.SizeChanged += (_, _) => { double w = TweakRowWidth(); foreach (Grid r in _tweakRows) r.Width = w; };
-        OptionsList.SizeChanged += (_, _) => { double w = OptionCardWidth(); foreach (Control c in OptionsList.Children) if (c is Border) c.Width = w; };
+        OptionsList.SizeChanged += (_, _) =>
+        {
+            double w = OptionCardWidth();
+            foreach (Control c in OptionsList.Children)
+                if (c is Border) c.Width = w;
+                else if (c is TextBlock heading) heading.Width = Math.Max(200, OptionsList.Bounds.Width - 12);   // a heading takes its own line
+        };
         Activated += async (_, _) => await CheckLauncherAsync();   // also when the player comes back to the window
         Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
@@ -226,8 +233,8 @@ public partial class MainWindow : Window
     void OnTab(object? sender, RoutedEventArgs e)
     {
         int page = int.Parse((string)((Button)sender!).Tag!);
-        Control[] pages = [NewsPage, TweaksPage, AddonsPage, ModsPage, SettingsPage, LauncherPage];
-        Button[] tabs = [NewsTab, TweaksTab, AddonsTab, ModsTab, SettingsTab, LauncherTab];
+        Control[] pages = [NewsPage, TweaksPage, AddonsPage, ModsPage, SettingsPage, LauncherPage, ScreensPage];
+        Button[] tabs = [NewsTab, TweaksTab, AddonsTab, ModsTab, SettingsTab, LauncherTab, ScreensTab];
         for (int i = 0; i < pages.Length; i++)
         {
             pages[i].IsVisible = i == page;
@@ -240,7 +247,7 @@ public partial class MainWindow : Window
         _settings.LastPage = page;
     }
 
-    Button TabButton(int page) => new[] { NewsTab, TweaksTab, AddonsTab, ModsTab, SettingsTab, LauncherTab }[Math.Clamp(page, 0, 5)];
+    Button TabButton(int page) => new[] { NewsTab, TweaksTab, AddonsTab, ModsTab, SettingsTab, LauncherTab, ScreensTab }[Math.Clamp(page, 0, 6)];
 
     void ApplyBackground()
     {
@@ -2042,12 +2049,9 @@ public partial class MainWindow : Window
         _sectionHeads.Clear();
         string? section = null;
         WrapPanel rows = new();
-        // launcher settings first (what the launcher itself does), then the game's own settings
-        TweaksList.Children.Add(new TextBlock { Text = "LAUNCHER SETTINGS", Classes = { "title", "group" }, Margin = new Thickness(0, 4, 0, 0) });
-        BuildLoginScenes();
-        BuildCharacterScenes();
-        // the game's own files and the mods that change how it runs, as their own group
-        TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "title", "group" }, Margin = new Thickness(0, 22, 0, 0) });
+        // the game's exe and the mods that change how it runs first, then the game's own settings
+        // (the login and character screens have their own page: Screens)
+        TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "title", "group" }, Margin = new Thickness(0, 4, 0, 0) });
         TweaksList.Children.Add(new TextBlock { Text = "WOW.EXE", Classes = { "section" } });
         _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
@@ -2171,13 +2175,11 @@ public partial class MainWindow : Window
     CheckBox? _sceneOverlayBox;
 
     /// <summary>The login screen section: one box per scene in the game's loginui.lua (one is picked at random).</summary>
-    void BuildLoginScenes()
+    void BuildLoginScenes(Panel target)
     {
-        TweaksList.Children.Add(new TextBlock { Text = "LOGIN SCREEN", Classes = { "section" } });
-        TweaksList.Children.Add(new TextBlock { Text = "Pick the backgrounds your login screen can show. Each time the game starts it shows one of the ticked ones at random. Press Save to keep your choice.",
+        target.Children.Add(new TextBlock { Text = "Pick the backgrounds your login screen can show. Each time the game starts it shows one of the ticked ones at random. Click a picture to see its versions.",
                                                 Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
-        _scenePanel = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        TweaksList.Children.Add(_scenePanel);
+        _scenePanel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         StackPanel buttons = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
         Button all = new() { Content = "Tick all", FontSize = 12, Padding = new Thickness(8, 2) };
         all.Click += (_, _) => { foreach (CheckBox box in _sceneBoxes.Values) box.IsChecked = true; };
@@ -2196,7 +2198,8 @@ public partial class MainWindow : Window
         buttons.Children.Add(server);
         buttons.Children.Add(overlay);
         _sceneButtons = buttons;
-        TweaksList.Children.Add(buttons);
+        target.Children.Add(buttons);
+        target.Children.Add(_scenePanel);   // the pictures under the buttons
     }
 
     int _sceneLoad;
@@ -2235,14 +2238,12 @@ public partial class MainWindow : Window
             _scenePanel.Children.Add(new TextBlock { Text = local
                 ? "The list of backgrounds comes with the next update."
                 : "Connect to the server to see the backgrounds.", Classes = { "dim" }, FontSize = 12 });
-            FilterTweaks(TweaksSearch.Text);   // the section shows (or stays folded) now that it has something in it
             return;
         }
         BuildSceneGroups(scenes);
         if (!local)
             _scenePanel.Children.Add(new TextBlock { Text = "No game installed yet: your picks are used when it is.", Classes = { "dim" },
                                                      FontSize = 12, Width = 600, TextWrapping = TextWrapping.Wrap });
-        FilterTweaks(TweaksSearch.Text);
     }
 
     /// <summary>The player's scenes into loginui.lua; the file still counts as the server's (it isn't downloaded again).</summary>
@@ -2289,8 +2290,17 @@ public partial class MainWindow : Window
         _fillingTweaks = false;
         foreach (string cvar in _serverTweaks)
             SetTweak(cvar, config.Get(cvar) ?? TweakRule(cvar)?.CVarText ?? "");
-        try { if (_laaBox is not null) _laaBox.IsChecked = LargeAddressAware.IsEnabled(GameFolder.ExePath(Folder)); }
-        catch (Exception e) { Logger.Warning("Large Address Aware", e); }
+        if (_laaBox is not null)
+        {
+            // no readable Wow.exe (not installed yet, or not a Windows program): the box waits, quietly
+            try { _laaBox.IsChecked = LargeAddressAware.IsEnabled(GameFolder.ExePath(Folder)); _laaBox.IsEnabled = true; }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                _laaBox.IsEnabled = false;
+                ToolTip.SetTip(_laaBox, "Needs the game's Wow.exe: " + e.Message);
+                Logger.Debug("Large Address Aware: " + e.Message);
+            }
+        }
         // a fresh game (none of these set yet) starts on the server's recommendation, or the defaults; a game with its
         // own settings keeps them and shows whichever preset they match
         _savedBoxes = CurrentBoxes();   // what the game has now: Apply / Discard show when the boxes differ
@@ -2475,15 +2485,11 @@ public partial class MainWindow : Window
             SaveGameOptions();   // the game's own options and keys, before anything else can fail
             SaveBindings();
             SaveMacros();
-            if (_laaBox is not null) LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true);
-            List<string> scenes = _sceneBoxes.Where(b => b.Value.IsChecked == true).Select(b => b.Key).ToList();
-            if (_sceneBoxes.Count > 0 && scenes.Count > 0 && LoginScreens.Read(Folder).Where(x => x.On).Select(x => x.Code).Order().SequenceEqual(scenes.Order()) == false)
-            {
-                _settings.LoginScenes = scenes;
-                SaveSettings();
-                ApplyLoginScenes(Folder);
-            }
-            SaveCharacterScenes();
+            // a Wow.exe that can't be read must not stop the rest of the settings from being saved
+            if (_laaBox is not null)
+                try { LargeAddressAware.Set(GameFolder.ExePath(Folder), _laaBox.IsChecked == true); }
+                catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+                { Logger.Warning("Large Address Aware wasn't changed", error); }
             LoadTweaks();
             PresetChanges.IsVisible = false;
             Status("Tweaks saved.");
@@ -2797,8 +2803,23 @@ public partial class MainWindow : Window
         _previewTiles.Clear();
         if (_manifest is null || _manifest.OptionGroups.Count == 0)
             OptionsList.Children.Add(new TextBlock { Text = "The server offers no cosmetic patches (or the launcher hasn't connected yet).", Classes = { "dim" } });
-        foreach (OptionGroup group in _manifest?.OptionGroups ?? [])
+        // cards under their category's heading (Characters, World, Interface, Performance and fixes, then others, Other last)
+        string[] categoryOrder = ["Characters", "World", "Interface", "Performance and fixes"];
+        int Rank(OptionGroup g) => g.Category.Length == 0 ? 1000
+            : Array.IndexOf(categoryOrder, g.Category) is int i and >= 0 ? i
+            : 100 + (_manifest?.OptionGroups ?? []).FindIndex(x => x.Category == g.Category);
+        List<OptionGroup> ordered = [.. (_manifest?.OptionGroups ?? []).OrderBy(Rank)];
+        string? heading = null;
+        foreach (OptionGroup group in ordered)
         {
+            string category = group.Category.Length > 0 ? group.Category : "Other";
+            if (ordered.Any(g => g.Category.Length > 0) && category != heading)
+            {
+                heading = category;
+                using (Look.Untranslated())
+                    OptionsList.Children.Add(new TextBlock { Text = category.ToUpperInvariant(), Classes = { "section" },
+                                                             Width = Math.Max(200, OptionsList.Bounds.Width - 12), Margin = new Thickness(0, 6, 0, 8) });
+            }
             // a card per group, in a grid that fills the width
             StackPanel panel = new() { Spacing = 6 };
             Border card = new()
@@ -2880,7 +2901,7 @@ public partial class MainWindow : Window
                 Button look = new() { Content = "Preview", FontSize = 12 };
                 OptionGroup screens = group;
                 look.Click += async (_, _) => await OpenCharacterScenePreviewAsync(
-                    UpdatePlanner.ChosenOption(_manifest!, _settings.Options, screens.Name) == "HD");
+                    CharacterScenes.ModeOf(UpdatePlanner.ChosenOption(_manifest!, _settings.Options, screens.Name)));
                 panel.Children.Add(look);
             }
             if (group.Gallery.Count > 0)
@@ -2910,17 +2931,16 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    WrapPanel tiles = new();
+                    // the choices side by side (up to three a row), each picture as wide as its column
+                    Avalonia.Controls.Primitives.UniformGrid tiles = new() { Columns = Math.Min(pictured.Count, 3) };
                     List<(string Value, Border Frame)> frames = [];
-                    int across = Math.Min(pictured.Count, 3);
-                    double width = Math.Floor((OptionCardWidth() - 28) / across) - 8;
                     foreach ((string value, string label, string url) in pictured)
                     {
-                        Image picture = new() { Width = width, Height = Math.Round(width * 0.56), Stretch = Stretch.UniformToFill, IsVisible = false };
+                        Image picture = new() { Stretch = Stretch.Uniform, IsVisible = false };
                         StackPanel inner = new() { Spacing = 2 };
                         inner.Children.Add(picture);
                         using (Look.Untranslated()) inner.Children.Add(new TextBlock { Text = label, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center });
-                        Border frame = new() { Child = inner, Classes = { "tile" }, Margin = new Thickness(0, 0, 6, 6),
+                        Border frame = new() { Child = inner, Classes = { "tile" }, Margin = new Thickness(0, 0, 4, 4),
                                                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
                         frame.PointerPressed += (_, _) => { if (!locked) choose?.Invoke(value); };
                         frames.Add((value, frame));
