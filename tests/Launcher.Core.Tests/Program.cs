@@ -127,7 +127,7 @@ static Task HdModelsBuild()
 
 static Task CharacterScenesFile()
 {
-    Check(CharacterScenes.DefaultScene("HUMAN", "old") == "Huma2" && CharacterScenes.DefaultScene("HUMAN", "new") == "Human", "human defaults");
+    Check(CharacterScenes.DefaultScene("HUMAN", "old") == "Huma2" && CharacterScenes.DefaultScene("HUMAN", "new") == "KulTiran" && CharacterScenes.DefaultScene("KULTIRAN", "new") == "Human", "human defaults (swapped folders)");
     Check(CharacterScenes.DefaultScene("GNOME", "old") == "Dwar2" && CharacterScenes.DefaultScene("TROLL", "old") == "Or2", "shared originals");
     Check(CharacterScenes.DefaultScene("ORC", "faction") == "Horde" && CharacterScenes.DefaultScene("DRAENEI", "faction") == "Alliance", "faction scenes");
     string text = CharacterScenes.Text("new", new Dictionary<string, string> { ["draenei"] = "Human", ["GNOME"] = "Or2", ["BAD\\"] = "x", ["ORC"] = "a\"b" });

@@ -21,18 +21,18 @@ public static class CharacterScenes
     public static readonly CharacterScene[] Scenes =
     [
         new("Alliance", "Alliance", "al"), new("Horde", "Horde", "ho"),
-        new("Huma2", "Human (Classic)", "hu"), new("Human", "Human (HD)", "hm"),
-        new("Dwar2", "Dwarf and Gnome (Classic)", "dw"), new("Dwarf", "Dwarf (HD)", "dg"),
-        new("NightEl2", "Night Elf (Classic)", "nl"), new("NightElf", "Night Elf (HD)", "ne"),
-        new("Draenei", "Draenei", "dr"), new("Gnome", "Gnome (HD)", "gn"), new("Worgen", "Worgen", "wr"),
+        new("Huma2", "Human (Classic)", "hu"), new("Human", "Boralus (Kul Tiran)", "hm"),
+        new("Dwar2", "Dwarf and Gnome (Classic)", "dw"), new("Dwarf", "Shadowforge (Dark Iron)", "dg"),
+        new("NightEl2", "Night Elf (Classic)", "nl"), new("NightElf", "Suramar (Nightborne)", "ne"),
+        new("Draenei", "Draenei (Lightforged ship)", "dr"), new("Gnome", "Gnome (HD)", "gn"), new("Worgen", "Worgen", "wr"),
         new("Or2", "Orc and Troll (Classic)", "or"), new("Orc", "Orc (HD)", "ot"),
         new("Scourg2", "Undead (Classic)", "sc"), new("Scourge", "Undead (HD)", "ud"),
-        new("Taure2", "Tauren (Classic)", "ta"), new("Tauren", "Tauren (HD)", "tr"),
-        new("Troll", "Troll (HD)", "tl"), new("BloodElf", "Blood Elf", "be"), new("Goblin", "Goblin", "gb"),
+        new("Taure2", "Tauren (Classic)", "ta"), new("Tauren", "Highmountain", "tr"),
+        new("Troll", "Zandalar", "tl"), new("BloodElf", "Blood Elf", "be"), new("Goblin", "Goblin", "gb"),
         new("Pandaren", "Pandaren", "pd"), new("PandarenCharacterSelect", "Pandaren (temple)", "pn"),
         new("VoidElf", "Void Elf", "ve"), new("LightforgedDraenei", "Lightforged Draenei", "ld"),
-        new("KulTiran", "Kul Tiran", "kt"), new("Mechagnome", "Mechagnome", "mg"),
-        new("NightborneElf", "Nightborne", "nf"), new("HighmountainTauren", "Highmountain Tauren", "hr"),
+        new("KulTiran", "Stormwind (Human HD)", "kt"), new("Mechagnome", "Mechagnome", "mg"),
+        new("NightborneElf", "Nightborne", "nf"), new("HighmountainTauren", "Mulgore (Tauren HD)", "hr"),
         new("OrcClan", "Mag'har Orc", "oc"), new("Vulpera", "Vulpera", "vp"), new("Earthen", "Earthen", "ea"),
         new("DeathKnight", "Death Knight (Classic)", "dk"), new("DeathKnigh2", "Death Knight (HD)", "dt"),
         new("DemonHunter", "Demon Hunter", "dh"), new("Dracthyr", "Dracthyr", "dy"), new("Pirate", "Pirate", "tp"),
@@ -56,11 +56,14 @@ public static class CharacterScenes
     // the same tables as GlueParent.lua (for showing which scene a race gets when the player picked nothing)
     static readonly Dictionary<string, string> Hd = new()
     {
-        ["HUMAN"] = "Human", ["DWARF"] = "Dwarf", ["NIGHTELF"] = "NightElf", ["GNOME"] = "Gnome", ["DRAENEI"] = "Draenei",
-        ["WORGEN"] = "Worgen", ["BLOODELF"] = "BloodElf", ["ORC"] = "Orc", ["TROLL"] = "Troll", ["SCOURGE"] = "Scourge",
-        ["TAUREN"] = "Tauren", ["GOBLIN"] = "Goblin", ["LIGHTFORGEDDRAENEI"] = "LightforgedDraenei",
-        ["NIGHTBORNE"] = "NightborneElf", ["MAGHAR"] = "OrcClan", ["HIGHMOUNTAINTAUREN"] = "HighmountainTauren",
-        ["KULTIRAN"] = "KulTiran", ["VULPERA"] = "Vulpera", ["VOIDELF"] = "VoidElf", ["MECHAGNOME"] = "Mechagnome",
+        // In this client the newer scenes at the stock paths hold the allied races' scenes (UI_Human = Boralus, UI_Tauren =
+        // Highmountain, UI_Dwarf = Dark Iron, UI_NightElf = Suramar, UI_Draenei = Lightforged ship, UI_Troll = Zandalar)
+        // and ui_kultiran / ui_highmountaintauren hold copies of the human / tauren scenes: so the races swap folders.
+        ["HUMAN"] = "KulTiran", ["DWARF"] = "Dwar2", ["NIGHTELF"] = "NightEl2", ["GNOME"] = "Gnome", ["DRAENEI"] = "Draenei",
+        ["WORGEN"] = "Worgen", ["BLOODELF"] = "BloodElf", ["ORC"] = "Orc", ["TROLL"] = "Or2", ["SCOURGE"] = "Scourge",
+        ["TAUREN"] = "HighmountainTauren", ["GOBLIN"] = "Goblin", ["LIGHTFORGEDDRAENEI"] = "LightforgedDraenei",
+        ["NIGHTBORNE"] = "NightborneElf", ["MAGHAR"] = "OrcClan", ["HIGHMOUNTAINTAUREN"] = "Tauren",
+        ["KULTIRAN"] = "Human", ["VULPERA"] = "Vulpera", ["VOIDELF"] = "VoidElf", ["MECHAGNOME"] = "Mechagnome",
         ["DARKIRONDWARF"] = "Dwarf", ["ZANDALARITROLL"] = "Troll", ["ALLIANCEPANDAREN"] = "Pandaren",
         ["HORDEPANDAREN"] = "Pandaren", ["ALLIANCEEARTHEN"] = "Earthen", ["HORDEEARTHEN"] = "Earthen",
         ["DEATHKNIGHT"] = "DeathKnigh2", ["HIGHELF"] = "Human",
