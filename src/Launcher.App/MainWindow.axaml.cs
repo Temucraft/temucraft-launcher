@@ -2163,6 +2163,7 @@ public partial class MainWindow : Window
     // drawn login buttons over the scene pictures ("Preview with the login buttons")
     readonly List<Control> _sceneOverlays = [];
     bool _sceneOverlayOn;
+    CheckBox? _sceneOverlayBox;
 
     /// <summary>The login screen section: one box per scene in the game's loginui.lua (one is picked at random).</summary>
     void BuildLoginScenes()
@@ -2179,6 +2180,7 @@ public partial class MainWindow : Window
         ToolTip.SetTip(server, "Go back to the backgrounds the server picked (they come back with the next update)");
         server.Click += (_, _) => ResetLoginScenes();
         CheckBox overlay = new() { Content = "Preview with the login buttons", FontSize = 12, IsChecked = _sceneOverlayOn };
+        _sceneOverlayBox = overlay;
         ToolTip.SetTip(overlay, "Shows the pictures with the login screen's buttons and boxes on top, as you'll see them in the game");
         overlay.IsCheckedChanged += (_, _) =>
         {
@@ -2230,29 +2232,7 @@ public partial class MainWindow : Window
             FilterTweaks(TweaksSearch.Text);   // the section shows (or stays folded) now that it has something in it
             return;
         }
-        foreach (LoginScene scene in scenes)
-        {
-            CheckBox box = new() { Content = LoginScreens.Title(scene.Name), IsChecked = scene.On };
-            _sceneBoxes[scene.Code] = box;
-            StackPanel tile = new() { Spacing = 2, Margin = new Thickness(0, 0, 12, 8), Width = 184 };
-            if (_manifest?.LoginScreenPreviews.TryGetValue(scene.Code, out string? url) == true)
-            {
-                Image picture = new() { Width = 180, Height = 100, Stretch = Stretch.Fill, IsVisible = false,
-                                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
-                picture.PointerPressed += (_, _) => box.IsChecked = box.IsChecked != true;
-                Control layer = LoginButtonsOverlay.Build();
-                layer.Width = 180; layer.Height = 100; layer.IsVisible = _sceneOverlayOn;
-                _sceneOverlays.Add(layer);
-                Grid frame = new() { Width = 180, Height = 100, HorizontalAlignment = HorizontalAlignment.Left };
-                frame.Children.Add(picture);
-                frame.Children.Add(layer);
-                frame.Bind(IsVisibleProperty, picture.GetObservable(IsVisibleProperty));
-                tile.Children.Add(frame);
-                _ = SetPictureAsync(picture, url, withOverlay: true);
-            }
-            tile.Children.Add(box);
-            _scenePanel.Children.Add(tile);
-        }
+        BuildSceneGroups(scenes);
         if (!local)
             _scenePanel.Children.Add(new TextBlock { Text = "No game installed yet: your picks are used when it is.", Classes = { "dim" },
                                                      FontSize = 12, Width = 600, TextWrapping = TextWrapping.Wrap });
