@@ -356,8 +356,8 @@ def manifest(client, env, dry):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Upload release files or a server build to the VPS.")
-    parser.add_argument("what", choices=["files", "server", "manifest"])
+    parser = argparse.ArgumentParser(description="Upload release files, developer tools (dev, never served) or a server build to the VPS.")
+    parser.add_argument("what", choices=["files", "server", "manifest", "dev"])
     parser.add_argument("folder", nargs="?")
     parser.add_argument("--env", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "upload.env"))
     parser.add_argument("--delete", action="store_true", help="remove files on the VPS that are gone locally")
@@ -373,6 +373,15 @@ def main():
             return
         if not args.folder or not os.path.isdir(args.folder):
             sys.exit("Give the local folder to upload.")
+        if args.what == "dev":
+            # developer tools (_dev: the login screen tool, screenshots...) kept on the VPS but never served: only
+            # reachable over SSH, so the folder must be outside the web folder
+            remote = env.get("REMOTE_DEV_DIR") or "/opt/temucraft-dev"
+            web = (env.get("REMOTE_FILES_DIR") or "/var/www").rstrip("/")
+            if remote.rstrip("/").startswith(web) or remote.startswith("/var/www"):
+                sys.exit(f"REMOTE_DEV_DIR ({remote}) is inside the web folder; pick one players can't download from.")
+            sync(client, args.folder, remote, args.delete, args.dry_run, openssh=openssh_command(env))
+            return
         if args.what == "files":
             sync(client, args.folder, env["REMOTE_FILES_DIR"], args.delete, args.dry_run, skip={"manifest.json"},
                  openssh=openssh_command(env), delete_under=() if args.keep_old_options else ("options",))
