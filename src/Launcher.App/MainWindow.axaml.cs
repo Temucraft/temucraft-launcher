@@ -2046,7 +2046,9 @@ public partial class MainWindow : Window
         TweaksList.Children.Add(new TextBlock { Text = "LAUNCHER SETTINGS", Classes = { "title", "group" }, Margin = new Thickness(0, 4, 0, 0) });
         BuildLoginScenes();
         BuildCharacterScenes();
-        TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
+        // the game's own files and the mods that change how it runs, as their own group
+        TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "title", "group" }, Margin = new Thickness(0, 22, 0, 0) });
+        TweaksList.Children.Add(new TextBlock { Text = "WOW.EXE", Classes = { "section" } });
         _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
         foreach (Tweak t in Tweaks.All.Where(t => t.Requires is not null)) AddTweak(t);

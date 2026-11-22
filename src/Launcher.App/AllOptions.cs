@@ -336,8 +336,8 @@ public partial class MainWindow
                 if (name.Length == 0) continue;
                 Button link = new()
                 {
-                    Content = char.ToUpper(name[0]) + name[1..].ToLowerInvariant(), Classes = { "link" }, FontSize = 13,
-                    Padding = new Thickness(6, 2), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left,
+                    Content = MenuName(name), Classes = { "nav" }, FontSize = 13,
+                    HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left,
                 };
                 link.Click += (_, _) =>
                 {
@@ -348,6 +348,15 @@ public partial class MainWindow
                 TweaksMenu.Children.Add(link);
             }
         }
+    }
+
+    /// <summary>A section's name for the side menu: "Login screen", "Awesome WotLK", "DXVK" (not all capitals).</summary>
+    static string MenuName(string name)
+    {
+        string upper = name.ToUpperInvariant();
+        if (upper is "DXVK" or "WOW.EXE") return upper == "DXVK" ? "DXVK" : "Wow.exe";
+        if (upper == "AWESOME WOTLK") return "Awesome WotLK";
+        return char.ToUpper(name[0]) + name[1..].ToLowerInvariant();
     }
 
     /// <summary>Shows only the rows whose name, setting or description has the search words; empty sections hide.</summary>

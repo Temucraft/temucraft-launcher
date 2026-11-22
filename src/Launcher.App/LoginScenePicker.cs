@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -325,12 +326,13 @@ public sealed class ScenePreviewWindow : Window
         layout.Children.Add(pictureArea);
         Content = layout;
 
-        KeyDown += (_, e) =>
+        // tunnel: arrow keys reach the window before a focused button or tick box uses them to move focus
+        AddHandler(KeyDownEvent, (object? _, KeyEventArgs e) =>
         {
             if (e.Key == Key.Left) { Go(-1); e.Handled = true; }
             else if (e.Key == Key.Right) { Go(1); e.Handled = true; }
             else if (e.Key == Key.Escape) Close();
-        };
+        }, RoutingStrategies.Tunnel);
         _ = ShowAsync();
     }
 

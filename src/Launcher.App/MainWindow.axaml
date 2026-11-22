@@ -84,6 +84,17 @@
       <Setter Property="Foreground" Value="{DynamicResource T.good}" />
       <Setter Property="Padding" Value="4,2" />
     </Style>
+    <!-- the side menu of the settings page: plain text, brighter with a soft panel on hover -->
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource T.textSoft}" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource T.panel}" />
+      <Setter Property="Foreground" Value="{DynamicResource T.text}" />
+    </Style>
     <!-- colours for text and boxes made in code (they follow the theme) -->
     <Style Selector="TextBlock.accent"><Setter Property="Foreground" Value="{DynamicResource T.accent}" /></Style>
     <Style Selector="TextBlock.text"><Setter Property="Foreground" Value="{DynamicResource T.text}" /></Style>
