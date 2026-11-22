@@ -31,6 +31,8 @@ public partial class MainWindow
     async Task SyncHdModelsAsync(string folder, bool askToCloseGame = true)
     {
         if (_manifest is null || !GameFolder.LooksLikeClient(folder)) return;
+        try { foreach (string old in Untracked.RemoveOldHdTables(folder, _manifest)) Log($"Moved the old HD tables {old} to the backup folder (no longer used)"); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Logger.Warning("Couldn't move the old HD tables", error); }
         List<string> hd = HdParts();
         if (HdModels.UpToDate(folder, [.. hd.Where(p => File.Exists(HdModels.PiecePath(folder, p)))])) return;
         if (askToCloseGame && !await Dispatcher.UIThread.InvokeAsync(() => MakeSureGameClosedAsync(folder))) return;

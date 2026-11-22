@@ -118,13 +118,24 @@ public static class UpdatePlanner
                     && choice.Locales.Contains(file.Locale, StringComparer.OrdinalIgnoreCase) => choice.WowFolder,
                 FileCategory.Addon when choice.Addons => choice.WowFolder,
                 FileCategory.Base when !string.IsNullOrEmpty(choice.BaseFolder) => choice.BaseFolder,
-                FileCategory.Option when IsChosen(manifest, choice, file) => choice.WowFolder,
+                // a choice's files in a language folder (Data/deDE/...) only for the ticked languages
+                FileCategory.Option when IsChosen(manifest, choice, file) && LanguageTicked(file.Path, choice) => choice.WowFolder,
                 _ => null,
             };
             if (root is not null)
                 wanted.Add(new PlannedFile(file, PathRules.Resolve(root, file.Path)));
         }
         return wanted;
+    }
+
+    /// <summary>False for a file in a language folder (Data/xxXX/...) whose language isn't ticked.</summary>
+    static bool LanguageTicked(string path, InstallChoice choice)
+    {
+        string[] parts = path.Replace('\\', '/').Split('/');
+        if (parts.Length < 3 || !parts[0].Equals("Data", StringComparison.OrdinalIgnoreCase)) return true;
+        string folder = parts[1];
+        bool language = folder.Length == 4 && char.IsLower(folder[0]) && char.IsLower(folder[1]) && char.IsUpper(folder[2]) && char.IsUpper(folder[3]);
+        return !language || choice.Locales.Contains(folder, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>The option the player picked in a group (the first option when nothing was picked and it isn't optional).</summary>

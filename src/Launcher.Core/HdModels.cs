@@ -43,6 +43,8 @@ public static class HdModels
     ];
 
     public const string PieceFolder = "Data/TemucraftHD";
+    /// <summary>The files this builds (never in the manifest, never "untracked").</summary>
+    public static readonly string[] Generated = ["Data/patch-K.MPQ", "Data/patch-_.MPQ"];
     public static string PiecePath(string wowFolder, string part) => Path.Combine(wowFolder, "Data", "TemucraftHD", $"hd-{part}.MPQ");
     static string ModelsPath(string wowFolder) => Path.Combine(wowFolder, "Data", "patch-K.MPQ");
     static string DataPath(string wowFolder) => Path.Combine(wowFolder, "Data", "patch-_.MPQ");

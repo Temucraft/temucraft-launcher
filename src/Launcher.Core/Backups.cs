@@ -264,6 +264,7 @@ public static class Untracked
     {
         HashSet<string> known = manifest.Files.Select(f => f.Path.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
         known.UnionWith(TestingFiles.Installed(wowFolder));   // testing mode's own files
+        known.UnionWith(HdModels.Generated);                  // built here by the launcher (HD character models)
         List<string> found = [];
         string data = Path.Combine(wowFolder, "Data");
         if (!Directory.Exists(data)) return found;
@@ -280,6 +281,22 @@ public static class Untracked
                 if (!stock && !known.Contains($"Data/{locale}/{name}")) found.Add($"Data/{locale}/{name}");
             }
         return found;
+    }
+
+    /// <summary>The old HD skin tables (Data/&lt;locale&gt;/patch-&lt;locale&gt;-U.MPQ, before HD per race): unused now, so they
+    /// go to the backup folder. Small files only (they were about 2 MB), and only when the server doesn't list them.</summary>
+    public static IReadOnlyList<string> RemoveOldHdTables(string wowFolder, Manifest manifest)
+    {
+        List<string> moved = [];
+        foreach (string file in Find(wowFolder, manifest))
+        {
+            string[] parts = file.Split('/');
+            if (parts.Length != 3 || !parts[2].Equals($"patch-{parts[1]}-U.MPQ", StringComparison.OrdinalIgnoreCase)) continue;
+            if (new FileInfo(PathRules.Resolve(wowFolder, file)).Length > 8 << 20) continue;
+            Remove(wowFolder, file);
+            moved.Add(file);
+        }
+        return moved;
     }
 
     /// <summary>Moves an untracked file into the backup folder.</summary>
