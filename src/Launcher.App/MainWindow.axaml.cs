@@ -1504,6 +1504,7 @@ public partial class MainWindow : Window
             ApplyEnforcedToGame(folder);
             ApplyLoginScenes(folder);
             ApplyCharacterScenes(folder);
+            await SyncHdModelsAsync(folder, askToCloseGame: false);
             Status("Everything up to date!");
             await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; SetPendingUpdate(null); ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
         });
@@ -1881,6 +1882,7 @@ public partial class MainWindow : Window
             EnableRequiredAddons(Folder);
             ApplyLoginScenes(Folder);
             ApplyCharacterScenes(Folder);
+            await SyncHdModelsAsync(Folder, askToCloseGame: false);
             // testing mode (testing.env next to the launcher): the owner's test files go in, old ones come out
             foreach (string line in TestingFiles.Apply(AppContext.BaseDirectory, Folder, SelectedLocales())) Log(line);
             if (Diagnostics.RemoveCompatibilityMode(GameFolder.ExePath(Folder)) is { } compat)
@@ -2892,6 +2894,7 @@ public partial class MainWindow : Window
                         if (await SwapOptionAsync(group, value))
                         {
                             Status($"{group.Name}: {shown}. Switched (already on this PC, nothing to download).");
+                            if (group.Name == ModelsGroup) await SyncHdModelsAsync(Folder, askToCloseGame: false);
                             RefreshMods();
                         }
                         else
@@ -2939,6 +2942,7 @@ public partial class MainWindow : Window
                 control = box;
             }
             if (group.Enforce) ToolTip.SetTip(control, "Set by the server");
+            if (group.Name == ModelsGroup) panel.Children.Add(HdRacePanel(group));
             if (group.Name == "Character screens")
             {
                 // the character screens: each race's scene big, Classic or HD (starts on the choice shown in the box)

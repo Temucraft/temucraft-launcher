@@ -141,6 +141,8 @@ public sealed class UserSettings
     public List<string>? LoginScenes { get; set; }
     /// <summary>The player's character screen scene per race (race file string upper case -> scene folder).</summary>
     public Dictionary<string, string> ScenePicks { get; set; } = [];
+    /// <summary>Character models: HD, but these races (HdModels.Parts) stay Classic.</summary>
+    public List<string> HdClassicParts { get; set; } = [];
     public bool ReopenAfterGame { get; set; } = true;
     public bool RememberWindow { get; set; }
     /// <summary>The remembered window position; null until "Remember window position" has saved one.</summary>

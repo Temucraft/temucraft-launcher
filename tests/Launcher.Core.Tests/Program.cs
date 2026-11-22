@@ -66,9 +66,64 @@ List<(string Name, Func<Task> Body)> tests =
     ("The old launcher a self update leaves behind is removed at the next start", SelfUpdateLeftovers),
     ("testing.env copies test files in and takes them out again", TestingFilesInAndOut),
     ("Character screen scenes: Classic / HD defaults and the player's picks in TemucraftScenes.lua", CharacterScenesFile),
+    ("HD character models: patch-K and patch-_ built per race from the pieces", HdModelsBuild),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
+
+static Task HdModelsBuild()
+{
+    string wow = Path.Combine(Path.GetTempPath(), "tc-hd-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        Directory.CreateDirectory(Path.Combine(wow, "Data", "TemucraftHD"));
+        File.WriteAllText(Path.Combine(wow, "Wow.exe"), "x");
+        // a 21-column table: the race in columns 0..2 (every table's race column is one of those), a string in 4, 5, 6 and 20
+        static byte[] Table(string text, params int[] races)
+        {
+            using MemoryStream m = new();
+            byte[] strings = [0, .. System.Text.Encoding.ASCII.GetBytes(text), 0];
+            m.Write("WDBC"u8); m.Write(BitConverter.GetBytes(races.Length)); m.Write(BitConverter.GetBytes(21)); m.Write(BitConverter.GetBytes(84));
+            m.Write(BitConverter.GetBytes(strings.Length));
+            foreach (int race in races)
+                for (int c = 0; c < 21; c++) m.Write(BitConverter.GetBytes(c <= 2 ? race : c is 4 or 5 or 6 or 20 ? 1 : 0));
+            m.Write(strings);
+            return m.ToArray();
+        }
+        using (MpqWriter common = new(HdModels.PiecePath(wow, "common"), 3))
+        {
+            foreach (string name in new[] { "CharSections", "CharHairGeosets", "CharacterFacialHairStyles", "CreatureDisplayInfoExtra", "EmotesTextSound", "HelmetGeosetVisData" })
+            {
+                common.AddPlain($"Temucraft\\Classic\\{name}.dbc", Table("classic", 1, 2, 50));
+                common.AddPlain($"Temucraft\\HD\\{name}.dbc", Table("hd", 1, 2, 50));
+            }
+            common.AddPlain("Textures\\GuildEmblems\\e.blp", [1, 2, 3]);
+        }
+        using (MpqWriter human = new(HdModels.PiecePath(wow, "human"), 3)) human.AddPlain("Character\\Human\\a.blp", [4, 5]);
+        using (MpqWriter orc = new(HdModels.PiecePath(wow, "orc"), 3)) orc.AddPlain("Character\\Orc\\b.blp", [6]);
+
+        Check(HdModels.Sync(wow, ["human"]) is not null, "built");
+        using (MpqArchive k = MpqArchive.Open(Path.Combine(wow, "Data", "patch-K.MPQ")))
+        {
+            Check(k.Names.Contains("Character\\Human\\a.blp") && k.Names.Contains("Textures\\GuildEmblems\\e.blp"), "human and common in patch-K");
+            Check(!k.Names.Contains("Character\\Orc\\b.blp") && !k.Names.Any(n => n.StartsWith("Temucraft")), "no Classic race, no source tables");
+            Check(k.ReadPlain("Character\\Human\\a.blp").SequenceEqual(new byte[] { 4, 5 }), "file data copied unchanged");
+        }
+        using (MpqArchive data = MpqArchive.Open(Path.Combine(wow, "Data", "patch-_.MPQ")))
+        {
+            byte[] sections = data.ReadPlain("DBFilesClient\\CharSections.dbc");
+            string text = System.Text.Encoding.ASCII.GetString(sections);
+            Check(BitConverter.ToInt32(sections, 4) == 3, "one row per race");
+            Check(text.Contains("hd") && text.Contains("classic"), "HD rows for the HD race, Classic for the rest: " + text);
+            Check(data.ReadPlain("DBFilesClient\\HelmetGeosetVisData.dbc").Length > 20, "whole table taken");
+        }
+        Check(HdModels.Sync(wow, ["human"]) is null, "unchanged: not built again");
+        Check(HdModels.Sync(wow, []) is not null && !File.Exists(Path.Combine(wow, "Data", "patch-K.MPQ"))
+              && !File.Exists(Path.Combine(wow, "Data", "patch-_.MPQ")), "all Classic: both removed");
+    }
+    finally { try { Directory.Delete(wow, true); } catch (IOException) { } }
+    return Task.CompletedTask;
+}
 
 static Task CharacterScenesFile()
 {
