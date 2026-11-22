@@ -18,6 +18,7 @@ public static class Diagnostics
         text.AppendLine($"System: {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})");
         text.AppendLine($"Game folder: {wowFolder}");
         foreach (string line in extraLines) text.AppendLine(line);
+        foreach (string line in RecentCrashes(wowFolder)) text.AppendLine(line);
 
         Dictionary<string, ManifestFile> server = (manifest?.Files ?? [])
             .GroupBy(f => f.Path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
@@ -53,6 +54,56 @@ public static class Diagnostics
             if (!File.Exists(Path.Combine(wowFolder, file.Path.Replace('/', Path.DirectorySeparatorChar))))
                 text.AppendLine($"{file.Path}: missing");
         return text.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// The game's last few crash reports (Errors\*.txt): when, the error, and the top of the crashing thread's stack,
+    /// so one paste says what went wrong without sending the whole file.
+    /// </summary>
+    public static List<string> RecentCrashes(string wowFolder, int count = 3)
+    {
+        List<string> lines = [];
+        string errors = Path.Combine(wowFolder, "Errors");
+        if (!Directory.Exists(errors)) return lines;
+        FileInfo[] reports;
+        try
+        {
+            reports = new DirectoryInfo(errors).GetFiles("*.txt")
+                .OrderByDescending(f => f.LastWriteTime).Take(count).ToArray();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return lines; }
+        if (reports.Length == 0) return lines;
+        lines.Add("");
+        lines.Add($"Last crashes ({reports.Length}, newest first):");
+        foreach (FileInfo report in reports)
+        {
+            string[] all;
+            try { all = File.ReadAllLines(report.FullName); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { continue; }
+            lines.Add($"- {report.LastWriteTime:yyyy-MM-dd HH:mm:ss}");
+            int at = Array.FindIndex(all, l => l.StartsWith("ERROR #", StringComparison.Ordinal));
+            if (at >= 0)
+            {
+                lines.Add("  " + all[at].Trim());
+                // what follows the error until "WoWBuild": the exception line, or the game's own message
+                for (int i = at + 1; i < all.Length && !all[i].StartsWith("WoWBuild", StringComparison.Ordinal); i++)
+                {
+                    string l = all[i].Trim();
+                    if (l.Length == 0 || l.StartsWith("Program:", StringComparison.Ordinal)) continue;
+                    lines.Add("  " + l);
+                }
+            }
+            int stack = Array.FindIndex(all, l => l.Contains("[Current Thread]", StringComparison.Ordinal));
+            if (stack >= 0)
+            {
+                IEnumerable<string> frames = all.Skip(stack + 1).TakeWhile(l => l.Trim().Length > 0).Take(8)
+                    .Select(l => l.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    .Where(p => p.Length >= 4)
+                    .Select(p => p[0] + " " + Path.GetFileName(string.Join(' ', p.Skip(3))));
+                lines.Add("  Stack: " + string.Join(", ", frames));
+            }
+        }
+        return lines;
     }
 
     static async Task<string> FileLineAsync(string wowFolder, string file, Dictionary<string, ManifestFile> server, HashCache? cache, CancellationToken token)
