@@ -201,7 +201,7 @@ def put_openssh(command, sftp, path, temp, size, start):
                 continue
             speed = (done - first) / max(time.monotonic() - began, 0.001)
             left = (size - done) / speed if speed > 0 else 0
-            print(f"\r    {done / 1048576:9.1f} / {size / 1048576:.1f} MB  {speed / 1048576:5.2f} MB/s"
+            print(f"\r    {done * 100 // max(size, 1):3d}%  {done / 1048576:9.1f} / {size / 1048576:.1f} MB  {speed / 1048576:5.2f} MB/s"
                   f"  {int(left // 3600)}h{int(left % 3600 // 60):02d}m left   ", end="", flush=True)
 
     watcher = threading.Thread(target=progress, daemon=True)
@@ -257,7 +257,7 @@ def put(client, sftp, path, target, size, already, openssh=None):
                     last = now
                     speed = (done - start) / max(now - began, 0.001)
                     left = (size - done) / speed if speed > 0 else 0
-                    print(f"\r    {done / 1048576:9.1f} / {size / 1048576:.1f} MB  {speed / 1048576:5.2f} MB/s"
+                    print(f"\r    {done * 100 // max(size, 1):3d}%  {done / 1048576:9.1f} / {size / 1048576:.1f} MB  {speed / 1048576:5.2f} MB/s"
                           f"  {int(left // 3600)}h{int(left % 3600 // 60):02d}m left   ", end="", flush=True)
         if size >= 8 << 20:
             print()
@@ -283,6 +283,7 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
     checked = 0
     made, sent, total = set(), 0, 0
     local_set = set()
+    pending = []
     for root, dirs, files in os.walk(local):
         # base/ (the full client, only for new players) goes last, so the files every player needs arrive first
         dirs[:] = sorted((d for d in dirs if not d.startswith(".")),
@@ -299,16 +300,22 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
             st = os.stat(path)
             if have.get(rel) == (st.st_size, int(st.st_mtime)):
                 continue
-            target = posixpath.join(remote, rel)
-            print(f"  upload {rel} ({st.st_size / 1048576:.1f} MB)")
-            total += st.st_size
-            sent += 1
-            if dry:
-                continue
-            makedirs(sftp, posixpath.dirname(target), made)
-            put(client, sftp, path, target, st.st_size, (have.get(rel + ".upload") or (0, 0))[0], openssh)
-            sftp.utime(target + ".upload", (int(st.st_atime), int(st.st_mtime)))
-            sftp.posix_rename(target + ".upload", target)
+            pending.append((rel, path, st))
+    # overall progress (files and bytes) on every line, even for small files that go by fast
+    grand = sum(st.st_size for _, _, st in pending) or 1
+    for rel, path, st in pending:
+        target = posixpath.join(remote, rel)
+        sent += 1
+        print(f"  [{sent}/{len(pending)} {total * 100 // grand:3d}%] upload {rel} ({st.st_size / 1048576:.1f} MB)")
+        total += st.st_size
+        if dry:
+            continue
+        makedirs(sftp, posixpath.dirname(target), made)
+        put(client, sftp, path, target, st.st_size, (have.get(rel + ".upload") or (0, 0))[0], openssh)
+        sftp.utime(target + ".upload", (int(st.st_atime), int(st.st_mtime)))
+        sftp.posix_rename(target + ".upload", target)
+    if pending:
+        print(f"  [{sent}/{len(pending)} 100%] done")
     removed = 0
     if delete:
         for rel in sorted(set(have) - local_set):
