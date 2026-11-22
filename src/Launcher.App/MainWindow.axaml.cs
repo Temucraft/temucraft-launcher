@@ -1494,6 +1494,7 @@ public partial class MainWindow : Window
             GameFolder.WriteRealmlist(folder, manifest.Realmlist);
             ApplyEnforcedToGame(folder);
             ApplyLoginScenes(folder);
+            ApplyCharacterScenes(folder);
             Status("Everything up to date!");
             await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; SetPendingUpdate(null); ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
         });
@@ -1870,6 +1871,7 @@ public partial class MainWindow : Window
             ShareSettings(Folder);
             EnableRequiredAddons(Folder);
             ApplyLoginScenes(Folder);
+            ApplyCharacterScenes(Folder);
             // testing mode (testing.env next to the launcher): the owner's test files go in, old ones come out
             foreach (string line in TestingFiles.Apply(AppContext.BaseDirectory, Folder, SelectedLocales())) Log(line);
             if (Diagnostics.RemoveCompatibilityMode(GameFolder.ExePath(Folder)) is { } compat)
@@ -2043,6 +2045,7 @@ public partial class MainWindow : Window
         // launcher settings first (what the launcher itself does), then the game's own settings
         TweaksList.Children.Add(new TextBlock { Text = "LAUNCHER SETTINGS", Classes = { "title", "group" }, Margin = new Thickness(0, 4, 0, 0) });
         BuildLoginScenes();
+        BuildCharacterScenes();
         TweaksList.Children.Add(new TextBlock { Text = "CLIENT", Classes = { "section" } });
         _laaBox = new CheckBox { Content = "Large Address Aware - lets the game use 4 GB of memory instead of 2 GB (Wow.exe is backed up as Wow.exe.bak)" };
         TweaksList.Children.Add(_laaBox);
@@ -2218,6 +2221,7 @@ public partial class MainWindow : Window
             catch (Exception error) { Logger.Warning("Couldn't read the server's login screens", error); }
         }
         if (ticket != _sceneLoad) return;
+        LoadCharacterScenePictures();
         if (!local && _settings.LoginScenes is { Count: > 0 } mine)
             scenes = [.. scenes.Select(x => x with { On = mine.Contains(x.Code) })];
         _scenePanel.Children.Clear();
@@ -2477,6 +2481,7 @@ public partial class MainWindow : Window
                 SaveSettings();
                 ApplyLoginScenes(Folder);
             }
+            SaveCharacterScenes();
             LoadTweaks();
             PresetChanges.IsVisible = false;
             Status("Tweaks saved.");
