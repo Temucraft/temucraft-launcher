@@ -3180,8 +3180,35 @@ public partial class MainWindow : Window
 
     void RefreshBackups()
     {
-        BackupList.ItemsSource = Backups.List();
+        IReadOnlyList<Backups.Backup> list = Backups.List();
+        BackupList.ItemsSource = list;
         BackupList.SelectedIndex = BackupList.ItemCount > 0 ? 0 : -1;
+        try
+        {
+            (long zips, long moved) = Backups.Sizes();
+            BackupTotal.Text = $"Total: {Words.Size(zips + moved)} ({list.Count} backup{(list.Count == 1 ? "" : "s")}: {Words.Size(zips)}"
+                               + (moved > 0 ? $"; patches moved out of the game: {Words.Size(moved)}" : "") + ")";
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { BackupTotal.Text = ""; }
+    }
+
+    async void OnDeleteBackup(object? sender, RoutedEventArgs e)
+    {
+        if (BackupList.SelectedItem is not Backups.Backup backup) return;
+        if (!await ConfirmAsync("Delete this backup?", $"{backup}\n\nIt can't be brought back.", "Delete")) return;
+        try { Backups.Delete(backup.File); Log($"Deleted the backup {backup.File}"); Status("Backup deleted."); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Logger.Warning("Couldn't delete the backup", error); }
+        RefreshBackups();
+    }
+
+    async void OnDeleteAllBackups(object? sender, RoutedEventArgs e)
+    {
+        (long zips, long moved) = Backups.Sizes();
+        if (zips + moved == 0) { Status("There are no backups."); return; }
+        if (!await ConfirmAsync("Delete all backups?", $"Every backup and the patches moved out of the game ({Words.Size(zips + moved)}) are deleted. They can't be brought back.", "Delete all")) return;
+        try { Backups.DeleteAll(); Log("Deleted all backups"); Status($"Deleted all backups ({Words.Size(zips + moved)} freed)."); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Logger.Warning("Couldn't delete the backups", error); }
+        RefreshBackups();
     }
 
     async void OnBackupNow(object? sender, RoutedEventArgs e)

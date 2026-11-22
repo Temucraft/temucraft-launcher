@@ -186,7 +186,9 @@ def build(files_dir, realmlist, cache):
             info = {}
             if os.path.isfile(os.path.join(gdir, "group.json")):
                 info = load_jsonc(os.path.join(gdir, "group.json"))
-            names = sorted(o for o in os.listdir(gdir) if os.path.isdir(os.path.join(gdir, o)) and not o.startswith("."))
+            # a folder counts as a choice only when it holds files: an empty one is left over from a removed choice
+            names = sorted(o for o in os.listdir(gdir) if os.path.isdir(os.path.join(gdir, o)) and not o.startswith(".")
+                           and any(walk(os.path.join(gdir, o))))
             # an option listed in "order" may have no folder: it installs nothing (e.g. "Off"; uploads skip empty folders)
             order = list(info.get("order", [])) + [o for o in names if o not in info.get("order", [])]
             for option in order:

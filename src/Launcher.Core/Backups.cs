@@ -170,6 +170,34 @@ public static class Backups
                 .Select(f => new Backup(f.FullName, f.LastWriteTime, f.Length)).OrderByDescending(b => b.Created).ToList()
             : [];
 
+    /// <summary>Patches moved out of the game by "Remove" under Untracked patches (they can be large).</summary>
+    public static string UntrackedFolder => Path.Combine(Folder, "untracked");
+
+    /// <summary>Bytes in the backups (zips) and in the moved patches.</summary>
+    public static (long Zips, long Untracked) Sizes()
+    {
+        long zips = List().Sum(b => b.Size);
+        long moved = Directory.Exists(UntrackedFolder)
+            ? new DirectoryInfo(UntrackedFolder).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) : 0;
+        return (zips, moved);
+    }
+
+    /// <summary>Deletes one backup zip (only files inside the backup folder).</summary>
+    public static void Delete(string backupFile)
+    {
+        string full = Path.GetFullPath(backupFile);
+        if (!full.StartsWith(Path.GetFullPath(Folder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"{backupFile} is not in the backup folder");
+        File.Delete(full);
+    }
+
+    /// <summary>Deletes every backup zip and the moved patches.</summary>
+    public static void DeleteAll()
+    {
+        foreach (Backup b in List()) File.Delete(b.File);
+        if (Directory.Exists(UntrackedFolder)) Directory.Delete(UntrackedFolder, recursive: true);
+    }
+
     static void AddFolder(ZipArchive zip, string wowFolder, string relative, Func<string, bool>? keep = null)
     {
         string root = Path.Combine(wowFolder, relative);

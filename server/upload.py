@@ -331,6 +331,16 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
             removed += 1
             if not dry:
                 sftp.remove(posixpath.join(remote, rel))
+        # folders left empty (a removed choice like Character screens/Original) go too: an empty choice folder on the
+        # server would still be offered by the manifest of an older make-manifest.py
+        for top in delete_under:
+            folder = posixpath.join(remote, top)
+            if dry:
+                print(f"  would remove empty folders under {top}/")
+                continue
+            _, out, _ = client.exec_command(f"find {shlex.quote(folder)} -mindepth 1 -type d -empty -print -delete")
+            for line in out.read().decode(errors="replace").splitlines():
+                print(f"  delete empty folder {line[len(remote) + 1:] if line.startswith(remote) else line}")
     sftp.close()
     print(f"{checked} file(s) checked: {sent} uploaded ({total / 1048576:.1f} MB), {checked - sent} already up to date,"
           f" {removed} deleted" + (" [dry run]" if dry else ""))

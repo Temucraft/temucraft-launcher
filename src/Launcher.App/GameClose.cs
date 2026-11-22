@@ -28,6 +28,32 @@ public partial class MainWindow
         return found;
     }
 
+    /// <summary>A yes / Cancel question in a small window; true for yes.</summary>
+    async Task<bool> ConfirmAsync(string title, string text, string yesText)
+    {
+        bool yes = false;
+        Window ask = new()
+        {
+            Title = "Temucraft", Width = 440, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        Button ok = new() { Content = Translation.T(yesText) }, cancel = new() { Content = Translation.T("Cancel") };
+        ok.Click += (_, _) => { yes = true; ask.Close(); };
+        cancel.Click += (_, _) => ask.Close();
+        ask.Content = new StackPanel
+        {
+            Margin = new Thickness(20), Spacing = 14,
+            Children =
+            {
+                new TextBlock { Text = Translation.T(title), FontSize = 16, FontWeight = FontWeight.Bold },
+                new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap },
+                new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8, Children = { cancel, ok } },
+            },
+        };
+        await ask.ShowDialog(this);
+        return yes;
+    }
+
     /// <summary>True when the game isn't running (any more). When it is, asks whether to close it first.</summary>
     async Task<bool> MakeSureGameClosedAsync(string folder)
     {

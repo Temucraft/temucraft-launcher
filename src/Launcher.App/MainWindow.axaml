@@ -455,9 +455,12 @@
                   <TextBlock Classes="dim" Text="Your settings, macros, key bindings and addons (WTF and Interface\AddOns)." />
                   <CheckBox Name="BackupBox" Content="Back up before every update" IsChecked="True" />
                   <ComboBox Name="BackupList" HorizontalAlignment="Stretch" Margin="0,6,0,0" ToolTip.Tip="Date format: DD-MM-YYYY HH:MM:SS" />
+                  <TextBlock Name="BackupTotal" Classes="dim" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
                   <WrapPanel Margin="0,6,0,0">
                     <Button Content="Back up now" Click="OnBackupNow" Margin="0,0,8,6" />
                     <Button Content="Restore" Click="OnRestoreBackup" Margin="0,0,8,6" />
+                    <Button Content="Delete" Click="OnDeleteBackup" Margin="0,0,8,6" ToolTip.Tip="Delete the backup picked above" />
+                    <Button Content="Delete all" Click="OnDeleteAllBackups" Margin="0,0,8,6" ToolTip.Tip="Delete every backup and the moved patches" />
                     <Button Content="Open folder" Click="OnOpenBackups" Margin="0,0,8,6" />
                   </WrapPanel>
                   <WrapPanel>
