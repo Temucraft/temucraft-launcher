@@ -2867,6 +2867,14 @@ public partial class MainWindow : Window
                 control = box;
             }
             if (group.Enforce) ToolTip.SetTip(control, "Set by the server");
+            if (group.Gallery.Count > 0)
+            {
+                // more pictures of the choices (character screens for Character models, for example)
+                Button more = new() { Content = group.GalleryTitle.Length > 0 ? group.GalleryTitle : "More pictures", FontSize = 12 };
+                OptionGroup mine = group;
+                more.Click += async (_, _) => await new OptionGalleryWindow(mine, UpdatePlanner.ChosenOption(_manifest!, _settings.Options, mine.Name), PictureAsync).ShowDialog(this);
+                panel.Children.Add(more);
+            }
             if (group.Previews.Count > 0)
             {
                 // a picture of each choice side by side (Off and On for a switch): click one to pick it, hover for a bigger one

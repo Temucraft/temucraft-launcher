@@ -95,6 +95,11 @@ public sealed class OptionGroup
     public Dictionary<string, string> Requires { get; set; } = [];
     /// <summary>Preview images next to the manifest, by option ("" = one picture for the whole group).</summary>
     public Dictionary<string, string> Previews { get; set; } = [];
+    /// <summary>More pictures by option (gallery-&lt;Option&gt;-&lt;NN&gt;-&lt;Label&gt; next to group.json), shown in a window that
+    /// opens from a button on the card; Name is the picture's label.</summary>
+    public Dictionary<string, List<OptionLink>> Gallery { get; set; } = [];
+    /// <summary>The gallery button's text ("" = "More pictures").</summary>
+    public string GalleryTitle { get; set; } = "";
     /// <summary>The option the server recommends ("" = none): marked in the launcher and picked for new installs.</summary>
     public string Recommended { get; set; } = "";
 }

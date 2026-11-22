@@ -192,6 +192,17 @@ def build(files_dir, realmlist, cache):
                 stem, ext = os.path.splitext(name)
                 if os.path.isfile(os.path.join(gdir, name)) and ext.lower() in (".png", ".jpg", ".jpeg") and stem.lower().startswith("preview"):
                     previews[stem[8:] if stem.lower().startswith("preview-") else ""] = url_of(files_dir, os.path.join(gdir, name))
+            # gallery-<Option>-<NN>-<Label>.png/.jpg next to group.json: more pictures of a choice, shown in the launcher's
+            # gallery window (in NN order) with "galleryTitle" from group.json on its button; never installed
+            gallery = {}
+            for name in sorted(os.listdir(gdir)):
+                stem, ext = os.path.splitext(name)
+                if not (os.path.isfile(os.path.join(gdir, name)) and ext.lower() in (".png", ".jpg", ".jpeg")
+                        and stem.lower().startswith("gallery-")):
+                    continue
+                parts = stem[8:].split("-", 2)
+                if len(parts) == 3:
+                    gallery.setdefault(parts[0], []).append({"name": parts[2], "url": url_of(files_dir, os.path.join(gdir, name))})
             # "links": {"GitHub": "https://...", "Website": "https://..."} (or "link": "https://..."): shown on the card
             links = info.get("links") or ({"Page": info["link"]} if info.get("link") else {})
             links = [{"name": str(n), "url": str(u)} for n, u in links.items() if str(u).startswith(("https://", "http://"))]
@@ -201,6 +212,7 @@ def build(files_dir, realmlist, cache):
                            # "requires": {"Character models": "HD"}: the group can only be turned on with that pick
                            "requires": {str(k): str(v) for k, v in (info.get("requires") or {}).items()},
                            "previews": previews,
+                           "gallery": gallery, "galleryTitle": str(info.get("galleryTitle", "") or ""),
                            # "recommended": "HD": marked in the launcher and picked for new installs
                            "recommended": str(info.get("recommended", "") or "")})
 
