@@ -11,8 +11,27 @@ public sealed class Manifest
     /// <summary>Written to realmlist.wtf in every installed locale. Empty leaves realmlist.wtf alone.</summary>
     public string Realmlist { get; set; } = "";
 
-    /// <summary>The launcher the server hands out, for the launcher's self-check.</summary>
-    public ManifestFile? Launcher { get; set; }
+    /// <summary>The Windows launcher ("launcher" in manifest.json; launchers before 1.4 only know this one).</summary>
+    [JsonPropertyName("launcher")]
+    public ManifestFile? WindowsLauncher { get; set; }
+
+    /// <summary>The launcher for each platform, by .NET runtime id: win-x64, linux-x64, osx-x64, osx-arm64.</summary>
+    public Dictionary<string, ManifestFile> Launchers { get; set; } = [];
+
+    /// <summary>The launcher for this PC, for the self-check and self update; null when the server has none for it.</summary>
+    [JsonIgnore]
+    public ManifestFile? Launcher =>
+        Launchers.TryGetValue(ThisPlatform, out ManifestFile? mine) ? mine : OperatingSystem.IsWindows() ? WindowsLauncher : null;
+
+    /// <summary>This PC's runtime id: win-x64, linux-x64, linux-arm64, osx-x64 or osx-arm64.</summary>
+    public static string ThisPlatform =>
+        (OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux") + "-"
+        + System.Runtime.InteropServices.RuntimeInformation.OSArchitecture switch
+        {
+            System.Runtime.InteropServices.Architecture.Arm64 => "arm64",
+            System.Runtime.InteropServices.Architecture.X86 => "x86",
+            _ => "x64",
+        };
 
     /// <summary>The server's client version (from client-version.txt next to the manifest), shown at the bottom.</summary>
     public string ClientVersion { get; set; } = "";
@@ -50,7 +69,9 @@ public sealed class Manifest
             ?? throw new InvalidDataException("The manifest is empty.");
         foreach (ManifestFile file in manifest.Files)
             file.Validate();
-        manifest.Launcher?.Validate();
+        manifest.WindowsLauncher?.Validate();
+        foreach (ManifestFile launcher in manifest.Launchers.Values)
+            launcher.Validate();
         foreach (string path in manifest.Obsolete)
             PathRules.CheckRelative(path);
         return manifest;

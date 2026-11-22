@@ -98,8 +98,25 @@ public static class GameFolder
             Directory.Delete(cache, recursive: true);
     }
 
-    public static Process? Start(string folder) =>
-        Process.Start(new ProcessStartInfo(ExePath(folder)) { WorkingDirectory = folder, UseShellExecute = true });
+    /// <summary>Starts Wow.exe: on Windows directly; on Linux and macOS through Wine ($WINE, or wine / wine64 on the
+    /// PATH), or the system's own handler for .exe files when no Wine is found.</summary>
+    public static Process? Start(string folder)
+    {
+        string exe = ExePath(folder);
+        if (!OperatingSystem.IsWindows() && Wine() is { } wine)
+            return Process.Start(new ProcessStartInfo(wine) { WorkingDirectory = folder, UseShellExecute = false, ArgumentList = { exe } });
+        return Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = folder, UseShellExecute = true });
+    }
+
+    /// <summary>The Wine to run the game with on Linux and macOS: $WINE when set, else wine or wine64 on the PATH.</summary>
+    public static string? Wine()
+    {
+        if (Environment.GetEnvironmentVariable("WINE") is { Length: > 0 } set && File.Exists(set)) return set;
+        foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            foreach (string name in new[] { "wine", "wine64" })
+                if (File.Exists(Path.Combine(dir, name))) return Path.Combine(dir, name);
+        return null;
+    }
 }
 
 /// <summary>
@@ -280,6 +297,8 @@ public static class SelfCheck
         if (manifest.Launcher is null || CurrentExe is null) throw new InvalidOperationException("The server has no launcher to update to.");
         string exe = CurrentExe, fresh = exe + ".new", old = exe + ".old";
         await client.DownloadAsync(manifest.Launcher, fresh, progress, token);
+        if (!OperatingSystem.IsWindows())   // Linux / macOS: the downloaded file must be runnable
+            File.SetUnixFileMode(fresh, File.GetUnixFileMode(exe) | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
         if (File.Exists(old)) File.Delete(old);
         File.Move(exe, old);
         try { File.Move(fresh, exe); }

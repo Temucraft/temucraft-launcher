@@ -134,9 +134,11 @@ public static class UpdatePlanner
     static string? ChosenOption(Manifest manifest, IReadOnlyDictionary<string, string>? options, string group, int depth)
     {
         OptionGroup? info = manifest.OptionGroups.FirstOrDefault(g => g.Name == group);
+        // a pick the server no longer offers (a renamed or removed choice) counts as no pick: the default again
         if (info is not { Enforce: true } && options is not null && options.TryGetValue(group, out string? picked)
-            && RequirementsMet(manifest, options, info, depth))
-            return picked.Length == 0 ? null : picked;
+            && RequirementsMet(manifest, options, info, depth)
+            && (picked.Length == 0 || info is null || info.Options.Contains(picked, StringComparer.OrdinalIgnoreCase)))
+            return picked.Length == 0 ? null : info?.Options.First(o => o.Equals(picked, StringComparison.OrdinalIgnoreCase)) ?? picked;
         return info is null || info.Optional ? null : info.Options.FirstOrDefault();
     }
 

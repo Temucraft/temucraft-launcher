@@ -2859,6 +2859,14 @@ public partial class MainWindow : Window
                 if (_manifest!.OptionGroups.Any(g => g.Requires.ContainsKey(group.Name)))
                     Dispatcher.UIThread.Post(RefreshMods);
                 ShowGatedTweaks();
+                if (!_manifest.Files.Any(f => f.Group == group.Name))
+                {
+                    // a choice without files (Character screens) is a setting: it takes effect now, nothing to download
+                    ApplyCharacterScenes(Folder);
+                    RefreshCharacterScenes();
+                    Status($"{group.Name}: {shown}.");
+                    return;
+                }
                 _pendingFiles = Math.Max(_pendingFiles, 1);
                 ShowPlayState();
                 Status($"{group.Name}: {shown}. Press UPDATE to install it.");

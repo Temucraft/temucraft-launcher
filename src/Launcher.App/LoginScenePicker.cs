@@ -68,16 +68,32 @@ public partial class MainWindow
 
         foreach ((string name, List<(string Code, string Label)> versions) in groups)
         {
-            StackPanel tile = new() { Spacing = 2, Width = 184, Margin = new Thickness(0, 0, 12, 8),
-                                      Cursor = new Cursor(StandardCursorType.Hand) };
+            StackPanel tile = new() { Spacing = 2, Width = 184, Margin = new Thickness(0, 0, 12, 10) };
             tile.Children.Add(new Border { Child = GroupPicture(versions), Width = 180, Height = 100, HorizontalAlignment = HorizontalAlignment.Left,
-                                           Background = Brushes.Black, ClipToBounds = true });
+                                           Background = Brushes.Black, ClipToBounds = true, Cursor = new Cursor(StandardCursorType.Hand) });
+            Border picture = (Border)tile.Children[0];
             tile.Children.Add(new TextBlock { Text = name, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
             TextBlock count = new() { Classes = { "dim" }, FontSize = 11 };
             _sceneGroupCounts[name] = count;
-            tile.Children.Add(count);
             List<(string Code, string Label)> mine = versions;
-            tile.PointerPressed += (_, _) => ShowSceneGroup(name, mine);
+            if (versions.Count <= 4)
+            {
+                // a tick box per version right under the picture, so a version is turned on without opening the group;
+                // it mirrors the version's own box (the one in the opened group and the big preview)
+                foreach ((string code, string label) in versions)
+                {
+                    if (!_sceneBoxes.TryGetValue(code, out CheckBox? main)) continue;
+                    CheckBox quick = new() { Content = versions.Count == 1 ? "Use this background" : label, FontSize = 12,
+                                             IsChecked = main.IsChecked, Padding = new Thickness(4, 0), MinHeight = 24 };
+                    bool syncing = false;
+                    quick.IsCheckedChanged += (_, _) => { if (syncing) return; syncing = true; main.IsChecked = quick.IsChecked; syncing = false; };
+                    main.IsCheckedChanged += (_, _) => { if (syncing) return; syncing = true; quick.IsChecked = main.IsChecked; syncing = false; };
+                    tile.Children.Add(quick);
+                }
+            }
+            else tile.Children.Add(count);   // the races: too many for boxes here, open the group
+            picture.PointerPressed += (_, _) => ShowSceneGroup(name, mine);
+            ToolTip.SetTip(picture, versions.Count > 1 ? "Click to see the versions big" : "Click to see it big");
             _scenePanel!.Children.Add(tile);
         }
         _sceneDetail = new StackPanel { Spacing = 6, Margin = new Thickness(0, 4, 0, 8), IsVisible = false };

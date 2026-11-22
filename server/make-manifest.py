@@ -6,7 +6,8 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
 
     FILES_DIR/
         manifest.json                 written by this script
-        launcher/TemucraftLauncher.exe   the launcher, for its self-check (optional)
+        launcher/<platform>/TemucraftLauncher[.exe]   the launcher per platform (windows, linux, macos-intel, macos-arm),
+                                      for its self-check and self update (optional)
         patches/<file>                -> <WoW>/Data/<file>               always installed
         client/<path>                 -> <WoW>/<path>                    always installed (patched Wow.exe, dlls...)
         locales/<locale>/<file...>    -> <WoW>/Data/<locale>/<file...>   for the locales a player picks
@@ -42,6 +43,15 @@ import sys
 
 LOCALES = {"enUS", "enGB", "enCN", "enTW", "deDE", "frFR", "esES", "esMX", "ruRU", "koKR", "zhCN", "zhTW", "ptBR", "itIT"}
 CACHE_NAME = ".manifest-cache.json"
+
+
+# (runtime id, folder under launcher/, file name): what 3 - Build launcher puts there
+LAUNCHERS = [
+    ("win-x64", "windows", "TemucraftLauncher.exe"),
+    ("linux-x64", "linux", "TemucraftLauncher"),
+    ("osx-x64", "macos-intel", "TemucraftLauncher"),
+    ("osx-arm64", "macos-arm", "TemucraftLauncher"),
+]
 
 
 def load_jsonc(path):
@@ -251,9 +261,20 @@ def build(files_dir, realmlist, cache):
         with open(version_file) as f:
             manifest["clientVersion"] = f.read().strip()
 
-    launcher = os.path.join(files_dir, "launcher", "TemucraftLauncher.exe")
-    if os.path.isfile(launcher):
-        manifest["launcher"] = entry(files_dir, launcher, "TemucraftLauncher.exe", "base", cache)
+    # the launcher for each platform (launcher/<folder>/), by .NET runtime id; "launcher" stays the Windows one for
+    # launchers before 1.4, which only read that. An old launcher/TemucraftLauncher.exe still counts as Windows.
+    launchers = {}
+    for rid, folder, name in LAUNCHERS:
+        path = os.path.join(files_dir, "launcher", folder, name)
+        if os.path.isfile(path):
+            launchers[rid] = entry(files_dir, path, name, "base", cache)
+    old_exe = os.path.join(files_dir, "launcher", "TemucraftLauncher.exe")
+    if "win-x64" not in launchers and os.path.isfile(old_exe):
+        launchers["win-x64"] = entry(files_dir, old_exe, "TemucraftLauncher.exe", "base", cache)
+    if launchers:
+        manifest["launchers"] = launchers
+    if "win-x64" in launchers:
+        manifest["launcher"] = launchers["win-x64"]
     return manifest
 
 
