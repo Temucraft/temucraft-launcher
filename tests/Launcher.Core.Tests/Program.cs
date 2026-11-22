@@ -64,9 +64,39 @@ List<(string Name, Func<Task> Body)> tests =
     ("Macro files read and write back the same; new ids and limits", MacroFileRoundTrip),
     ("Per character settings go to the character's config-cache.wtf", PerCharacterOptions),
     ("The old launcher a self update leaves behind is removed at the next start", SelfUpdateLeftovers),
+    ("testing.env copies test files in and takes them out again", TestingFilesInAndOut),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
+
+static Task TestingFilesInAndOut()
+{
+    string root = Path.Combine(Path.GetTempPath(), "temucraft-testing-" + Guid.NewGuid().ToString("N"));
+    string launcher = Path.Combine(root, "launcher"), wow = Path.Combine(root, "wow");
+    Directory.CreateDirectory(launcher); Directory.CreateDirectory(wow);
+    try
+    {
+        string mpq = Path.Combine(root, "patch-enUS-Z.MPQ");
+        File.WriteAllText(mpq, "test");
+        File.WriteAllLines(Path.Combine(launcher, TestingFiles.FileName), [
+            "# comment",
+            $"{mpq} = Data\\{{locale}}\\patch-{{locale}}-Z.MPQ",
+            "missing.mpq = Data/x.MPQ",
+            $"{mpq} = ../outside.MPQ" ]);
+        List<string> log = TestingFiles.Apply(launcher, wow, ["enUS", "deDE"]);
+        Check(File.Exists(Path.Combine(wow, "Data", "enUS", "patch-enUS-Z.MPQ")), "enUS copy");
+        Check(File.Exists(Path.Combine(wow, "Data", "deDE", "patch-deDE-Z.MPQ")), "deDE copy");
+        Check(log.Count(l => l.Contains("does not exist")) == 1, "missing source reported");
+        Check(log.Count(l => l.Contains("not a path inside")) == 1, "outside path refused");
+        Check(!TestingFiles.Apply(launcher, wow, ["enUS", "deDE"]).Any(l => l.Contains("copied")), "unchanged files are not copied again");
+        File.Delete(Path.Combine(launcher, TestingFiles.FileName));
+        TestingFiles.Apply(launcher, wow, ["enUS", "deDE"]);
+        Check(!File.Exists(Path.Combine(wow, "Data", "enUS", "patch-enUS-Z.MPQ")), "removed when testing.env is gone");
+        Check(!File.Exists(Path.Combine(wow, "Data", "deDE", "patch-deDE-Z.MPQ")), "removed (deDE)");
+    }
+    finally { Directory.Delete(root, recursive: true); }
+    return Task.CompletedTask;
+}
 static string HexOf(char c) => new(c, 64);
 
 static async Task RealmStatusBlock()

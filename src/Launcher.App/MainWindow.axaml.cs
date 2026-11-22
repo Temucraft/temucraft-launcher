@@ -1870,6 +1870,8 @@ public partial class MainWindow : Window
             ShareSettings(Folder);
             EnableRequiredAddons(Folder);
             ApplyLoginScenes(Folder);
+            // testing mode (testing.env next to the launcher): the owner's test files go in, old ones come out
+            foreach (string line in TestingFiles.Apply(AppContext.BaseDirectory, Folder, SelectedLocales())) Log(line);
             if (Diagnostics.RemoveCompatibilityMode(GameFolder.ExePath(Folder)) is { } compat)
                 Log($"Windows compatibility mode was on for Wow.exe ({compat}); turned it off");
             await RequestPlayTicketAsync();

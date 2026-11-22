@@ -280,3 +280,11 @@ sub folder (and the zip fallback), README previews and the log. With `LAUNCHER_S
 - `src/Launcher.App`: the window (Avalonia, like Anarres)
 - `tests/Launcher.Core.Tests`: the tests
 - `server/`: `make-manifest.py` and the Apache example
+
+## Testing mode (server owner only)
+
+Put a `testing.env` next to `TemucraftLauncher.exe` (copy `testing.env.example`; it is never in git). Each line is
+`<file on this computer> = <path inside the WoW folder>`; `{locale}` becomes every game language picked. On every Play
+the launcher copies the listed files into the game folder (only when they changed) and logs it. Remove a line, or the
+whole file, and the next Play takes those files out again. Use names the server doesn't send (`patch-enUS-Z`, not
+`patch-enUS-T`), or the update check will want to replace them.

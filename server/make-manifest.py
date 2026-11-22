@@ -213,6 +213,15 @@ def build(files_dir, realmlist, cache):
             if os.path.isfile(os.path.join(pdir, name)) and ext.lower() in (".png", ".jpg", ".jpeg"):
                 login_previews[stem.lower()] = url_of(files_dir, os.path.join(pdir, name))
 
+    # An option file that lands on the same path as a normal file (a stale option left on the server after a patch got
+    # its letter, for example) would make the launcher swap the two on every check. The normal file wins.
+    fixed = {f["path"].lower() for f in files if f.get("category") != "option"}
+    clashes = [f for f in files if f.get("category") == "option" and f["path"].lower() in fixed]
+    for f in clashes:
+        print(f"  skipping option file {f.get('group')}/{f.get('option')}/{f['path']}: a normal file already installs "
+              f"{f['path']} (remove the old option file from the server)", file=sys.stderr)
+    files = [f for f in files if f not in clashes]
+
     manifest = {"version": 1, "realmlist": realmlist, "clientVersion": "", "optionGroups": groups,
                 "loginScreenPreviews": login_previews,
                 "files": files, "obsolete": [], "policy": {}}

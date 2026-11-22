@@ -10,3 +10,6 @@ publish/
 upload.env
 server/play-ticket.env
 __pycache__/
+
+# Testing mode for the server owner (see testing.env.example); never commit it
+testing.env
