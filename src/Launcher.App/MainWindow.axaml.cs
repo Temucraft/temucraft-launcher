@@ -3076,7 +3076,12 @@ public partial class MainWindow : Window
         UntrackedButton.Content = $"⚠ Untracked files ({count})";
     }
 
-    void OnUntracked(object? sender, RoutedEventArgs e) => OnTab(ModsTab, e);
+    void OnUntracked(object? sender, RoutedEventArgs e)
+    {
+        // the list is under the mod cards: open the page and scroll down to it (also when the page is already open)
+        OnTab(ModsTab, e);
+        Dispatcher.UIThread.Post(() => UntrackedList.BringIntoView(), DispatcherPriority.Background);
+    }
 
     // ------------------------------------------------------------------------------------------- settings
     async void OnPickBackground(object? sender, RoutedEventArgs e)

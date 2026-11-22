@@ -17,6 +17,15 @@ public static class TestingFiles
 
     static string RecordOf(string wowFolder) => Path.Combine(wowFolder, "_Temucraft", "testing-installed.txt");
 
+    /// <summary>The game-folder paths testing mode put in place last time (not "untracked": the launcher owns them).</summary>
+    public static HashSet<string> Installed(string wowFolder)
+    {
+        string record = RecordOf(wowFolder);
+        return File.Exists(record)
+            ? File.ReadAllLines(record).Where(l => l.Length > 0).Select(l => l.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
     public static bool Enabled(string launcherFolder) => File.Exists(Path.Combine(launcherFolder, FileName));
 
     /// <summary>The (source, target inside the game folder) pairs from testing.env; bad lines are reported in errors.</summary>

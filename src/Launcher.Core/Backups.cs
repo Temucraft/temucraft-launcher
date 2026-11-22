@@ -263,6 +263,7 @@ public static class Untracked
     public static IReadOnlyList<string> Find(string wowFolder, Manifest manifest)
     {
         HashSet<string> known = manifest.Files.Select(f => f.Path.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        known.UnionWith(TestingFiles.Installed(wowFolder));   // testing mode's own files
         List<string> found = [];
         string data = Path.Combine(wowFolder, "Data");
         if (!Directory.Exists(data)) return found;
