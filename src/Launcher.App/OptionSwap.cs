@@ -37,6 +37,7 @@ public partial class MainWindow
     {
         string folder = Folder;
         if (_manifest is null || !GameFolder.LooksLikeClient(folder)) return false;
+        if (!await MakeSureGameClosedAsync(folder)) return false;
         Manifest manifest = _manifest;
         InstallChoice choice = Choice();
         HashSet<string> ofGroup = manifest.Files.Where(f => f.Group == group.Name).Select(f => f.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);

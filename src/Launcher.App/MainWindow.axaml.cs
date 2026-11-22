@@ -1435,6 +1435,8 @@ public partial class MainWindow : Window
             return;
         }
         if (download && NeedFolder()) return;
+        // the game keeps its files open: offer to close it before changing them
+        if (download && haveGame && !await MakeSureGameClosedAsync(Folder)) return;
         // everything the work needs from the window, read here on the window's thread
         InstallChoice choice = Choice();
         string folder = choice.WowFolder;
