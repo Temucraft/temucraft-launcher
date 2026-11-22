@@ -2847,6 +2847,20 @@ public partial class MainWindow : Window
                         : string.Join("  ·  ", sized.Select(o => $"{o}: {Words.ShortSize(InstallSizes.Option(_manifest!, group.Name, o))}")),
                 });
             string? chosen = UpdatePlanner.ChosenOption(_manifest!, _settings.Options, group.Name);
+            // which choices are already on this PC: switching between those is instant
+            if (_manifest!.Files.Any(f => f.Group == group.Name) && group.Options.Count >= 2
+                && !group.Options.SequenceEqual(["On", "Off"], StringComparer.OrdinalIgnoreCase))
+            {
+                // choices with files of their own that are on this PC (Classic has none, so it only counts beside HD)
+                List<string> onDisk = OptionsOnDisk(group);
+                bool anyDownloaded = onDisk.Any(o => _manifest.Files.Any(f => f.Group == group.Name && f.Option == o));
+                if (anyDownloaded && onDisk.Count >= 2)
+                    panel.Children.Add(new TextBlock
+                    {
+                        Classes = { "good" }, FontSize = 11, TextWrapping = TextWrapping.Wrap,
+                        Text = $"Installed: {string.Join(", ", onDisk)}. Switch between them any time: no download, no UPDATE.",
+                    });
+            }
             bool met = UpdatePlanner.RequirementsMet(_manifest!, _settings.Options, group);
             bool locked = group.Enforce || !met;
 
@@ -2865,6 +2879,26 @@ public partial class MainWindow : Window
                     ApplyCharacterScenes(Folder);
                     RefreshCharacterScenes();
                     Status($"{group.Name}: {shown}.");
+                    return;
+                }
+                if (value.Length > 0 && OptionOnDisk(group, value) || value.Length == 0)
+                {
+                    // already on this PC (installed before, kept aside since): switch now, no download, no UPDATE
+                    Status($"{group.Name}: switching to {shown}…");
+                    _ = Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        if (await SwapOptionAsync(group, value))
+                        {
+                            Status($"{group.Name}: {shown}. Switched (already on this PC, nothing to download).");
+                            RefreshMods();
+                        }
+                        else
+                        {
+                            _pendingFiles = Math.Max(_pendingFiles, 1);
+                            ShowPlayState();
+                            Status($"{group.Name}: {shown}. Press UPDATE to install it.");
+                        }
+                    });
                     return;
                 }
                 _pendingFiles = Math.Max(_pendingFiles, 1);
