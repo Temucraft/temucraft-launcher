@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -68,11 +69,8 @@ public partial class MainWindow
         {
             StackPanel tile = new() { Spacing = 2, Width = 184, Margin = new Thickness(0, 0, 12, 8),
                                       Cursor = new Cursor(StandardCursorType.Hand) };
-            Image picture = new() { Width = 180, Height = 100, Stretch = Stretch.Fill };
-            if (_manifest?.LoginScreenPreviews.TryGetValue(versions[0].Code, out string? url) == true)
-                _ = SetSceneImageAsync(picture, url);
-            tile.Children.Add(new Border { Child = picture, Width = 180, Height = 100, HorizontalAlignment = HorizontalAlignment.Left,
-                                           Background = Brushes.Black });
+            tile.Children.Add(new Border { Child = GroupPicture(versions), Width = 180, Height = 100, HorizontalAlignment = HorizontalAlignment.Left,
+                                           Background = Brushes.Black, ClipToBounds = true });
             tile.Children.Add(new TextBlock { Text = name, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
             TextBlock count = new() { Classes = { "dim" }, FontSize = 11 };
             _sceneGroupCounts[name] = count;
@@ -84,6 +82,38 @@ public partial class MainWindow
         _sceneDetail = new StackPanel { Spacing = 6, Margin = new Thickness(0, 4, 0, 8), IsVisible = false };
         _scenePanel!.Children.Add(_sceneDetail);
         RefreshSceneCounts();
+    }
+
+    /// <summary>The picture on an expansion's button: one version shows whole; two show half and half (left half of the
+    /// first, right half of the second); more show the first four in a 2 x 2 grid.</summary>
+    Control GroupPicture(List<(string Code, string Label)> versions)
+    {
+        const double W = 180, H = 100;
+        Image Load(string code, double width, double height)
+        {
+            Image image = new() { Width = width, Height = height, Stretch = Stretch.Fill };
+            if (_manifest?.LoginScreenPreviews.TryGetValue(code, out string? url) == true) _ = SetSceneImageAsync(image, url);
+            return image;
+        }
+        if (versions.Count == 1) return Load(versions[0].Code, W, H);
+        if (versions.Count == 2)
+        {
+            // each half shows the matching half of its own picture (both drawn full size, then clipped)
+            Canvas halves = new() { Width = W, Height = H };
+            Border left = new() { Width = W / 2, Height = H, ClipToBounds = true, Child = new Canvas { Children = { Load(versions[0].Code, W, H) } } };
+            Image right = Load(versions[1].Code, W, H);
+            Canvas.SetLeft(right, -W / 2);
+            Border rightHalf = new() { Width = W / 2, Height = H, ClipToBounds = true, Child = new Canvas { Children = { right } } };
+            Canvas.SetLeft(rightHalf, W / 2);
+            halves.Children.Add(left);
+            halves.Children.Add(rightHalf);
+            halves.Children.Add(new Border { Width = 1, Height = H, Background = Brushes.Black, [Canvas.LeftProperty] = W / 2 - 0.5 });
+            return halves;
+        }
+        UniformGrid grid = new() { Columns = 2, Rows = 2, Width = W, Height = H };
+        foreach ((string code, string _) in versions.Take(4))
+            grid.Children.Add(new Border { Child = Load(code, W / 2, H / 2), BorderBrush = Brushes.Black, BorderThickness = new Thickness(0.5) });
+        return grid;
     }
 
     void RefreshSceneCounts()
