@@ -1435,8 +1435,6 @@ public partial class MainWindow : Window
             return;
         }
         if (download && NeedFolder()) return;
-        // the game keeps its files open: offer to close it before changing them
-        if (download && haveGame && !await MakeSureGameClosedAsync(Folder)) return;
         // everything the work needs from the window, read here on the window's thread
         InstallChoice choice = Choice();
         string folder = choice.WowFolder;
@@ -1482,19 +1480,29 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // The game keeps its MPQs and DLLs open, so those need it closed. Addons and loose interface files aren't held
+            // open: an update that only has those goes ahead while the game runs (a /reload in game loads them).
+            bool onlyUi = outdated.All(p => p.File.Path.Replace('\\', '/').TrimStart('/').StartsWith("Interface/", StringComparison.OrdinalIgnoreCase));
+            bool gameOpen = haveGame && GameRunning(folder);
+            if (gameOpen && !onlyUi && !await Dispatcher.UIThread.InvokeAsync(() => MakeSureGameClosedAsync(folder))) return;
+            gameOpen = gameOpen && onlyUi;
+
             if (_settings.BackupBeforeUpdate && (outdated.Count > 0 || addonUpdates.Count > 0))
             {
                 Status("Backing up your settings and addons…");
                 Log($"Backup: {Path.GetFileName(Backups.Create(folder, "before-update", keep: _settings.BackupsToKeep))}");
             }
-            foreach (string removed in GameFolder.RemoveObsolete(folder, manifest.Obsolete))
-                Log($"Removed {removed} (no longer on the server)");
-            // files of options turned off are kept (not deleted), so switching back needs no download
-            HashCache keptCache = HashCache.Load(_cacheFile);
-            foreach (string kept in await KeptFiles.KeepAsync(folder, UpdatePlanner.Unchosen(manifest, choice), keptCache, token))
-                Log($"Kept {kept} aside (option not picked; it comes back without a download)");
-            outdated = KeptFiles.Restore(folder, outdated, keptCache, Log);
-            keptCache.Save();
+            if (!gameOpen)   // these move MPQs around: next update with the game closed
+            {
+                foreach (string removed in GameFolder.RemoveObsolete(folder, manifest.Obsolete))
+                    Log($"Removed {removed} (no longer on the server)");
+                // files of options turned off are kept (not deleted), so switching back needs no download
+                HashCache keptCache = HashCache.Load(_cacheFile);
+                foreach (string kept in await KeptFiles.KeepAsync(folder, UpdatePlanner.Unchosen(manifest, choice), keptCache, token))
+                    Log($"Kept {kept} aside (option not picked; it comes back without a download)");
+                outdated = KeptFiles.Restore(folder, outdated, keptCache, Log);
+                keptCache.Save();
+            }
             await InstallAsync(client, outdated, folder, token);
             foreach (CatalogAddon addon in addonUpdates) await InstallCatalogAsync(addon, folder, token);
             foreach (CatalogAddon addon in required.Where(a => a.Default && !a.Required))
@@ -1504,8 +1512,8 @@ public partial class MainWindow : Window
             ApplyEnforcedToGame(folder);
             ApplyLoginScenes(folder);
             ApplyCharacterScenes(folder);
-            await SyncHdModelsAsync(folder, askToCloseGame: false);
-            Status("Everything up to date!");
+            if (!gameOpen) await SyncHdModelsAsync(folder, askToCloseGame: false);
+            Status(gameOpen ? "Updated while the game runs: type /reload in game to load the new addons." : "Everything up to date!");
             await Dispatcher.UIThread.InvokeAsync(() => { _pendingFiles = 0; SetPendingUpdate(null); ShowPlayState(); RefreshInstalledAddons(); RefreshCatalog(); });
         });
     }

@@ -28,6 +28,15 @@ public partial class MainWindow
         return found;
     }
 
+    /// <summary>True when the game from this WoW folder is running (Windows only).</summary>
+    static bool GameRunning(string folder)
+    {
+        if (!OperatingSystem.IsWindows() || folder.Length == 0) return false;
+        List<Process> running = GameProcesses(folder);
+        foreach (Process p in running) p.Dispose();
+        return running.Count > 0;
+    }
+
     /// <summary>A yes / Cancel question in a small window; true for yes.</summary>
     async Task<bool> ConfirmAsync(string title, string text, string yesText)
     {
