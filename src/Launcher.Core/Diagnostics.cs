@@ -19,6 +19,7 @@ public static class Diagnostics
         text.AppendLine($"Game folder: {wowFolder}");
         foreach (string line in extraLines) text.AppendLine(line);
         foreach (string line in RecentCrashes(wowFolder)) text.AppendLine(line);
+        foreach (string line in UiErrors(wowFolder)) text.AppendLine(line);
 
         Dictionary<string, ManifestFile> server = (manifest?.Files ?? [])
             .GroupBy(f => f.Path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
@@ -110,6 +111,66 @@ public static class Diagnostics
             }
         }
         return lines;
+    }
+
+    /// <summary>
+    /// The newest UI errors and blocked actions from !TemucraftCompat's error log (the saved variable
+    /// TemucraftErrorLog, one file per account), so a broken frame that shows no error still says why.
+    /// </summary>
+    public static List<string> UiErrors(string wowFolder, int count = 8)
+    {
+        List<string> lines = [];
+        string accounts = Path.Combine(wowFolder, "WTF", "Account");
+        if (!Directory.Exists(accounts)) return lines;
+        List<(string Account, string Message, string Count, string Last)> found = [];
+        try
+        {
+            foreach (string account in Directory.GetDirectories(accounts))
+            {
+                string file = Path.Combine(account, "SavedVariables", "!TemucraftCompat.lua");
+                if (!File.Exists(file)) continue;
+                string? message = null, times = null, last = null;
+                foreach (string raw in File.ReadLines(file))
+                {
+                    string l = raw.Trim();
+                    if (l.StartsWith("[\"msg\"] = ", StringComparison.Ordinal)) message = LuaString(l);
+                    else if (l.StartsWith("[\"count\"] = ", StringComparison.Ordinal)) times = l[12..].TrimEnd(',');
+                    else if (l.StartsWith("[\"last\"] = ", StringComparison.Ordinal)) last = LuaString(l);
+                    else if (l.StartsWith('}'))
+                    {
+                        if (message is not null) found.Add((Path.GetFileName(account), message, times ?? "1", last ?? ""));
+                        message = times = last = null;
+                    }
+                }
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return lines; }
+        if (found.Count == 0) return lines;
+        lines.Add("");
+        lines.Add($"UI errors ({found.Count} logged, newest {Math.Min(count, found.Count)}; saved at logout or /reload):");
+        foreach (var e in found.OrderByDescending(e => e.Last, StringComparer.Ordinal).Take(count))
+            lines.Add($"- {e.Last} x{e.Count}: {(e.Message.Length > 300 ? e.Message[..300] + "..." : e.Message)}");
+        return lines;
+    }
+
+    /// <summary>The text of a saved-variable line such as ["msg"] = "a \"b\"\nc",</summary>
+    static string LuaString(string line)
+    {
+        int start = line.IndexOf("= \"", StringComparison.Ordinal);
+        if (start < 0) return "";
+        System.Text.StringBuilder text = new();
+        for (int i = start + 3; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"') break;
+            if (c == '\\' && i + 1 < line.Length)
+            {
+                char n = line[++i];
+                text.Append(n switch { 'n' => ' ', 't' => ' ', _ => n });
+            }
+            else text.Append(c);
+        }
+        return text.ToString();
     }
 
     /// <summary>"005CFEA1 Wow.exe CGReputationInfo::AddHeader+0x31": a stack frame, named when it's in Wow.exe.</summary>
