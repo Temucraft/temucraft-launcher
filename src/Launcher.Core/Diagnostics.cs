@@ -91,19 +91,34 @@ public static class Diagnostics
                     string l = all[i].Trim();
                     if (l.Length == 0 || l.StartsWith("Program:", StringComparison.Ordinal)) continue;
                     lines.Add("  " + l);
+                    // "Exception: 0xC0000005 (ACCESS_VIOLATION) at 0023:005CFEA1": name the function it crashed in
+                    int colon = l.LastIndexOf(':');
+                    if (l.StartsWith("Exception:", StringComparison.Ordinal) && colon > 0 && WowFunctions.Name(l[(colon + 1)..].Trim()) is { } where)
+                        lines.Add("  Crashed in: " + where);
                 }
             }
             int stack = Array.FindIndex(all, l => l.Contains("[Current Thread]", StringComparison.Ordinal));
             if (stack >= 0)
             {
-                IEnumerable<string> frames = all.Skip(stack + 1).TakeWhile(l => l.Trim().Length > 0).Take(8)
+                List<string> frames = all.Skip(stack + 1).TakeWhile(l => l.Trim().Length > 0).Take(12)
                     .Select(l => l.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries))
                     .Where(p => p.Length >= 4)
-                    .Select(p => p[0] + " " + Path.GetFileName(string.Join(' ', p.Skip(3))));
-                lines.Add("  Stack: " + string.Join(", ", frames));
+                    .Select(p => Frame(p[0], string.Join(' ', p.Skip(3)).Split('\\', '/')[^1]))
+                    .ToList();
+                lines.Add("  Stack:");
+                foreach (string frame in frames) lines.Add("    " + frame);
             }
         }
         return lines;
+    }
+
+    /// <summary>"005CFEA1 Wow.exe CGReputationInfo::AddHeader+0x31": a stack frame, named when it's in Wow.exe.</summary>
+    static string Frame(string address, string module)
+    {
+        string line = address + " " + module;
+        if (module.Equals("Wow.exe", StringComparison.OrdinalIgnoreCase) && WowFunctions.Name(address) is { } name)
+            line += " " + name;
+        return line;
     }
 
     static async Task<string> FileLineAsync(string wowFolder, string file, Dictionary<string, ManifestFile> server, HashCache? cache, CancellationToken token)

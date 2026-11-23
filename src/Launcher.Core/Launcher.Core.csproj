@@ -11,6 +11,8 @@
     <EmbeddedResource Include="game-options.json" LogicalName="Launcher.Core.game-options.json" />
     <!-- every command of the game's Key Bindings window (see KeyBindings.cs) -->
     <EmbeddedResource Include="key-bindings.json" LogicalName="Launcher.Core.key-bindings.json" />
+    <!-- Wow.exe function names for crash stacks (see WowFunctions.cs, built by tools/wow_functions.py) -->
+    <EmbeddedResource Include="wow-functions.txt.gz" LogicalName="Launcher.Core.wow-functions.txt.gz" />
   </ItemGroup>
 
 </Project>
