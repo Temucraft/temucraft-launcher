@@ -2015,6 +2015,14 @@ public partial class MainWindow : Window
             Status(Translation.T("Diagnostics copied. Paste them in a message to the server's admin."));
             await Task.Delay(1500);
             DiagnosticsButton.Content = Translation.T("Copy diagnostics");
+            // the crash helper's minidump is too big for the clipboard: offer the folder with it
+            if (Diagnostics.NewestCrashDump(folder, TimeSpan.FromDays(7)) is { } dump
+                && await ConfirmAsync("Crash dump", Translation.T("The newest crash report has a crash dump (.dmp file) next to it. The server's admin may ask for it. Open the folder with it?"), "Open folder"))
+            {
+                if (OperatingSystem.IsWindows())
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{dump}\"") { UseShellExecute = true })?.Dispose();
+                else OpenFolder(Path.GetDirectoryName(dump) ?? folder);
+            }
         }
         catch (Exception error)
         {

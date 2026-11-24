@@ -58,6 +58,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
     ("Needed addons are turned back on in every AddOns.txt", RequiredAddonsEnabled),
     ("Diagnostics mark files against the server's copy", DiagnosticsMarks),
+    ("Diagnostics read the crash helper's report", DiagnosticsCrashHelper),
     ("A new launcher is required unless the server says recommended", LauncherUpdateRule),
     ("Login screen scenes are read and turned on or off", LoginScenes),
     ("Self cast, focus cast and auto loot keys go to bindings-cache.wtf", ModifiedClicks),
@@ -1259,6 +1260,40 @@ static async Task DiagnosticsMarks()
     Check(text.Contains("DIFFERENT from the server"), text);
     Check(text.Contains("extra.dll") && text.Contains("not from the server"), text);
     Check(text.Contains("Data/patch-Y.MPQ: missing") && text.Contains("Wow.exe: not found"), text);
+}
+
+static async Task DiagnosticsCrashHelper()
+{
+    string wow = TempDir();
+    string errors = Path.Combine(wow, "Errors");
+    Directory.CreateDirectory(errors);
+    File.WriteAllText(Path.Combine(errors, "2026-11-24 21.05.13 Crash.txt"),
+        "ERROR #132 (0x85100084) Fatal Exception\r\nException:\t0xC0000005 (ACCESS_VIOLATION) at 0023:0058A57A\r\n\r\nWoWBuild: 12340\r\n");
+    string report = Path.Combine(errors, "Temucraft-2026-11-24-210513.txt");
+    File.WriteAllText(report, string.Join("\r\n",
+        "Temucraft crash report", "", "Hooks: server packets on, client packets on", "",
+        "What happened: exception 0xC0000005 (ACCESS_VIOLATION)",
+        "Crashed at: 0x0058A57A Wow.exe+0x18A57A CGGossipInfo::SetGossip+0x2A",
+        "It tried to read from 0x00000010 (a null pointer)", "",
+        "Stack of the crashing thread (StackWalk64):",
+        "  #0   0x0058A57A Wow.exe+0x18A57A CGGossipInfo::SetGossip+0x2A",
+        "  #1   0x00632018 Wow.exe+0x232018 NetClient::ProcessMessage+0x38", "",
+        "Last server packets received (newest first, 1 shown, 9 since the game started):",
+        "  -0.012 s  SMSG_GOSSIP_MESSAGE (0x17D)                   312 bytes", "",
+        "Last client packets sent (newest first, 0 shown, 0 since the game started):", "  (none)", "",
+        "Last Lua errors (newest first, 0 since the game started):", "  (none)", ""));
+    File.WriteAllBytes(Path.ChangeExtension(report, ".dmp"), new byte[2048]);
+    string text = await Diagnostics.BuildAsync(wow, null, []);
+    Check(text.Contains("Newest Temucraft crash report: Temucraft-2026-11-24-210513.txt"), text);
+    Check(text.Contains("Crashed at: 0x0058A57A Wow.exe+0x18A57A CGGossipInfo::SetGossip+0x2A"), text);
+    Check(text.Contains("SMSG_GOSSIP_MESSAGE (0x17D)") && text.Contains("NetClient::ProcessMessage+0x38"), text);
+    Check(!text.Contains("Last client packets:") && text.Contains("Minidump: ") && text.Contains(".dmp"), text);
+    // the game's own report is still read, and ours is not listed as one of the game's
+    Check(text.Contains("Last crashes (1, newest first):") && text.Contains("ERROR #132"), text);
+    Check(text.IndexOf("Newest Temucraft crash report", StringComparison.Ordinal) < text.IndexOf("Last crashes", StringComparison.Ordinal), text);
+    Check(Diagnostics.NewestCrashDump(wow, TimeSpan.FromDays(7)) == Path.ChangeExtension(report, ".dmp"), "dump");
+    File.SetLastWriteTime(report, DateTime.Now.AddDays(-30));
+    Check(Diagnostics.NewestCrashDump(wow, TimeSpan.FromDays(7)) is null, "old dump");
 }
 
 static Task LoginScenes()

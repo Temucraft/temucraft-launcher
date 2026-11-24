@@ -18,6 +18,7 @@ public static class Diagnostics
         text.AppendLine($"System: {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})");
         text.AppendLine($"Game folder: {wowFolder}");
         foreach (string line in extraLines) text.AppendLine(line);
+        foreach (string line in TemucraftCrash(wowFolder)) text.AppendLine(line);
         foreach (string line in RecentCrashes(wowFolder)) text.AppendLine(line);
         foreach (string line in UiErrors(wowFolder)) text.AppendLine(line);
 
@@ -69,7 +70,9 @@ public static class Diagnostics
         FileInfo[] reports;
         try
         {
+            // Temucraft-*.txt are the crash helper's own reports (TemucraftCrash below), not the game's
             reports = new DirectoryInfo(errors).GetFiles("*.txt")
+                .Where(f => !f.Name.StartsWith(CrashHelperPrefix, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(f => f.LastWriteTime).Take(count).ToArray();
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return lines; }
@@ -111,6 +114,68 @@ public static class Diagnostics
             }
         }
         return lines;
+    }
+
+    const string CrashHelperPrefix = "Temucraft-";
+
+    /// <summary>
+    /// The newest report of the crash helper (the "Crash reports" mod: version.dll next to Wow.exe writes
+    /// Errors\Temucraft-date-time.txt and a .dmp when the game crashes): what crashed, the top of the stack, the last
+    /// packets and Lua errors. Empty when there is none.
+    /// </summary>
+    public static List<string> TemucraftCrash(string wowFolder)
+    {
+        List<string> lines = [];
+        FileInfo? report = NewestCrashHelperReport(wowFolder);
+        if (report is null) return lines;
+        string[] all;
+        try { all = File.ReadAllLines(report.FullName); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return lines; }
+        lines.Add("");
+        lines.Add($"Newest Temucraft crash report: {report.Name} ({report.LastWriteTime:yyyy-MM-dd HH:mm:ss})");
+        string[] keep = ["What happened:", "Crashed at:", "Called from:", "It tried to", "Game's message:", "Hooks:"];
+        foreach (string l in all)
+            if (keep.Any(k => l.StartsWith(k, StringComparison.Ordinal))) lines.Add("  " + l.Trim());
+        AddSection(lines, all, "Stack of the crashing thread", "  Stack:", 10);
+        AddSection(lines, all, "Last server packets received", "  Last server packets:", 6);
+        AddSection(lines, all, "Last client packets sent", "  Last client packets:", 4);
+        AddSection(lines, all, "Last Lua errors", "  Last Lua errors:", 3);
+        string dump = Path.ChangeExtension(report.FullName, ".dmp");
+        lines.Add(File.Exists(dump) ? $"  Minidump: {dump} ({Words.Size(new FileInfo(dump).Length)})" : "  Minidump: none");
+        return lines;
+    }
+
+    /// <summary>The first lines of a report section ("Last Lua errors (...):" and the lines under it).</summary>
+    static void AddSection(List<string> lines, string[] all, string title, string heading, int max)
+    {
+        int at = Array.FindIndex(all, l => l.StartsWith(title, StringComparison.Ordinal));
+        if (at < 0) return;
+        List<string> found = all.Skip(at + 1).TakeWhile(l => l.Trim().Length > 0)
+            .Select(l => l.Trim()).Where(l => l != "(none)").Take(max).ToList();
+        if (found.Count == 0) return;
+        lines.Add(heading);
+        foreach (string l in found) lines.Add("    " + (l.Length > 300 ? l[..300] + "..." : l));
+    }
+
+    static FileInfo? NewestCrashHelperReport(string wowFolder)
+    {
+        string errors = Path.Combine(wowFolder, "Errors");
+        if (!Directory.Exists(errors)) return null;
+        try
+        {
+            return new DirectoryInfo(errors).GetFiles(CrashHelperPrefix + "*.txt")
+                .OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>The .dmp of the newest crash helper report, when it is newer than maxAge; else null.</summary>
+    public static string? NewestCrashDump(string wowFolder, TimeSpan maxAge)
+    {
+        FileInfo? report = NewestCrashHelperReport(wowFolder);
+        if (report is null || DateTime.Now - report.LastWriteTime > maxAge) return null;
+        string dump = Path.ChangeExtension(report.FullName, ".dmp");
+        return File.Exists(dump) ? dump : null;
     }
 
     /// <summary>
