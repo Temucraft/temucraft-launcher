@@ -61,8 +61,9 @@ public static class HdModels
     static string? PartOf(int race) => RacePart.TryGetValue(race, out string? p) ? p : race >= 100 ? "npcs" : null;
 
     /// <summary>What a build from these pieces would be: changes when the pieces or the races change.</summary>
+    /// <remarks>"rows2|" marks a patch-_ with its rows in the client's order (see Dbcs); an older build is made again.</remarks>
     static string Stamp(string wowFolder, IReadOnlyCollection<string> hd) =>
-        string.Join(",", hd.OrderBy(p => p)) + "|" + string.Join(",", hd.Append("common").OrderBy(p => p)
+        "rows2|" + string.Join(",", hd.OrderBy(p => p)) + "|" + string.Join(",", hd.Append("common").OrderBy(p => p)
             .Select(p => new FileInfo(PiecePath(wowFolder, p))).Select(f => f.Exists ? $"{f.Length}:{f.LastWriteTimeUtc.Ticks}" : "-"));
 
     /// <summary>True when the build for these races is already in place.</summary>
