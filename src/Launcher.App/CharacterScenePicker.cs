@@ -64,6 +64,9 @@ public partial class MainWindow
         StackPanel palette = new() { Spacing = 3, Margin = new Thickness(4, 0, 0, 0), Width = 236 };
         _pickedNote = new TextBlock { FontWeight = FontWeight.Bold, FontSize = 13, TextWrapping = TextWrapping.Wrap };
         palette.Children.Add(_pickedNote);
+        // what clicking a race does, above the race chips
+        palette.Children.Add(new TextBlock { Text = Translation.T("Click a race to give it the picked scene. Click it again to give it back its own."),
+                                             Classes = { "dim" }, FontSize = 11, TextWrapping = TextWrapping.Wrap });
         foreach (string faction in new[] { "Alliance", "Horde", "Class" })
         {
             palette.Children.Add(new TextBlock { Text = faction == "Class" ? "Classes" : faction, FontSize = 12, FontWeight = FontWeight.SemiBold,
@@ -189,6 +192,7 @@ public partial class MainWindow
 
     void RefreshCharacterScenes()
     {
+        RefreshScreensDirty();
         if (_characterScenesNote is null) return;
         string hd = SceneMode;
         string name = CharacterScenes.ModeName(hd);

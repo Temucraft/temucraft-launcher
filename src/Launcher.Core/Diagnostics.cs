@@ -145,16 +145,53 @@ public static class Diagnostics
             }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return lines; }
+        string? textFile = ExportUiErrorText(wowFolder);
         if (found.Count == 0) return lines;
         lines.Add("");
-        lines.Add($"UI errors ({found.Count} logged, newest {Math.Min(count, found.Count)}; saved at logout or /reload):");
+        lines.Add($"UI errors ({found.Count} logged, newest {Math.Min(count, found.Count)}; saved at logout, /reload or /tcerrors save):");
+        if (textFile is not null) lines.Add($"  The whole log with stacks: {textFile}");
         foreach (var e in found.OrderByDescending(e => e.Last, StringComparer.Ordinal).Take(count))
             lines.Add($"- {e.Last} x{e.Count}: {(e.Message.Length > 300 ? e.Message[..300] + "..." : e.Message)}");
         return lines;
     }
 
+    /// <summary>
+    /// The plain text copy of the UI error log (TemucraftErrorLog.text, stored by /tcerrors save and at logout) of every
+    /// account, written to Logs\TemucraftUiErrors.txt so it can be opened and sent as a file. Returns that path, or
+    /// null when no account has a text copy.
+    /// </summary>
+    public static string? ExportUiErrorText(string wowFolder)
+    {
+        string accounts = Path.Combine(wowFolder, "WTF", "Account");
+        if (!Directory.Exists(accounts)) return null;
+        StringBuilder all = new();
+        try
+        {
+            foreach (string account in Directory.GetDirectories(accounts))
+            {
+                string file = Path.Combine(account, "SavedVariables", "!TemucraftCompat.lua");
+                if (!File.Exists(file)) continue;
+                foreach (string raw in File.ReadLines(file))
+                {
+                    string l = raw.Trim();
+                    if (!l.StartsWith("[\"text\"] = ", StringComparison.Ordinal)) continue;
+                    all.AppendLine($"===== Account {Path.GetFileName(account)} =====");
+                    all.AppendLine(LuaString(l, keepLines: true).Replace("\n", Environment.NewLine));
+                    all.AppendLine();
+                }
+            }
+            if (all.Length == 0) return null;
+            string logs = Path.Combine(wowFolder, "Logs");
+            Directory.CreateDirectory(logs);
+            string path = Path.Combine(logs, "TemucraftUiErrors.txt");
+            File.WriteAllText(path, all.ToString());
+            return path;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
+    }
+
     /// <summary>The text of a saved-variable line such as ["msg"] = "a \"b\"\nc",</summary>
-    static string LuaString(string line)
+    static string LuaString(string line, bool keepLines = false)
     {
         int start = line.IndexOf("= \"", StringComparison.Ordinal);
         if (start < 0) return "";
@@ -166,7 +203,17 @@ public static class Diagnostics
             if (c == '\\' && i + 1 < line.Length)
             {
                 char n = line[++i];
-                text.Append(n switch { 'n' => ' ', 't' => ' ', _ => n });
+                if (keepLines && n == 'n') text.Append('\n');
+                else if (char.IsDigit(n))
+                {
+                    // \ddd: a byte by its number (the game writes other control characters this way)
+                    int end = i;
+                    while (end + 1 < line.Length && end - i < 2 && char.IsDigit(line[end + 1])) end++;
+                    int code = int.Parse(line.AsSpan(i, end - i + 1));
+                    i = end;
+                    text.Append(keepLines && code == 10 ? '\n' : code < 32 ? ' ' : (char)code);
+                }
+                else text.Append(n switch { 'n' => ' ', 't' => ' ', _ => n });
             }
             else text.Append(c);
         }

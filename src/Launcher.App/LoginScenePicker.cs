@@ -59,7 +59,7 @@ public partial class MainWindow
         foreach (LoginScene scene in scenes)
         {
             CheckBox box = new() { Content = "Use this background", IsChecked = scene.On, FontSize = 12 };
-            box.IsCheckedChanged += (_, _) => RefreshSceneCounts();
+            box.IsCheckedChanged += (_, _) => { RefreshSceneCounts(); RefreshScreensDirty(); };
             _sceneBoxes[scene.Code] = box;
         }
         foreach ((string name, List<(string Code, string Label)> versions) in groups)

@@ -53,6 +53,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Settings copy to text and import back", SettingsCopy),
     ("Speeds, sizes, counts, update hours and the download cap", SpeedsAndSizes),
     ("Settings, key bindings and macros are shared between accounts", SharingSettings),
+    ("Shared settings write the game's cache.md5, so the game keeps them", SharingKeepsCacheMd5),
     ("Changelog tags are found and coloured", NewsTags),
     ("The server sets how News and Changelog show; the last ones are kept", FeedRules),
     ("Needed addons are turned back on in every AddOns.txt", RequiredAddonsEnabled),
@@ -1008,8 +1009,43 @@ static Task SharingSettings()
     Assert(first.Copied == 2 && backups == 1 && first.Accounts.SequenceEqual(["ALT", "MAIN"]), $"copied {first.Copied}, backups {backups}, accounts {string.Join(",", first.Accounts)}");
     var second = SharedSettings.Sync(wow, addonSettings: true, characters: true, () => backups++);
     Assert(File.ReadAllText(Path.Combine(b, "SavedVariables", "Bagnon.lua")) == "x = 1" && File.ReadAllText(Path.Combine(cb, "bindings-cache.wtf")) == "hero binds", "addons and characters");
-    Assert(second.Copied == 2 && backups == 2, "only the new ones: " + second.Copied);
+    Assert(second.Copied == 2 && backups == 2, "only the new ones: " + string.Join(", ", second.Files));
     Assert(SharedSettings.Sync(wow, true, true, () => backups++).Copied == 0 && backups == 2, "nothing left to copy, no backup");
+    return Task.CompletedTask;
+}
+
+static Task SharingKeepsCacheMd5()
+{
+    string wow = Directory.CreateTempSubdirectory().FullName;
+    string a = Path.Combine(wow, "WTF", "Account", "MAIN"), b = Path.Combine(wow, "WTF", "Account", "ALT");
+    string ca = Path.Combine(a, "Realm", "Hero"), cb = Path.Combine(b, "Realm", "Alt");
+    foreach (string d in new[] { ca, cb }) Directory.CreateDirectory(d);
+    byte[] Entry(byte[] content, uint time) => [.. MD5.HashData(content), .. BitConverter.GetBytes(time)];
+    byte[] mainConfig = "SET autoLootDefault \"1\""u8.ToArray(), altConfig = "SET autoLootDefault \"0\""u8.ToArray();
+    byte[] binds = "bind A STRAFELEFT"u8.ToArray();
+    File.WriteAllBytes(Path.Combine(a, "config-cache.wtf"), mainConfig);
+    File.WriteAllBytes(Path.Combine(b, "config-cache.wtf"), altConfig);
+    File.SetLastWriteTimeUtc(Path.Combine(b, "config-cache.wtf"), DateTime.UtcNow.AddHours(-2));
+    // both accounts already have the same bindings, but ALT's cache.md5 still has the old file's MD5 (an older launcher copied it)
+    File.WriteAllBytes(Path.Combine(a, "bindings-cache.wtf"), binds);
+    File.WriteAllBytes(Path.Combine(b, "bindings-cache.wtf"), binds);
+    File.SetLastWriteTimeUtc(Path.Combine(b, "bindings-cache.wtf"), DateTime.UtcNow.AddHours(-1));
+    // the game's cache.md5: config, bindings, macros (MD5 + save time)
+    File.WriteAllBytes(Path.Combine(a, "cache.md5"), [.. Entry(mainConfig, 2000), .. Entry(binds, 1999), .. new byte[20]]);
+    File.WriteAllBytes(Path.Combine(b, "cache.md5"), [.. Entry(altConfig, 1000), .. Entry("old"u8.ToArray(), 900), .. new byte[20]]);
+    // a character file: the character's cache.md5 is made when missing (5 entries)
+    File.WriteAllText(Path.Combine(ca, "bindings-cache.wtf"), "hero binds");
+    File.WriteAllText(Path.Combine(cb, "bindings-cache.wtf"), "alt binds");
+    File.SetLastWriteTimeUtc(Path.Combine(cb, "bindings-cache.wtf"), DateTime.UtcNow.AddHours(-2));
+
+    SharedSettings.Sync(wow, addonSettings: false, characters: true);
+    byte[] alt = File.ReadAllBytes(Path.Combine(b, "cache.md5"));
+    Assert(alt.Length == 60 && alt.AsSpan(0, 16).SequenceEqual(MD5.HashData(mainConfig)), "the copied config's MD5 is in ALT's cache.md5");
+    Assert(BitConverter.ToUInt32(alt, 16) == 2000, "with MAIN's save time: " + BitConverter.ToUInt32(alt, 16));
+    Assert(alt.AsSpan(20, 16).SequenceEqual(MD5.HashData(binds)) && BitConverter.ToUInt32(alt, 36) >= 1999, "an equal file with a stale MD5 is put right");
+    byte[] chr = File.ReadAllBytes(Path.Combine(cb, "cache.md5"));
+    Assert(chr.Length == 100 && chr.AsSpan(20, 16).SequenceEqual(MD5.HashData("hero binds"u8.ToArray())), "a character's cache.md5 is made with the bindings entry");
+    Assert(SharedSettings.Sync(wow, false, true).Copied == 0, "nothing left to do");
     return Task.CompletedTask;
 }
 

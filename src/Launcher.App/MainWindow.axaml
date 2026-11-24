@@ -337,8 +337,11 @@
               </StackPanel>
             </StackPanel>
             <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,10,0,0">
-              <TextBlock Classes="dim" VerticalAlignment="Center" TextWrapping="Wrap"
-                         Text="Save writes your picks into the game folder; they show the next time the game starts." />
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Name="ScreensDirtyText" Classes="accent" FontWeight="SemiBold" IsVisible="False" Text="Changes not saved" />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="Save writes your picks into the game folder; they show the next time the game starts." />
+              </StackPanel>
               <Button Grid.Column="1" Classes="accentButton" Content="Save" Padding="22,6" Click="OnSaveScreens" />
             </Grid>
             <ScrollViewer Classes="page">
@@ -357,6 +360,7 @@
               <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="10" Margin="0,10,0,0">
                 <Button Content="Check for updates" Click="OnCheckAddonUpdates" />
                 <Button Content="Update all" Click="OnUpdateAllAddons" />
+                <Button Name="InstallRecommendedButton" Content="Install recommended" Click="OnInstallRecommended" />
                 <Button Content="Open AddOns folder" Click="OnOpenAddons" />
               </StackPanel>
               <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,18,8">

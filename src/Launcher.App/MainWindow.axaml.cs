@@ -693,6 +693,7 @@ public partial class MainWindow : Window
             ShowFeeds(feeds);
             feeds.Save(_feedFile);
             RefreshCatalog();
+            RefreshMusicChoices();   // the page was built before the server's music clips were known
             RefreshUntrackedButton();
             MaybeAskConfigPreset();
         });
@@ -1772,6 +1773,36 @@ public partial class MainWindow : Window
         ShowInstallTotal(manifest);
     }
 
+    /// <summary>
+    /// A description cut to its first sentence, with "more" to show the rest (and "less" to fold it again), so a card
+    /// says in one line what it does. A short description shows whole.
+    /// </summary>
+    static Control ShortDescription(string text)
+    {
+        text = text.Trim();
+        int end = -1;
+        for (int i = 0; i < text.Length - 1; i++)
+            if (text[i] is '.' or '!' or '?' or ':' && text[i + 1] == ' ') { end = i + 1; break; }
+        if (end < 0 || text.Length - end < 25)
+            return new TextBlock { Text = text, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+        string first = text[..end];
+        TextBlock shown = new() { Text = first, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+        Button toggle = new()
+        {
+            Content = Translation.T("more"), FontSize = 11, Padding = new Thickness(0), Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0), Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        toggle.Classes.Add("link");
+        bool open = false;
+        toggle.Click += (_, _) =>
+        {
+            open = !open;
+            shown.Text = open ? text : first;
+            toggle.Content = Translation.T(open ? "less" : "more");
+        };
+        return new StackPanel { Spacing = 0, Children = { shown, toggle } };
+    }
+
     /// <summary>A name, followed by a dimmed "recommended" when the server recommends it.</summary>
     static Control NameWithTag(string name, bool recommended)
     {
@@ -2598,6 +2629,7 @@ public partial class MainWindow : Window
     /// under letter headings.</summary>
     void RefreshCatalog()
     {
+        RefreshInstallRecommended();
         if (!_catalogHooked)
         {
             _catalogHooked = true;
@@ -2790,6 +2822,42 @@ public partial class MainWindow : Window
         });
     }
 
+    /// <summary>The recommended addons from the server's list that aren't in the game folder yet.</summary>
+    List<CatalogAddon> MissingRecommended(string folder) =>
+        GameFolder.LooksLikeClient(folder) ? [.. _catalog.Where(a => a.Recommended && !IsInstalled(a, folder))] : [];
+
+    /// <summary>"Install recommended" is on while a recommended addon is missing; its tip names them.</summary>
+    void RefreshInstallRecommended()
+    {
+        List<CatalogAddon> missing = MissingRecommended(Folder);
+        InstallRecommendedButton.IsEnabled = missing.Count > 0;
+        ToolTip.SetTip(InstallRecommendedButton, missing.Count > 0
+            ? string.Format(Translation.T("Installs: {0}"), string.Join(", ", missing.Select(a => a.Name)))
+            : _catalog.Any(a => a.Recommended) ? Translation.T("Every recommended addon is installed.") : Translation.T("The server recommends no addons."));
+    }
+
+    async void OnInstallRecommended(object? sender, RoutedEventArgs e)
+    {
+        if (NeedFolder()) return;
+        string folder = Folder;
+        List<CatalogAddon> missing = MissingRecommended(folder);
+        if (missing.Count == 0)
+        {
+            Status("Every recommended addon is installed.");
+            RefreshCatalog();
+            return;
+        }
+        InstallRecommendedButton.IsEnabled = false;
+        await RunAsync("Recommended addons", async token =>
+        {
+            // one after another, with the same progress and messages as each addon's own Install button
+            foreach (CatalogAddon addon in missing)
+                await InstallCatalogAsync(addon, folder, token);
+            Status(string.Format(Translation.T("Installed the recommended addons: {0}."), string.Join(", ", missing.Select(a => a.Name))));
+        });
+        RefreshInstallRecommended();
+    }
+
     void OnClearKept(object? sender, RoutedEventArgs e)
     {
         if (NeedFolder()) return;
@@ -2860,7 +2928,7 @@ public partial class MainWindow : Window
             {
                 panel.Children.Add(new TextBlock { Text = group.Name, FontWeight = FontWeight.SemiBold, FontSize = 15 });
                 if (group.Description.Length > 0)
-                    panel.Children.Add(new TextBlock { Text = group.Description, Classes = { "dim" }, FontSize = 12, TextWrapping = TextWrapping.Wrap });
+                    panel.Children.Add(ShortDescription(group.Description));
             }
             // how big each choice is ("On" / "Off" groups: only the size of On)
             if (group.Recommended.Length > 0)

@@ -17,16 +17,27 @@ public partial class MainWindow
 {
     const string OwnMusic = "";
 
-    /// <summary>Tracks with a clip on the server: (code, name), names from loginui.lua's scene list.</summary>
+    /// <summary>
+    /// Every login music track: each background's own track (named after the background, from loginui.lua's scene list),
+    /// then any other track the server has a clip for (previews/music/&lt;code&gt;.mp3). A track without a clip can still
+    /// be picked; only its ▶ is off. Before the server is reached, the list is the backgrounds of the game's loginui.lua.
+    /// </summary>
     List<(string Code, string Name)> MusicTracks()
     {
-        Dictionary<string, string> names = new(StringComparer.OrdinalIgnoreCase);
-        try { foreach (LoginScene scene in LoginScreens.Read(Folder)) names[scene.Code] = LoginScreens.Title(scene.Name); }
+        List<(string Code, string Name)> tracks = [];
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (LoginScene scene in LoginScreens.Read(Folder))
+                if (seen.Add(scene.Code)) tracks.Add((scene.Code, LoginScreens.Title(scene.Name)));
+        }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
-        return [.. (_manifest?.MusicPreviews.Keys ?? Enumerable.Empty<string>())
-            .Select(c => (c, names.TryGetValue(c, out string? n) ? n : c.ToUpperInvariant()))
-            .OrderBy(t => t.Item2, StringComparer.OrdinalIgnoreCase)];
+        foreach (string code in _manifest?.MusicPreviews.Keys ?? Enumerable.Empty<string>())
+            if (seen.Add(code)) tracks.Add((code, code.ToUpperInvariant()));
+        return [.. tracks.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)];
     }
+
+    bool HasClip(string code) => code.Length > 0 && _manifest?.MusicPreviews.ContainsKey(code) == true;
 
     /// <summary>A choice box of tracks with a ▶ next to it.</summary>
     Control MusicChoice(string ownText, string current, Action<string> picked)
@@ -37,9 +48,13 @@ public partial class MainWindow
         int index = tracks.FindIndex(t => t.Code.Equals(current, StringComparison.OrdinalIgnoreCase));
         box.SelectedIndex = index < 0 ? 0 : index + 1;
         Button play = new() { Content = "▶", FontSize = 12, Padding = new Thickness(10, 2), Margin = new Thickness(6, 0, 0, 0) };
-        ToolTip.SetTip(play, "Play a short part of this music (click again to stop)");
         string Code() => box.SelectedIndex > 0 ? tracks[box.SelectedIndex - 1].Code : OwnMusic;
-        void Update() => play.IsEnabled = Code().Length > 0;
+        void Update()
+        {
+            play.IsEnabled = HasClip(Code());
+            ToolTip.SetTip(play, play.IsEnabled ? Translation.T("Play a short part of this music (click again to stop)")
+                : Code().Length == 0 ? Translation.T("Pick a track to hear it") : Translation.T("The server has no clip of this music yet"));
+        }
         box.SelectionChanged += (_, _) => { Update(); AudioPreview.Stop(); picked(Code()); };
         play.Click += async (_, _) =>
         {
@@ -56,6 +71,15 @@ public partial class MainWindow
         };
         Update();
         return new StackPanel { Orientation = Orientation.Horizontal, Children = { box, play } };
+    }
+
+    StackPanel? _loginMusicPanel, _charMusicPanel;
+
+    /// <summary>Fills the music lists again (the server's clips arrive after the page was built).</summary>
+    void RefreshMusicChoices()
+    {
+        if (_loginMusicPanel is { } login) { login.Children.Clear(); BuildLoginMusic(login); }
+        if (_charMusicPanel is { } chars) { chars.Children.Clear(); BuildCharacterMusic(chars); }
     }
 
     /// <summary>Under the login screen backgrounds: one music for the login screen.</summary>
