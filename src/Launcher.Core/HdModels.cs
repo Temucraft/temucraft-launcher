@@ -31,15 +31,22 @@ public static class HdModels
         [8] = "troll", [9] = "goblin", [10] = "bloodelf", [11] = "draenei",
     };
 
-    /// <summary>The DBC files merged per race: race column, string columns (-1: no race column, taken whole).</summary>
-    static readonly (string Name, int Race, int[] Strings)[] Dbcs =
+    /// <summary>The DBC files merged per race: race column, string columns (-1: no race column, taken whole), and the
+    /// columns the rows must be sorted by (empty: by id).</summary>
+    /// <remarks>Two tables need their rows in order, not by id. The 3.3.5a client sizes its skin and hair lists from
+    /// runs of CharSections rows (BuildComponentArray, Wow.exe 0x004F3DD0): with the rows of one race, sex and section
+    /// split up, a list gets the size of its last run and the next pass writes past it (heap damage that crashes
+    /// later, anywhere). So CharSections goes by race, sex, section, variation, color. EmotesTextSound goes by emote
+    /// (SI2::InitEmoteSounds 0x004CECB0 keeps pointers into a list that moves as it grows, and a row for an emote
+    /// made earlier is then written through an old pointer).</remarks>
+    static readonly (string Name, int Race, int[] Strings, int[] Order)[] Dbcs =
     [
-        ("CharSections", 1, [4, 5, 6]),
-        ("CharHairGeosets", 1, []),
-        ("CharacterFacialHairStyles", 0, []),
-        ("CreatureDisplayInfoExtra", 1, [20]),
-        ("EmotesTextSound", 2, []),
-        ("HelmetGeosetVisData", -1, []),
+        ("CharSections", 1, [4, 5, 6], [1, 2, 3, 8, 9]),
+        ("CharHairGeosets", 1, [], []),
+        ("CharacterFacialHairStyles", 0, [], []),
+        ("CreatureDisplayInfoExtra", 1, [20], []),
+        ("EmotesTextSound", 2, [], [1, 2, 3]),
+        ("HelmetGeosetVisData", -1, [], []),
     ];
 
     public const string PieceFolder = "Data/TemucraftHD";
@@ -116,13 +123,13 @@ public static class HdModels
         using (MpqWriter writer = new(temp, common.SectorShift))
         {
             HashSet<string> hdParts = [.. hd];
-            foreach ((string name, int race, int[] strings) in Dbcs)
+            foreach ((string name, int race, int[] strings, int[] order) in Dbcs)
             {
                 byte[] classic = common.ReadPlain($"Temucraft\\Classic\\{name}.dbc");
                 byte[] hdData = common.ReadPlain($"Temucraft\\HD\\{name}.dbc");
                 byte[] merged = race < 0
                     ? (hdParts.Count > 0 ? hdData : classic)
-                    : Dbc.Merge(classic, hdData, race, strings, r => PartOf(r) is { } p && hdParts.Contains(p));
+                    : Dbc.Merge(classic, hdData, race, strings, r => PartOf(r) is { } p && hdParts.Contains(p), order);
                 writer.AddPlain($"DBFilesClient\\{name}.dbc", merged);
             }
         }
@@ -153,15 +160,30 @@ public static class Dbc
     }
 
     /// <summary>Rows of <paramref name="hd"/> whose race is wanted in HD, the other rows from <paramref name="classic"/>.
-    /// String columns are re-written into one new string block.</summary>
-    public static byte[] Merge(byte[] classic, byte[] hd, int raceColumn, int[] stringColumns, Func<int, bool> useHd)
+    /// String columns are re-written into one new string block. The rows are sorted by <paramref name="order"/>'s
+    /// columns, then by id (column 0); without <paramref name="order"/> by id only (and not at all for a table whose
+    /// column 0 is the race).</summary>
+    public static byte[] Merge(byte[] classic, byte[] hd, int raceColumn, int[] stringColumns, Func<int, bool> useHd, int[]? order = null)
     {
         Table a = Read(classic), b = Read(hd);
         if (a.Fields != b.Fields || a.RecordSize != b.RecordSize) throw new InvalidDataException("the Classic and HD tables differ in layout");
         List<(byte[] Row, byte[] Strings)> rows = [];
         foreach (byte[] row in a.Rows) if (!useHd(BitConverter.ToInt32(row, raceColumn * 4))) rows.Add((row, a.Strings));
         foreach (byte[] row in b.Rows) if (useHd(BitConverter.ToInt32(row, raceColumn * 4))) rows.Add((row, b.Strings));
-        if (raceColumn != 0) rows.Sort((x, y) => BitConverter.ToInt32(x.Row, 0).CompareTo(BitConverter.ToInt32(y.Row, 0)));
+        if (order is { Length: > 0 })
+        {
+            int Compare((byte[] Row, byte[] Strings) x, (byte[] Row, byte[] Strings) y)
+            {
+                foreach (int column in order)
+                {
+                    int c = BitConverter.ToInt32(x.Row, column * 4).CompareTo(BitConverter.ToInt32(y.Row, column * 4));
+                    if (c != 0) return c;
+                }
+                return BitConverter.ToInt32(x.Row, 0).CompareTo(BitConverter.ToInt32(y.Row, 0));
+            }
+            rows.Sort(Compare);
+        }
+        else if (raceColumn != 0) rows.Sort((x, y) => BitConverter.ToInt32(x.Row, 0).CompareTo(BitConverter.ToInt32(y.Row, 0)));
 
         using MemoryStream block = new();
         block.WriteByte(0);

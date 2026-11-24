@@ -119,6 +119,25 @@ static Task HdModelsBuild()
             Check(text.Contains("hd") && text.Contains("classic"), "HD rows for the HD race, Classic for the rest: " + text);
             Check(data.ReadPlain("DBFilesClient\\HelmetGeosetVisData.dbc").Length > 20, "whole table taken");
         }
+        // CharSections must come out in race, sex, section, variation, color order, not by id (the client sizes its
+        // lists from runs of rows): the ids below are out of that order on purpose
+        {
+            static byte[] Sections(params (int Id, int Race, int Sex, int Section)[] rows)
+            {
+                using MemoryStream m = new();
+                m.Write("WDBC"u8); m.Write(BitConverter.GetBytes(rows.Length)); m.Write(BitConverter.GetBytes(10)); m.Write(BitConverter.GetBytes(40));
+                m.Write(BitConverter.GetBytes(1));
+                foreach (var r in rows)
+                    foreach (int v in new[] { r.Id, r.Race, r.Sex, r.Section, 0, 0, 0, 0, 0, 0 }) m.Write(BitConverter.GetBytes(v));
+                m.WriteByte(0);
+                return m.ToArray();
+            }
+            byte[] merged = Dbc.Merge(Sections((1, 2, 0, 0), (2, 1, 0, 0), (5, 1, 1, 0)), Sections((3, 1, 0, 0), (9, 1, 0, 1), (4, 1, 1, 0)), 1, [4, 5, 6],
+                                      race => race == 1, [1, 2, 3, 8, 9]);
+            int[] ids = [.. Enumerable.Range(0, BitConverter.ToInt32(merged, 4)).Select(i => BitConverter.ToInt32(merged, 20 + i * 40))];
+            // race 1 from HD (Classic's race 1 row 5 is dropped), race 2 from Classic; by id it would be 1,3,4,9
+            Check(ids.SequenceEqual(new[] { 3, 9, 4, 1 }), "CharSections sorted by race, sex, section: " + string.Join(",", ids));
+        }
         Check(HdModels.Sync(wow, ["human"]) is null, "unchanged: not built again");
         Check(HdModels.Sync(wow, []) is not null && !File.Exists(Path.Combine(wow, "Data", "patch-K.MPQ"))
               && !File.Exists(Path.Combine(wow, "Data", "patch-_.MPQ")), "all Classic: both removed");
