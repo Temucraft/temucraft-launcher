@@ -1074,13 +1074,15 @@ static Task SpeedsAndSizes()
             new() { Path = "Data/common.MPQ", Size = 100, Category = FileCategory.Base },
             new() { Path = "Data/patch-A.MPQ", Size = 10, Category = FileCategory.Patch },
             new() { Path = "Data/deDE/a.MPQ", Size = 7, Category = FileCategory.Locale, Locale = "deDE" },
+            new() { Path = "Data/enUS/locale-enUS.MPQ", Size = 50, Category = FileCategory.Base },
+            new() { Path = "Data/enUS/patch-enUS-T.MPQ", Size = 2, Category = FileCategory.Locale, Locale = "enUS" },
             new() { Path = "Data/patch-9.MPQ", Size = 3, Category = FileCategory.Option, Group = "Night sky", Option = "On" },
             new() { Path = "Interface/AddOns/X/x.lua", Size = 1, Category = FileCategory.Addon },
         ],
         OptionGroups = [new() { Name = "Night sky", Options = ["On", "Off"] }],
     };
-    Assert(InstallSizes.Of(m, FileCategory.Base) == 100 && InstallSizes.Locale(m, "dede") == 7 && InstallSizes.Option(m, "Night sky", "On") == 3, "parts");
-    Assert(InstallSizes.Total(m, new InstallChoice("/w", ["deDE"], true, "/w", new Dictionary<string, string> { ["Night sky"] = "On" })) == 121, "total with everything");
+    Assert(InstallSizes.Of(m, FileCategory.Base) == 150 && InstallSizes.Locale(m, "dede") == 7 && InstallSizes.Locale(m, "enUS") == 52 && InstallSizes.Option(m, "Night sky", "On") == 3, "parts");
+    Assert(InstallSizes.Total(m, new InstallChoice("/w", ["deDE"], true, "/w", new Dictionary<string, string> { ["Night sky"] = "On" })) == 171, "total with everything");
     Assert(InstallSizes.Total(m, new InstallChoice("/w", [], false, null, new Dictionary<string, string> { ["Night sky"] = "Off" })) == 10, "just the needed files");
     Assert(InstallSizes.FreeSpace(Path.GetTempPath()) > 0, "free space");
     return Task.CompletedTask;

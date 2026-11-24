@@ -146,8 +146,12 @@ public static class InstallSizes
 {
     public static long Of(Manifest manifest, FileCategory category) => manifest.Files.Where(f => f.Category == category).Sum(f => f.Size);
 
+    /// <summary>The whole size of a language: its locale files plus the game's own files for it in the base folder
+    /// (Data/enUS/... comes with the game, so enUS showed only its small patches before).</summary>
     public static long Locale(Manifest manifest, string locale) =>
-        manifest.Files.Where(f => f.Category == FileCategory.Locale && string.Equals(f.Locale, locale, StringComparison.OrdinalIgnoreCase)).Sum(f => f.Size);
+        manifest.Files.Where(f => (f.Category == FileCategory.Locale && string.Equals(f.Locale, locale, StringComparison.OrdinalIgnoreCase))
+                               || (f.Category == FileCategory.Base && f.Path.StartsWith($"Data/{locale}/", StringComparison.OrdinalIgnoreCase)))
+                      .Sum(f => f.Size);
 
     public static long Option(Manifest manifest, string group, string option) =>
         manifest.Files.Where(f => f.Category == FileCategory.Option && f.Group == group && string.Equals(f.Option, option, StringComparison.OrdinalIgnoreCase)).Sum(f => f.Size);
