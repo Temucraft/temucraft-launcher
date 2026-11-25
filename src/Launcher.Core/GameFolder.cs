@@ -100,12 +100,17 @@ public static class GameFolder
 
     /// <summary>Starts Wow.exe: on Windows directly; on Linux and macOS through Wine ($WINE, or wine / wine64 on the
     /// PATH), or the system's own handler for .exe files when no Wine is found.</summary>
-    public static Process? Start(string folder)
+    public static Process? Start(string folder, IReadOnlyList<string>? arguments = null)
     {
         string exe = ExePath(folder);
+        arguments ??= [];
         if (!OperatingSystem.IsWindows() && Wine() is { } wine)
-            return Process.Start(new ProcessStartInfo(wine) { WorkingDirectory = folder, UseShellExecute = false, ArgumentList = { exe } });
-        return Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = folder, UseShellExecute = true });
+        {
+            ProcessStartInfo viaWine = new(wine) { WorkingDirectory = folder, UseShellExecute = false, ArgumentList = { exe } };
+            foreach (string a in arguments) viaWine.ArgumentList.Add(a);
+            return Process.Start(viaWine);
+        }
+        return Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = folder, UseShellExecute = true, Arguments = string.Join(" ", arguments) });
     }
 
     /// <summary>The Wine to run the game with on Linux and macOS: $WINE when set, else wine or wine64 on the PATH.</summary>

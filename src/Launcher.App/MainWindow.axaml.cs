@@ -1935,7 +1935,13 @@ public partial class MainWindow : Window
             if (Diagnostics.RemoveCompatibilityMode(GameFolder.ExePath(Folder)) is { } compat)
                 Log($"Windows compatibility mode was on for Wow.exe ({compat}); turned it off");
             await RequestPlayTicketAsync();
-            Process? game = GameFolder.Start(Folder);
+            bool debug = DebugMode.IsOn(Folder);
+            bool debugApplied = _settings.DebugSettingsApplied;
+            if (DebugMode.Apply(Folder, debug, ref debugApplied))
+                Log(debug ? "Debug mode: error popups and the taint log turned on in WTF\\Config.wtf" : "Debug mode off: the game's debug settings turned off again");
+            if (debugApplied != _settings.DebugSettingsApplied) { _settings.DebugSettingsApplied = debugApplied; SaveSettings(); }
+            Process? game = GameFolder.Start(Folder, DebugMode.Arguments(debug));
+            if (debug) Log("Debug mode is on: the game logs to Logs\\TemucraftDebug.log, and the ` key opens the console");
             DateTime started = DateTime.Now;
             Log("Started the game");
             if (game is null) return;

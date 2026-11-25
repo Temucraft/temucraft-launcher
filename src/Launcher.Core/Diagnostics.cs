@@ -21,6 +21,7 @@ public static class Diagnostics
         foreach (string line in TemucraftCrash(wowFolder)) text.AppendLine(line);
         foreach (string line in RecentCrashes(wowFolder)) text.AppendLine(line);
         foreach (string line in UiErrors(wowFolder)) text.AppendLine(line);
+        foreach (string line in DebugMode.LogTails(wowFolder)) text.AppendLine(line);
 
         Dictionary<string, ManifestFile> server = (manifest?.Files ?? [])
             .GroupBy(f => f.Path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)

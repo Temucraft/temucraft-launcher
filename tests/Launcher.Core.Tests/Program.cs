@@ -22,6 +22,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Parses make-manifest.py's output (LAUNCHER_SAMPLE_MANIFEST)", SampleManifest),
     ("Option groups install the picked option and remove the others", OptionGroups),
     ("Config.wtf values are read, changed and removed", ConfigWtfEdits),
+    ("Debug mode turns the game's debug settings on and only undoes its own", DebugModeSettings),
     ("Large Address Aware flips one header bit and keeps a backup", LargeAddressAwareBit),
     ("addons.json refuses bad repositories and paths", CatalogRules),
     ("Untracked patches skip stock and server files", UntrackedPatches),
@@ -1565,6 +1566,35 @@ static Task PerCharacterOptions()
     Directory.Delete(wow, true);
     return Task.CompletedTask;
 }
+static Task DebugModeSettings()
+{
+    string dir = Path.Combine(Path.GetTempPath(), "tl-debug-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(Path.Combine(dir, "WTF"));
+    try
+    {
+        File.WriteAllLines(Path.Combine(dir, "WTF", "Config.wtf"), ["SET gxResolution \"1920x1080\""]);
+        bool applied = false;
+        Assert(!DebugMode.IsOn(dir), "off without the file");
+        Assert(!DebugMode.Apply(dir, false, ref applied) && !applied, "off and never applied changes nothing");
+        Assert(DebugMode.Apply(dir, true, ref applied) && applied, "on writes the settings");
+        ConfigWtf c = ConfigWtf.Load(dir);
+        Assert(c.Get("scriptErrors") == "1" && c.Get("taintLog") == "2" && c.Get("gxResolution") == "1920x1080", "values on, others kept");
+        Assert(!DebugMode.Apply(dir, true, ref applied), "on again changes nothing");
+        Assert(DebugMode.Apply(dir, false, ref applied) && !applied, "off undoes it");
+        c = ConfigWtf.Load(dir);
+        Assert(c.Get("scriptErrors") is null && c.Get("taintLog") is null && c.Get("gxResolution") == "1920x1080", "values removed, others kept");
+        Assert(DebugMode.Arguments(true).Contains("-console") && DebugMode.Arguments(false).Count == 0, "console argument");
+        Directory.CreateDirectory(Path.Combine(dir, "Logs"));
+        File.WriteAllLines(Path.Combine(dir, "Logs", "TemucraftDebug.log"), Enumerable.Range(1, 100).Select(i => $"line {i}"));
+        List<string> tail = DebugMode.LogTails(dir, 10);
+        Assert(tail.Any(l => l.Contains("last 10 of 100")) && tail.Last() == "  line 100", "log tail");
+        File.WriteAllText(Path.Combine(dir, DebugMode.Marker), "");
+        Assert(DebugMode.IsOn(dir), "on with the file");
+    }
+    finally { Directory.Delete(dir, true); }
+    return Task.CompletedTask;
+}
+
 
 /// <summary>Answers like Apache: files under the folder, Range requests with 206.</summary>
 sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler

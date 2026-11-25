@@ -150,6 +150,8 @@ public sealed class UserSettings
     public string LoginMusic { get; set; } = "";
     public bool ReopenAfterGame { get; set; } = true;
     public bool RememberWindow { get; set; }
+    /// <summary>The launcher turned the game's debug settings on (Debug mode), so it turns them off again later.</summary>
+    public bool DebugSettingsApplied { get; set; }
     /// <summary>The remembered window position; null until "Remember window position" has saved one.</summary>
     public double? WindowX { get; set; }
     public double? WindowY { get; set; }
