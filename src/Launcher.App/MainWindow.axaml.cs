@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        HookProgressDisplay();
         // testing mode: Shift + click on PLAY starts the game without updating (to test local files)
         PlayButton.AddHandler(PointerPressedEvent, (_, e) => _shiftPlay = e.KeyModifiers.HasFlag(Avalonia.Input.KeyModifiers.Shift),
                               Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -146,7 +147,7 @@ public partial class MainWindow : Window
         Opened += async (_, _) =>
         {
             LauncherVersionText.Text = $"Temucraft Launcher {LauncherInfo.Version}";
-            ReportBugButton.Content = $"🐞 v{LauncherInfo.Version}";
+            ReportBugButton.Content = $"🐞 " + string.Format(Translation.T("Launcher v{0}"), LauncherInfo.Version);
             ShareSettings(Folder);   // the game may have been played with the launcher closed
             ShowPrivacy();
             // with a login, connect right away: news, addons and options show even before a game is installed
@@ -310,7 +311,29 @@ public partial class MainWindow : Window
         UpdateButton.IsEnabled = ClientButton.IsEnabled = !busy && _server is not null;
         PlayButton.IsEnabled = PreviewInstall.IsEnabled = !busy;
         CancelButton.IsVisible = busy;
-        if (!busy) Progress.Value = 0;
+        if (!busy)
+        {
+            Progress.Value = 0;
+            FileProgressRow.IsVisible = false;
+        }
+    }
+
+    /// <summary>The percentages next to the bars and the taskbar icon's progress follow the main bar.</summary>
+    void HookProgressDisplay()
+    {
+        Progress.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty) return;
+            double v = Progress.Value;
+            bool active = Busy && v > 0;
+            TotalPercentText.Text = active ? string.Format(Translation.T("Total {0}%"), (int)(v * 100)) : "";
+            TaskbarProgress.Set(this, active ? v : -1);
+        };
+        FileProgress.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty) return;
+            FilePercentText.Text = FileProgressRow.IsVisible ? $"{(int)(FileProgress.Value * 100)}%" : "";
+        };
     }
 
     bool Busy => _work is not null;
@@ -685,7 +708,8 @@ public partial class MainWindow : Window
             ClientButton.IsVisible = manifest.Files.Any(f => f.Category == FileCategory.Base);
             RefreshMods();
             ShowGatedTweaks();
-            VersionText.Text = manifest.ClientVersion.Length > 0 ? $"Version: {manifest.ClientVersion}" : "";
+            // the game files' version (the server's release); the launcher's own version is in the corner
+            VersionText.Text = manifest.ClientVersion.Length > 0 ? string.Format(Translation.T("Game version: {0}"), manifest.ClientVersion) : "";
             ShowLauncherUpdate(!launcherOk && manifest.Launcher is not null);
             // shown, and kept for the next start (before logging in, or when the server can't be reached)
             FeedCache feeds = new() { News = newsText ?? "", Changelog = changelogText ?? "", NewsRule = manifest.Rules.News,
@@ -1578,6 +1602,8 @@ public partial class MainWindow : Window
                         else { SetRow(row, RowState.Downloading, 0, planned.File.Size); currentRow = row; }
                     }
                     UpdateDownloadsButton();
+                    FileProgressRow.IsVisible = outdated.Count > 1;
+                    FileProgress.Value = copy ? 1 : 0;
                     Progress.Value = total == 0 ? 1 : (double)before / total;
                     StatusText.Text = string.Format(Translation.T(copy ? "Copying {0} ({1}/{2}) (already on your disk)" : "Downloading {0} ({1}/{2})"),
                                                     planned.File.Path, Index(planned), outdated.Count);
@@ -1586,6 +1612,7 @@ public partial class MainWindow : Window
                 {
                     long done = before + p.Done;
                     Progress.Value = total == 0 ? 1 : (double)done / total;
+                    FileProgress.Value = p.Total == 0 ? 1 : (double)p.Done / p.Total;
                     // this file and the whole update, the speed and the time left
                     double speed = meter.Add(done);
                     // the numbers change once a second (the bar keeps moving), so they can be read
