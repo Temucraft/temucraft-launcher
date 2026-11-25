@@ -311,6 +311,7 @@ public partial class MainWindow : Window
         UpdateButton.IsEnabled = ClientButton.IsEnabled = !busy && _server is not null;
         PlayButton.IsEnabled = PreviewInstall.IsEnabled = GameVersionBox.IsEnabled = !busy;
         CancelButton.IsVisible = busy;
+        LauncherUpdateNowButton.IsEnabled = !busy;   // a running download finishes first (Cancel stays reachable below)
         if (!busy)
         {
             Progress.Value = 0;
@@ -1161,6 +1162,21 @@ public partial class MainWindow : Window
     /// with what changed (the changelog's newest "Launcher ..." entry). Not forced: "Later" hides it until the next start.</summary>
     void ShowLauncherUpdate(bool differs)
     {
+        // required by the server (launcherUpdate policy): in the middle of the window, no "Later";
+        // recommended: the banner at the top that can be put off
+        bool required = differs && (_manifest?.Rules.LauncherUpdateFirst ?? false);
+        LauncherUpdateOverlay.IsVisible = required;
+        if (required)
+        {
+            LauncherUpdateOverlayText.Text = Translation.T("A new launcher is needed to keep playing on this server. It takes a few seconds and keeps your settings.");
+            NewsItem? required_news = null;
+            try { required_news = SelfCheck.WhatsNew(NewsItem.Parse(FeedCache.Load(_feedFile).Changelog)); }
+            catch (System.Text.Json.JsonException) { }
+            LauncherUpdateNewsList.Children.Clear();
+            if (required_news is not null) ShowNews(LauncherUpdateNewsList, [required_news], new FeedRule(true, 1, 1));
+            WarningBanner.IsVisible = false;
+            return;
+        }
         WarningBanner.IsVisible = differs && !_launcherLater;
         LauncherUpdateButtons.IsVisible = differs;
         if (!differs) { WhatsNewPanel.IsVisible = false; return; }

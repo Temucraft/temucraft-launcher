@@ -729,6 +729,28 @@
       </Border>
     </Grid>
 
+    <!-- a required launcher update (server policy launcherUpdate = required): in the middle of the window -->
+    <Grid Name="LauncherUpdateOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
+      <Border Background="{DynamicResource T.background}" Width="620" MaxHeight="620" Margin="20" CornerRadius="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+       <Border Classes="panel" CornerRadius="6" Padding="0">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource T.border}" BorderThickness="0,0,0,1" Padding="24,18">
+            <TextBlock Classes="title" Text="THERE'S AN UPDATE" FontSize="28" Margin="0" />
+          </Border>
+          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource T.border}" BorderThickness="0,1,0,0" Padding="24,12">
+            <Button Name="LauncherUpdateNowButton" Classes="play" Content="Update the launcher" HorizontalAlignment="Right" Click="OnUpdateLauncher" />
+          </Border>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,14,24,14">
+            <StackPanel Spacing="10">
+              <TextBlock Name="LauncherUpdateOverlayText" TextWrapping="Wrap" FontSize="15" Foreground="{DynamicResource T.text}" />
+              <StackPanel Name="LauncherUpdateNewsList" />
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+       </Border>
+      </Border>
+    </Grid>
+
     <!-- what's new: once after the launcher updated -->
     <Grid Name="StartupNewsOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
       <Border Background="{DynamicResource T.background}" Width="760" MaxHeight="660" Margin="20" CornerRadius="6" HorizontalAlignment="Center" VerticalAlignment="Center">
