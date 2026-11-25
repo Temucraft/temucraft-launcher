@@ -162,6 +162,14 @@ public sealed class UserSettings
     public bool DebugSettingsApplied { get; set; }
     /// <summary>The same for the PTR's install (each game version has its own Config.wtf).</summary>
     public bool PtrDebugSettingsApplied { get; set; }
+    /// <summary>The player agreed, the first time, that Shift + PLAY's one-off debug mode is meant for the PTR and
+    /// developers.</summary>
+    public bool DebugPlayAcknowledged { get; set; }
+    /// <summary>A game folder where Shift + PLAY put debug mode on for one game only; the launcher takes it back out
+    /// when that game closes, or at its next start or PLAY when the launcher was closed meanwhile.</summary>
+    public string OneOffDebugFolder { get; set; } = "";
+    /// <summary>That folder is the PTR's install (it has its own "debug settings applied" flag).</summary>
+    public bool OneOffDebugPtr { get; set; }
     /// <summary>The remembered window position; null until "Remember window position" has saved one.</summary>
     public double? WindowX { get; set; }
     public double? WindowY { get; set; }

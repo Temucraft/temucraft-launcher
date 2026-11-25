@@ -209,6 +209,12 @@ red while it is off. With Debug mode on, PLAY turns on the game's error popups a
 `Config.wtf`, starts the game with its console (the ` key) and Copy diagnostics adds the debug and taint logs; turned
 off, the launcher takes those settings out again. Each game version remembers this for itself.
 
+**Shift + left click on PLAY** plays in debug mode for this game only, while Debug mode is off on the Mods page. The
+first time, a window asks the player to tick that debug mode is meant for the PTR and developers (remembered after
+that). The launcher puts `TemucraftDebug.txt` and the debug settings in for that game and takes them out when it closes,
+or at its next start or PLAY if the launcher was closed meanwhile. In testing mode (`testing.env`) Shift + PLAY also
+skips the update, as before.
+
 ## Languages
 
 The launcher's own text comes in the languages the 3.3.5a client has: English (enUS), German (deDE), French (frFR),

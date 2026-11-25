@@ -46,7 +46,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         HookProgressDisplay();
-        // testing mode: Shift + click on PLAY starts the game without updating (to test local files)
+        // Shift + click on PLAY: debug mode for this game only (DebugPlay.cs); in testing mode also without updating
         PlayButton.AddHandler(PointerPressedEvent, (_, e) => _shiftPlay = e.KeyModifiers.HasFlag(Avalonia.Input.KeyModifiers.Shift),
                               Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         LoadDownloadHistory();
@@ -149,6 +149,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => { Logger.Written -= ShowLogLine; Logger.Info("Launcher closed", toWindow: false); };
         Opened += async (_, _) =>
         {
+            EndOneOffDebug();   // Shift + PLAY's one-off debug mode, when the launcher was closed while that game ran
             LauncherVersionText.Text = $"Temucraft Launcher {LauncherInfo.Version}";
             ReportBugButton.Content = $"🐞 " + string.Format(Translation.T("Launcher v{0}"), LauncherInfo.Version);
             ShareSettings(Folder);   // the game may have been played with the launcher closed
@@ -1984,8 +1985,10 @@ public partial class MainWindow : Window
             return;
         }
         if (NeedFolder()) return;
-        bool skipUpdate = _shiftPlay && TestingFiles.Enabled(AppContext.BaseDirectory);
+        bool shift = _shiftPlay;
         _shiftPlay = false;
+        EndOneOffDebug();   // a one-off debug mode left from a game the launcher didn't see close
+        bool skipUpdate = shift && TestingFiles.Enabled(AppContext.BaseDirectory);
         if (skipUpdate && _pendingFiles > 0) Log("Testing mode: playing without the update (Shift + PLAY)");
         if (_pendingFiles > 0 && _server is not null && !skipUpdate)
         {
@@ -1994,9 +1997,13 @@ public partial class MainWindow : Window
             await CheckAsync(download: true);
             return;
         }
+        // Shift + left click: debug mode for this game only (asked the first time); nothing to do when it's on anyway
+        bool oneOffDebug = shift && !DebugMode.IsOn(Folder);
+        if (oneOffDebug && !await AskDebugPlayAsync()) return;
         SaveSettings();
         try
         {
+            if (oneOffDebug) StartOneOffDebug(Folder);
             if (ClearCacheBox.IsChecked == true) GameFolder.ClearCache(Folder);
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
             WriteGameRealm(Folder);   // straight into the version's realm: no realm list
@@ -2044,6 +2051,7 @@ public partial class MainWindow : Window
             }
             _gameRunning = false;
             Log($"The game closed (exit code {game.ExitCode})");
+            if (oneOffDebug) EndOneOffDebug();
             if (game.ExitCode != 0 && DateTime.Now - started < TimeSpan.FromSeconds(90))
             {
                 // closed with an error right after starting: most often an extra under Mods, or a broken file
