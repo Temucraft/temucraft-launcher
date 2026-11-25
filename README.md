@@ -204,7 +204,8 @@ puts the file's text in the manifest as `realmName`.
 `upload.py ptr` (see Uploading); `upload.py files` never touches it. A `launcher-policy.json` in `ptr/` goes over Live's
 for the PTR.
 
-**DEBUG tab.** Under PLAY a small tab says DEBUG: green while Debug mode (Mods page) is on for the picked game version,
+**Debug mode** is off by default (the server's `options/Debug mode/group.json` lists Off first); Crash reports, the
+TemucraftCrash hook (version.dll), stays on by default. **DEBUG tab.** Under PLAY a small tab says DEBUG: green while Debug mode (Mods page) is on for the picked game version,
 red while it is off. With Debug mode on, PLAY turns on the game's error popups and taint log in that version's
 `Config.wtf`, starts the game with its console (the ` key) and Copy diagnostics adds the debug and taint logs; turned
 off, the launcher takes those settings out again. Each game version remembers this for itself.
