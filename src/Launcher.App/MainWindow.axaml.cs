@@ -1085,10 +1085,11 @@ public partial class MainWindow : Window
         {
             if (File.Exists(_cacheFile)) { File.Delete(_cacheFile); removed++; }
             if (GameFolder.LooksLikeClient(Folder) || Directory.Exists(Folder))
-                foreach (string part in Directory.EnumerateFiles(Folder, "*.part", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
-                {
-                    try { File.Delete(part); removed++; } catch (IOException) { }
-                }
+                foreach (string pattern in new[] { "*.part", "*.part.sha256" })
+                    foreach (string part in Directory.EnumerateFiles(Folder, pattern, new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
+                    {
+                        try { File.Delete(part); removed++; } catch (IOException) { }
+                    }
             SelfCheck.CleanUp();
             Log($"Download cache cleared ({removed} file(s) removed)");
             Status(Translation.T("Download cache cleared. The next update checks every file again."));

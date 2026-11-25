@@ -144,9 +144,43 @@ public sealed class ServerClient : IDisposable
     public async Task DownloadAsync(ManifestFile file, string target, IProgress<(long Done, long Total)>? progress = null,
         CancellationToken token = default)
     {
+        try
+        {
+            await DownloadOnceAsync(file, target, progress, token);
+        }
+        catch (ResumedPartMismatchException)
+        {
+            // The part left by an earlier try was of another version of the file (it changed on the server since, or
+            // the manifest was read while the file was being uploaded): it was deleted, so this try starts from zero
+            Logger.Info($"{file.Path}: the earlier partial download was of another version; downloading it again", toWindow: false);
+            await DownloadOnceAsync(file, target, progress, token);
+        }
+    }
+
+    sealed class ResumedPartMismatchException : Exception { }
+
+    static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    async Task DownloadOnceAsync(ManifestFile file, string target, IProgress<(long Done, long Total)>? progress,
+        CancellationToken token)
+    {
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         string part = target + ".part";
+        // part + ".sha256" names the version the part belongs to: a part of another version is never resumed
+        string partSha = part + ".sha256";
+        if (File.Exists(part))
+        {
+            string? owner = null;
+            try { owner = File.Exists(partSha) ? File.ReadAllText(partSha).Trim() : null; } catch (IOException) { }
+            if (!string.Equals(owner, file.Sha256, StringComparison.OrdinalIgnoreCase))
+                File.Delete(part);
+        }
+        try { File.WriteAllText(partSha, file.Sha256); } catch (IOException) { }
         long have = File.Exists(part) ? new FileInfo(part).Length : 0;
+        long resumedFrom = have;
         if (have > file.Size)
         {
             File.Delete(part);
@@ -185,10 +219,14 @@ public sealed class ServerClient : IDisposable
         if (sha != file.Sha256)
         {
             File.Delete(part);
+            TryDelete(partSha);
+            if (resumedFrom > 0)
+                throw new ResumedPartMismatchException();
             Logger.Warning($"{file.Path}: checksum mismatch (got {sha}, expected {file.Sha256}); the download was deleted");
             throw new InvalidDataException($"{file.Path} didn't download correctly (checksum mismatch). Try again.");
         }
         File.Move(part, target, overwrite: true);
+        TryDelete(partSha);
     }
 
     /// <summary>Measures the download speed: reads the start of <paramref name="file"/> for at most

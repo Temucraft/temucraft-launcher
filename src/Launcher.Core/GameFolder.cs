@@ -312,8 +312,8 @@ public static class SelfCheck
     }
 
     /// <summary>What a self update can leave next to the launcher: the previous copy (.old), a new copy that never took
-    /// the exe's place (.new) and a half-downloaded one (.new.part).</summary>
-    public static IReadOnlyList<string> Leftovers(string exe) => [exe + ".old", exe + ".new", exe + ".new.part"];
+    /// the exe's place (.new) and a half-downloaded one (.new.part, with the .sha256 naming its version).</summary>
+    public static IReadOnlyList<string> Leftovers(string exe) => [exe + ".old", exe + ".new", exe + ".new.part", exe + ".new.part.sha256"];
 
     /// <summary>Removes the launcher an update left behind and any unfinished new one; returns how many are still
     /// there (locked, for example while the previous launcher is still closing). Never throws.</summary>

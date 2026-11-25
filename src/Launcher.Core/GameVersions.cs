@@ -191,7 +191,7 @@ public static class PtrInstall
     public sealed record Result(int Linked, int Copied, int Skipped, long BytesLinked, long BytesCopied);
 
     static readonly string[] SkippedTop = ["WTF", "Cache", "Logs", "Screenshots", "Errors"];
-    static readonly string[] SkippedEndings = [".part", ".upload", ".tmp", ".old", ".new", ".building"];
+    static readonly string[] SkippedEndings = [".part", ".part.sha256", ".upload", ".tmp", ".old", ".new", ".building"];
 
     /// <summary>Whether a file (relative to the game folder) is left out of the PTR.</summary>
     public static bool Skipped(string relative)

@@ -16,6 +16,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("Hash cache reuses and refreshes hashes", HashCacheReuse),
     ("Download installs a file only when its checksum matches", DownloadVerifies),
     ("Download resumes a partial file with a range request", DownloadResumes),
+    ("Download never resumes a part of another version of the file", DownloadSkipsStalePart),
     ("A wrong password and a blocked address give the same message", LoginErrors),
     ("Realmlist goes to every locale; obsolete files are removed", GameFolderChanges),
     ("File names with spaces and # download from the right address", DownloadEscapesNames),
@@ -788,10 +789,36 @@ static async Task DownloadResumes()
     string dir = TempDir(), target = Path.Combine(dir, "Data", "a.MPQ");
     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
     await File.WriteAllBytesAsync(target + ".part", data[..200_000]);
+    await File.WriteAllTextAsync(target + ".part.sha256", Sha(data));
 
     await client.DownloadAsync(File1("Data/a.MPQ", data), target);
     Assert(server.LastRangeFrom == 200_000, "no range request: " + server.LastRangeFrom);
     Assert((await File.ReadAllBytesAsync(target)).SequenceEqual(data), "resumed file differs");
+    Assert(!File.Exists(target + ".part.sha256"), "the part's .sha256 left behind");
+}
+
+static async Task DownloadSkipsStalePart()
+{
+    // a part of the previous version (the file changed on the server since), with and without its .sha256
+    byte[] oldData = RandomNumberGenerator.GetBytes(500_000), data = RandomNumberGenerator.GetBytes(500_000);
+    FakeServer server = new(new() { ["files/Data/a.MPQ"] = data });
+    using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
+    string dir = TempDir(), target = Path.Combine(dir, "Data", "a.MPQ");
+    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+    foreach (bool withSha in new[] { true, false })
+    {
+        await File.WriteAllBytesAsync(target + ".part", oldData[..200_000]);
+        if (withSha) await File.WriteAllTextAsync(target + ".part.sha256", Sha(oldData));
+        await client.DownloadAsync(File1("Data/a.MPQ", data), target);
+        Assert((await File.ReadAllBytesAsync(target)).SequenceEqual(data), "stale part resumed (with .sha256: " + withSha + ")");
+        File.Delete(target);
+    }
+
+    // a part that claims the right version but holds other bytes: one fresh retry, no error
+    await File.WriteAllBytesAsync(target + ".part", oldData[..200_000]);
+    await File.WriteAllTextAsync(target + ".part.sha256", Sha(data));
+    await client.DownloadAsync(File1("Data/a.MPQ", data), target);
+    Assert((await File.ReadAllBytesAsync(target)).SequenceEqual(data), "a wrong part wasn't downloaded again");
 }
 
 static async Task LoginErrors()
