@@ -137,6 +137,8 @@ public partial class MainWindow
     {
         try
         {
+            if (IsPtr && LiveFolder.Length > 0 && GameVersions.SeedConfigFromLive(LiveFolder, folder))
+                Log("PTR: the game's settings (resolution, graphics, sound...) copied from Live");
             string? realm = IsPtr ? GameVersions.PtrRealmName(_ptrManifest, _policy, _realmStatus)
                                   : GameVersions.LiveRealmName(_liveManifest ?? _manifest, _policy, _realmStatus);
             if (GameVersions.WriteRealm(folder, realm, _manifest?.Realmlist))

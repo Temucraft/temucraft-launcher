@@ -121,8 +121,34 @@ public static class GameVersions
         bool changed = false;
         if (realmName is { Length: > 0 } && config.Get("realmName") != realmName) { config.Set("realmName", realmName); changed = true; }
         if (realmList is { Length: > 0 } && config.Get("realmList") != realmList) { config.Set("realmList", realmList); changed = true; }
+        // the game's EULA and terms screens: the player agreed in the launcher, so the game doesn't ask again
+        foreach (string agreed in new[] { "readEULA", "readTOS", "readScanning", "readContest" })
+            if (config.Get(agreed) != "1") { config.Set(agreed, "1"); changed = true; }
         if (changed) config.Save();
         return changed;
+    }
+
+    /// <summary>
+    /// The PTR starts with the Live game's own settings (resolution, graphics, sound, interface CVars, saved accounts):
+    /// copied from Live's WTF\Config.wtf while the PTR's has never been set up (no gxResolution yet). The realm lines
+    /// are left out (each version writes its own). Returns true when settings were copied.
+    /// </summary>
+    public static bool SeedConfigFromLive(string liveFolder, string ptrFolder, bool force = false)
+    {
+        ConfigWtf live = ConfigWtf.Load(liveFolder), ptr = ConfigWtf.Load(ptrFolder);
+        if (!File.Exists(live.File) || (!force && ptr.Get("gxResolution") is not null)) return false;
+        // what is replaced stays next to it once (Copy Account Data on an already set up PTR)
+        if (force && File.Exists(ptr.File) && !File.Exists(ptr.File + ".before-copy")) File.Copy(ptr.File, ptr.File + ".before-copy");
+        int n = 0;
+        foreach ((string name, string value) in live.All())
+        {
+            if (name.Equals("realmName", StringComparison.OrdinalIgnoreCase) || name.Equals("realmList", StringComparison.OrdinalIgnoreCase)) continue;
+            ptr.Set(name, value);
+            n++;
+        }
+        if (n == 0) return false;
+        ptr.Save();
+        return true;
     }
 
     /// <summary>True when the two folders are the same, or one is inside the other (the PTR must never share files
@@ -331,8 +357,13 @@ public static class PtrCopy
     /// Copies the Live account data to the PTR: per account config-cache.wtf, macros-cache.txt and the SavedVariables
     /// folder; per character (Live realm to PTR realm) every file but the key bindings, and its SavedVariables.
     /// </summary>
-    public static Result CopyAccountData(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm) =>
-        CopyWtf(liveFolder, ptrFolder, liveRealm, ptrRealm, "account-data", bindings: false);
+    public static Result CopyAccountData(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm)
+    {
+        Result result = CopyWtf(liveFolder, ptrFolder, liveRealm, ptrRealm, "account-data", bindings: false);
+        // and the game's own settings (resolution, graphics, sound, interface), like a fresh PTR gets them
+        GameVersions.SeedConfigFromLive(liveFolder, ptrFolder, force: true);
+        return result;
+    }
 
     /// <summary>Copies the Live key bindings to the PTR: each account's bindings-cache.wtf and each character's own.</summary>
     public static Result CopyKeyBindings(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm) =>

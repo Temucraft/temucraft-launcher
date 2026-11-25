@@ -44,6 +44,13 @@ public sealed class ConfigWtf : ITweakFile
         return null;
     }
 
+    /// <summary>Every SET line's name and value, in file order.</summary>
+    public IEnumerable<(string Name, string Value)> All()
+    {
+        foreach (string line in _lines)
+            if (SetLine.Match(line) is { Success: true } m) yield return (m.Groups[1].Value, m.Groups[2].Value);
+    }
+
     /// <summary>Sets a value; null removes the line so the client uses its default.</summary>
     public void Set(string name, string? value)
     {
