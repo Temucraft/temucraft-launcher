@@ -4,7 +4,7 @@ namespace Launcher.Core;
 
 /// <summary>
 /// Live and PTR (the test realm). Each has its own install: the PTR folder is made from the Live one (its big MPQs hard
-/// linked when both are on the same drive, the rest copied), with its own, fresh WTF and its own Interface\AddOns. The
+/// linked when both are on the same drive, the rest copied), with its own WTF and its own Interface\AddOns. The
 /// server's <c>ptr/</c> folder holds a manifest of only the files that differ from Live (a newer Wow.exe and patches,
 /// for example); the PTR's file list is the Live one with those over it (<see cref="MergePtr"/>). The game never shows a
 /// realm list: before it starts, the launcher writes the version's realm into its WTF\Config.wtf (<see cref="WriteRealm"/>).
@@ -121,32 +121,49 @@ public static class GameVersions
         bool changed = false;
         if (realmName is { Length: > 0 } && config.Get("realmName") != realmName) { config.Set("realmName", realmName); changed = true; }
         if (realmList is { Length: > 0 } && config.Get("realmList") != realmList) { config.Set("realmList", realmList); changed = true; }
-        // the game's EULA and terms screens: the player agreed in the launcher, so the game doesn't ask again
-        foreach (string agreed in new[] { "readEULA", "readTOS", "readScanning", "readContest" })
-            if (config.Get(agreed) != "1") { config.Set(agreed, "1"); changed = true; }
         if (changed) config.Save();
         return changed;
     }
 
+    /// <summary>The Config.wtf settings that mark the game's first-start agreement screens as seen.</summary>
+    public static readonly string[] AgreementCVars = ["readEULA", "readTOS", "readScanning", "readContest"];
+
     /// <summary>
-    /// The PTR starts with the Live game's own settings (resolution, graphics, sound, interface CVars, saved accounts):
-    /// copied from Live's WTF\Config.wtf while the PTR's has never been set up (no gxResolution yet). The realm lines
-    /// are left out (each version writes its own). Returns true when settings were copied.
+    /// The "skipGameAgreements" setting: marks the game's first-start agreement screens as seen in the install's
+    /// WTF\Config.wtf, so the game goes straight to the login. Returns true when the file changed.
     /// </summary>
-    public static bool SeedConfigFromLive(string liveFolder, string ptrFolder, bool force = false)
+    public static bool SkipAgreements(string folder)
+    {
+        ConfigWtf config = ConfigWtf.Load(folder);
+        bool changed = false;
+        foreach (string seen in AgreementCVars)
+            if (config.Get(seen) != "1") { config.Set(seen, "1"); changed = true; }
+        if (changed) config.Save();
+        return changed;
+    }
+
+    /// <summary>Settings each game version keeps for itself: never copied from Live (its realm, and the debug mode
+    /// settings, which follow each version's own Debug mode option).</summary>
+    static bool OwnSetting(string name) =>
+        name.Equals("realmName", StringComparison.OrdinalIgnoreCase) || name.Equals("realmList", StringComparison.OrdinalIgnoreCase)
+        || DebugMode.CVarNames.Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The "ptrCopyLiveSettings" setting: the PTR starts with the Live game's own settings (resolution, graphics, sound,
+    /// interface CVars, saved accounts), copied from Live's WTF\Config.wtf while the PTR's has never been set up (no
+    /// gxResolution yet). Only settings the PTR doesn't have yet are added, so what the launcher already wrote there
+    /// (the server's enforced tweaks, the player's Tweaks) stays. With <paramref name="force"/> (Copy Account Data) every
+    /// Live setting replaces the PTR's; <paramref name="keep"/> is called first with the file, to back it up. The realm
+    /// and debug lines are never copied. Only the PTR's file is written. Returns true when settings were copied.
+    /// </summary>
+    public static bool SeedConfigFromLive(string liveFolder, string ptrFolder, bool force = false, Action<string>? keep = null)
     {
         ConfigWtf live = ConfigWtf.Load(liveFolder), ptr = ConfigWtf.Load(ptrFolder);
         if (!File.Exists(live.File) || (!force && ptr.Get("gxResolution") is not null)) return false;
-        // what is replaced stays next to it once (Copy Account Data on an already set up PTR)
-        if (force && File.Exists(ptr.File) && !File.Exists(ptr.File + ".before-copy")) File.Copy(ptr.File, ptr.File + ".before-copy");
-        int n = 0;
-        foreach ((string name, string value) in live.All())
-        {
-            if (name.Equals("realmName", StringComparison.OrdinalIgnoreCase) || name.Equals("realmList", StringComparison.OrdinalIgnoreCase)) continue;
-            ptr.Set(name, value);
-            n++;
-        }
-        if (n == 0) return false;
+        List<(string Name, string Value)> copy = [.. live.All().Where(s => !OwnSetting(s.Name) && (force ? ptr.Get(s.Name) != s.Value : ptr.Get(s.Name) is null))];
+        if (copy.Count == 0) return false;
+        if (File.Exists(ptr.File)) keep?.Invoke(ptr.File);
+        foreach ((string name, string value) in copy) ptr.Set(name, value);
         ptr.Save();
         return true;
     }
@@ -165,7 +182,7 @@ public static class GameVersions
 /// Makes the PTR install from the Live one, so the PTR only downloads what differs. Every MPQ under Data (and the kept
 /// option files) is hard linked when the two folders are on the same drive: no extra space, nothing to copy. The
 /// launcher never writes into an MPQ in place (updates write a new file and move it over the old name, which leaves the
-/// Live file alone), so a link is safe. Everything else is copied. Left out: WTF (the PTR starts with fresh settings),
+/// Live file alone), so a link is safe. Everything else is copied. Left out: WTF (the PTR gets its own; see <see cref="GameVersions.SeedConfigFromLive"/>),
 /// Interface\AddOns (the PTR has its own addons; see <see cref="PtrCopy.CopyAddons"/>), Cache, Logs, Screenshots, Errors
 /// and unfinished downloads. Nothing is written into the Live folder.
 /// </summary>
@@ -209,7 +226,12 @@ public static class PtrInstall
         int linked = 0, copied = 0, skipped = 0;
         long bytesLinked = 0, bytesCopied = 0;
         bool tryLinks = true;
-        foreach (string source in Directory.EnumerateFiles(liveFolder, "*", SearchOption.AllDirectories))
+        // Wow.exe goes last: until it is there the PTR folder isn't taken for a game, so an install that was cancelled
+        // or failed halfway is made from Live again (and not downloaded from the server) the next time
+        string exe = GameFolder.ExePath(liveFolder);
+        IEnumerable<string> sources = Directory.EnumerateFiles(liveFolder, "*", SearchOption.AllDirectories)
+            .Where(f => !string.Equals(f, exe, StringComparison.OrdinalIgnoreCase)).Append(exe);
+        foreach (string source in sources)
         {
             token.ThrowIfCancellationRequested();
             string relative = Path.GetRelativePath(liveFolder, source);
@@ -357,19 +379,20 @@ public static class PtrCopy
     /// Copies the Live account data to the PTR: per account config-cache.wtf, macros-cache.txt and the SavedVariables
     /// folder; per character (Live realm to PTR realm) every file but the key bindings, and its SavedVariables.
     /// </summary>
-    public static Result CopyAccountData(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm)
-    {
-        Result result = CopyWtf(liveFolder, ptrFolder, liveRealm, ptrRealm, "account-data", bindings: false);
-        // and the game's own settings (resolution, graphics, sound, interface), like a fresh PTR gets them
-        GameVersions.SeedConfigFromLive(liveFolder, ptrFolder, force: true);
-        return result;
-    }
+    public static Result CopyAccountData(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm) =>
+        CopyWtf(liveFolder, ptrFolder, liveRealm, ptrRealm, "account-data", bindings: false, writer =>
+        {
+            // and the game's own settings (resolution, graphics, sound, interface) from WTF\Config.wtf, whatever the
+            // ptrCopyLiveSettings setting says (this is an explicit button); the PTR's old file goes to the backup
+            if (GameVersions.SeedConfigFromLive(liveFolder, ptrFolder, force: true, keep: writer.Keep)) writer.Files++;
+        });
 
     /// <summary>Copies the Live key bindings to the PTR: each account's bindings-cache.wtf and each character's own.</summary>
     public static Result CopyKeyBindings(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm) =>
         CopyWtf(liveFolder, ptrFolder, liveRealm, ptrRealm, "key-bindings", bindings: true);
 
-    static Result CopyWtf(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm, string what, bool bindings)
+    static Result CopyWtf(string liveFolder, string ptrFolder, string? liveRealm, string ptrRealm, string what, bool bindings,
+        Action<Writer>? more = null)
     {
         CheckFolders(liveFolder, ptrFolder);
         Writer writer = new(ptrFolder, "before-copy-" + what);
@@ -408,6 +431,7 @@ public static class PtrCopy
                 if (!bindings) CopyTree(writer, Path.Combine(character, "SavedVariables"), Path.Combine(to, "SavedVariables"));
             }
         }
+        more?.Invoke(writer);
         return new Result(writer.Files, 0, writer.Backup, notes);
     }
 

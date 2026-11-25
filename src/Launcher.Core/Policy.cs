@@ -38,7 +38,9 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// <c>{"value": ..., "enforce": true|false}</c>. An enforced setting is set by the server and the player can't change
 /// it; one that isn't enforced is the server's recommendation (a default where the launcher has no box for it).
 /// <list type="bullet">
-/// <item>On/off: installAddons, clearCache, reopenAfterGame, rememberWindow, backupBeforeUpdate, largeAddressAware</item>
+/// <item>On/off: installAddons, clearCache, reopenAfterGame, rememberWindow, backupBeforeUpdate, largeAddressAware,
+/// skipGameAgreements (skip the game's first-start agreement screens), ptrCopyLiveSettings (a new PTR install starts
+/// with Live's game settings)</item>
 /// <item>backupsToKeep: a number</item>
 /// <item>defaultLocale: the server's default language (its base client's), always installed; enUS when not set</item>
 /// <item>requiredLocales: extra languages everyone gets (players may add more)</item>
@@ -55,7 +57,8 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// </summary>
 public sealed class LauncherPolicy
 {
-    public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware"];
+    public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware",
+                                             "skipGameAgreements", "ptrCopyLiveSettings"];
     public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog", "theme", "themeMode", "downloadLimit", "launcherUpdate", "liveRealmName", "ptrRealmName"];
 
     /// <summary>Web addresses the launcher opens or reads: the bug report page, the realm status block and the player map.</summary>
@@ -109,6 +112,9 @@ public sealed class LauncherPolicy
     public PolicyRule? Setting(string key) => Settings.GetValueOrDefault(key);
 
     public bool? EnforcedBool(string key) => Setting(key) is { Enforce: true } rule ? rule.Bool : null;
+
+    /// <summary>An on/off setting as it applies: the server's value when it enforces one, else the player's choice.</summary>
+    public bool Effective(string key, bool playerChoice) => EnforcedBool(key) ?? playerChoice;
 
     /// <summary>Extra languages everyone gets (on top of <see cref="DefaultLocale"/> and the game's own language).</summary>
     public IReadOnlyList<string> RequiredLocales => Setting("requiredLocales")?.Strings ?? [];

@@ -137,7 +137,8 @@ public partial class MainWindow
     {
         try
         {
-            if (IsPtr && LiveFolder.Length > 0 && GameVersions.SeedConfigFromLive(LiveFolder, folder))
+            // a new PTR starts with Live's game settings, unless the player (or the server) says fresh ones
+            if (IsPtr && PtrLiveSettingsBox.IsChecked == true && LiveFolder.Length > 0 && GameVersions.SeedConfigFromLive(LiveFolder, folder))
                 Log("PTR: the game's settings (resolution, graphics, sound...) copied from Live");
             string? realm = IsPtr ? GameVersions.PtrRealmName(_ptrManifest, _policy, _realmStatus)
                                   : GameVersions.LiveRealmName(_liveManifest ?? _manifest, _policy, _realmStatus);
@@ -163,8 +164,12 @@ public partial class MainWindow
             Status(Translation.T("Pick a PTR folder of its own (Settings page), not the Live folder or a folder inside it."));
             return false;
         }
+        string start = PtrLiveSettingsBox.IsChecked == true
+            ? Translation.T("It starts with your Live game settings and no addons: copy your addons, key bindings and account data from Live afterwards if you want them.")
+            : Translation.T("It starts with fresh settings and no addons: copy yours from Live afterwards if you want them.");
         if (!await ConfirmAsync("Install the PTR", string.Format(Translation.T(
-                "The PTR (test realm) goes into {0}. It shares your Live game's files where it can (no extra space on the same drive) and downloads only what is new. It starts with fresh settings and no addons: copy yours from Live afterwards if you want them.\n\nYour Live game is not changed."), ptr), "Install"))
+                "The PTR (test realm) goes into {0}. It shares your Live game's files where it can (no extra space on the same drive) and downloads only what is new."), ptr)
+                + " " + start + "\n\n" + Translation.T("Your Live game is not changed."), "Install"))
             return false;
         HashCache cache = HashCache.Load(_cacheFile);
         bool done = await RunAsync("PTR install", token =>

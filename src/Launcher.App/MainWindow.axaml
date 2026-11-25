@@ -483,6 +483,10 @@
                   <TextBlock Classes="section" Margin="0,0,0,6" Text="GAME" />
                   <CheckBox Name="AddonsBox" Content="Install the addons the server needs" IsChecked="True" />
                   <CheckBox Name="ClearCacheBox" Content="Clean the client's Cache (WDB) on each launch" IsChecked="True" />
+                  <CheckBox Name="SkipAgreementsBox" Content="Skip the game's first-start agreement screens" IsChecked="True"
+                            ToolTip.Tip="The game goes straight to the login instead of showing its agreement screens first" />
+                  <CheckBox Name="PtrLiveSettingsBox" Content="A new PTR install starts with my Live game settings" IsChecked="True"
+                            ToolTip.Tip="Resolution, graphics, sound and interface settings from Live. Off: the PTR starts with fresh settings. Copy Account Data copies them at any time." />
                   </StackPanel>
                   </Border>
                   <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">

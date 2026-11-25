@@ -139,6 +139,10 @@ public sealed class UserSettings
     public List<string> Locales { get; set; } = [];
     public bool InstallAddons { get; set; } = true;
     public bool ClearCacheOnPlay { get; set; } = true;
+    /// <summary>Skip the game's first-start agreement screens (server setting "skipGameAgreements").</summary>
+    public bool SkipGameAgreements { get; set; } = true;
+    /// <summary>A new PTR install starts with Live's game settings (server setting "ptrCopyLiveSettings").</summary>
+    public bool PtrCopyLiveSettings { get; set; } = true;
     /// <summary>Picked option per option group (login screen...); "" = none.</summary>
     public Dictionary<string, string> Options { get; set; } = [];
     /// <summary>The login screen scenes the player picked (codes from loginui.lua); null: the server's own list.</summary>
@@ -156,6 +160,8 @@ public sealed class UserSettings
     public bool RememberWindow { get; set; }
     /// <summary>The launcher turned the game's debug settings on (Debug mode), so it turns them off again later.</summary>
     public bool DebugSettingsApplied { get; set; }
+    /// <summary>The same for the PTR's install (each game version has its own Config.wtf).</summary>
+    public bool PtrDebugSettingsApplied { get; set; }
     /// <summary>The remembered window position; null until "Remember window position" has saved one.</summary>
     public double? WindowX { get; set; }
     public double? WindowY { get; set; }

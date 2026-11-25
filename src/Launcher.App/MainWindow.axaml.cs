@@ -97,6 +97,8 @@ public partial class MainWindow : Window
         WowFolderBox.TextChanged += (_, _) => { ShowPlayState(); LoadTweaks(); ShowLocales(_manifest?.Locales ?? []); };
         AddonsBox.IsChecked = _settings.InstallAddons;
         ClearCacheBox.IsChecked = _settings.ClearCacheOnPlay;
+        SkipAgreementsBox.IsChecked = _settings.SkipGameAgreements;
+        PtrLiveSettingsBox.IsChecked = _settings.PtrCopyLiveSettings;
         ReopenBox.IsChecked = _settings.ReopenAfterGame;
         RememberWindowBox.IsChecked = _settings.RememberWindow;
         BackupBox.IsChecked = _settings.BackupBeforeUpdate;
@@ -216,6 +218,8 @@ public partial class MainWindow : Window
         _settings.PtrFolder = PtrFolderBox.Text?.Trim() ?? "";
         _settings.InstallAddons = AddonsBox.IsChecked == true;
         _settings.ClearCacheOnPlay = ClearCacheBox.IsChecked == true;
+        _settings.SkipGameAgreements = SkipAgreementsBox.IsChecked == true;
+        _settings.PtrCopyLiveSettings = PtrLiveSettingsBox.IsChecked == true;
         _settings.ReopenAfterGame = ReopenBox.IsChecked == true;
         _settings.RememberWindow = RememberWindowBox.IsChecked == true;
         _settings.BackupBeforeUpdate = BackupBox.IsChecked == true;
@@ -555,7 +559,8 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------------------------------- copy / import settings
     static readonly (string Key, string Name)[] LauncherSwitches =
         [("installAddons", "AddonsBox"), ("clearCache", "ClearCacheBox"), ("reopenAfterGame", "ReopenBox"),
-         ("rememberWindow", "RememberWindowBox"), ("backupBeforeUpdate", "BackupBox")];
+         ("rememberWindow", "RememberWindowBox"), ("backupBeforeUpdate", "BackupBox"),
+         ("skipGameAgreements", "SkipAgreementsBox"), ("ptrCopyLiveSettings", "PtrLiveSettingsBox")];
 
     CheckBox Switch(string name) => this.FindControl<CheckBox>(name)!;
 
@@ -1158,10 +1163,12 @@ public partial class MainWindow : Window
         catch (Exception error) { Logger.Warning("Couldn't check for a new launcher", error); }
     }
 
-    /// <summary>The server hands out a different launcher (normally a newer one): a banner that recommends updating,
-    /// with what changed (the changelog's newest "Launcher ..." entry). Not forced: "Later" hides it until the next start.</summary>
     /// <summary>The realm id of the picked game version, for the server's per-realm rules.</summary>
     int PickedRealmId => IsPtr ? GameVersions.PtrRealmId : GameVersions.LiveRealmId;
+
+    /// <summary>The server hands out a different launcher (normally a newer one). Required (launcherUpdate policy for the
+    /// picked realm): a window in the middle with what changed and no "Later". Recommended: a banner that can be put off
+    /// until the next start, with what changed (the changelog's newest "Launcher ..." entry).</summary>
 
     void ShowLauncherUpdate(bool differs)
     {
@@ -1172,11 +1179,11 @@ public partial class MainWindow : Window
         if (required)
         {
             LauncherUpdateOverlayText.Text = Translation.T("A new launcher is needed to keep playing on this server. It takes a few seconds and keeps your settings.");
-            NewsItem? required_news = null;
-            try { required_news = SelfCheck.WhatsNew(NewsItem.Parse(FeedCache.Load(_feedFile).Changelog)); }
+            NewsItem? whatsNew = null;
+            try { whatsNew = SelfCheck.WhatsNew(NewsItem.Parse(FeedCache.Load(_feedFile).Changelog)); }
             catch (System.Text.Json.JsonException) { }
             LauncherUpdateNewsList.Children.Clear();
-            if (required_news is not null) ShowNews(LauncherUpdateNewsList, [required_news], new FeedRule(true, 1, 1));
+            if (whatsNew is not null) ShowNews(LauncherUpdateNewsList, [whatsNew], new FeedRule(true, 1, 1));
             WarningBanner.IsVisible = false;
             return;
         }
@@ -1263,6 +1270,7 @@ public partial class MainWindow : Window
         [
             ("installAddons", AddonsBox), ("clearCache", ClearCacheBox), ("reopenAfterGame", ReopenBox),
             ("rememberWindow", RememberWindowBox), ("backupBeforeUpdate", BackupBox),
+            ("skipGameAgreements", SkipAgreementsBox), ("ptrCopyLiveSettings", PtrLiveSettingsBox),
         ];
         _policy = manifest.Rules;
         // the server's default theme (or the one it enforces), kept for the next start
@@ -1991,6 +1999,8 @@ public partial class MainWindow : Window
             if (ClearCacheBox.IsChecked == true) GameFolder.ClearCache(Folder);
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
             WriteGameRealm(Folder);   // straight into the version's realm: no realm list
+            if (SkipAgreementsBox.IsChecked == true && GameVersions.SkipAgreements(Folder))
+                Log("The game's first-start agreement screens are marked as seen in WTF\\Config.wtf");
             ShareSettings(Folder);
             EnableRequiredAddons(Folder);
             ApplyLoginScenes(Folder);
@@ -2002,10 +2012,16 @@ public partial class MainWindow : Window
                 Log($"Windows compatibility mode was on for Wow.exe ({compat}); turned it off");
             await RequestPlayTicketAsync();
             bool debug = DebugMode.IsOn(Folder);
-            bool debugApplied = _settings.DebugSettingsApplied;
+            // each game version has its own Config.wtf, so each remembers whether the launcher turned its debug settings on
+            bool ptrPlay = IsPtr;
+            bool debugApplied = ptrPlay ? _settings.PtrDebugSettingsApplied : _settings.DebugSettingsApplied;
             if (DebugMode.Apply(Folder, debug, ref debugApplied))
                 Log(debug ? "Debug mode: error popups and the taint log turned on in WTF\\Config.wtf" : "Debug mode off: the game's debug settings turned off again");
-            if (debugApplied != _settings.DebugSettingsApplied) { _settings.DebugSettingsApplied = debugApplied; SaveSettings(); }
+            if (debugApplied != (ptrPlay ? _settings.PtrDebugSettingsApplied : _settings.DebugSettingsApplied))
+            {
+                if (ptrPlay) _settings.PtrDebugSettingsApplied = debugApplied; else _settings.DebugSettingsApplied = debugApplied;
+                SaveSettings();
+            }
             Process? game = GameFolder.Start(Folder, DebugMode.Arguments(debug));
             if (debug) Log("Debug mode is on: the game logs to Logs\\TemucraftDebug.log, and the ` key opens the console");
             DateTime started = DateTime.Now;

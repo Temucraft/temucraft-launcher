@@ -74,6 +74,8 @@ List<(string Name, Func<Task> Body)> tests =
     ("PTR: each version's realm goes into its own Config.wtf", PtrRealms),
     ("PTR: made from Live with linked MPQs and copies, never writing into Live", PtrInstallFromLive),
     ("PTR: account data, key bindings and addons copied from Live, with backups", PtrCopyFromLive),
+    ("Server settings skipGameAgreements and ptrCopyLiveSettings: read, enforced, and what they do", AgreementsAndPtrSettings),
+    ("PTR: a cancelled install from Live isn't taken for a game", PtrInstallCancelled),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -141,6 +143,7 @@ static Task PtrRealms()
     Check(config.Get("realmName") == "[PTR] Falric" && config.Get("realmList") == "logon.example.com" && config.Get("gxWindow") == "1", "Config.wtf has the realm");
     Check(!GameVersions.WriteRealm(wow, "[PTR] Falric", "logon.example.com"), "nothing to change the second time");
     Check(!GameVersions.WriteRealm(wow, null, "") && ConfigWtf.Load(wow).Get("realmName") == "[PTR] Falric", "unknown values leave it alone");
+    Check(GameVersions.AgreementCVars.All(c => config.Get(c) is null), "the realm alone doesn't touch the agreement screens");
     string fresh = TempDir();
     GameVersions.WriteRealm(fresh, "Temucraft", "logon.example.com");
     Check(ConfigWtf.Load(fresh).Get("realmName") == "Temucraft", "a fresh install gets a Config.wtf");
@@ -260,6 +263,86 @@ static Task PtrCopyFromLive()
     Check(SameSnapshot(before, Snapshot(live)), "Live is left exactly as it was");
     Throws<InvalidOperationException>(() => PtrCopy.CopyKeyBindings(live, Path.Combine(root, "missing"), null, "x"), "no PTR installed: refused");
     Throws<InvalidOperationException>(() => PtrCopy.CopyKeyBindings(live, live, null, "x"), "Live as the PTR: refused");
+    return Task.CompletedTask;
+}
+
+static Task AgreementsAndPtrSettings()
+{
+    // the policy: both are on/off settings the launcher knows; enforced = the server's value, else the player's choice
+    LauncherPolicy none = LauncherPolicy.From(null);
+    Check(none.Effective("skipGameAgreements", true) && !none.Effective("ptrCopyLiveSettings", false), "no policy: the player's choice");
+    LauncherPolicy p = Manifest.Parse("""
+        {"files": [], "policy": {"skipGameAgreements": {"value": false, "enforce": true}, "ptrCopyLiveSettings": {"value": true, "enforce": false},
+                                 "_comment": "a note"}}
+        """).Rules;
+    Check(p.Unknown.Count == 0, "known settings: " + string.Join(", ", p.Unknown));
+    Check(LauncherPolicy.OnOff.Contains("skipGameAgreements") && LauncherPolicy.OnOff.Contains("ptrCopyLiveSettings"), "on/off switches");
+    Check(p.EnforcedBool("skipGameAgreements") == false && !p.Effective("skipGameAgreements", true), "enforced off wins over the player's on");
+    Check(p.EnforcedBool("ptrCopyLiveSettings") is null && !p.Effective("ptrCopyLiveSettings", false) && p.Effective("ptrCopyLiveSettings", true),
+          "a recommendation leaves the player's choice");
+    Check(LauncherPolicy.From(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(
+        """{"ptrCopyLiveSettings": {"value": "on", "enforce": true}}""")).Effective("ptrCopyLiveSettings", false), "\"on\" enforced");
+
+    // skipGameAgreements: the four first-start screens marked as seen, the rest of Config.wtf kept
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "WTF"));
+    File.WriteAllLines(Path.Combine(wow, "WTF", "Config.wtf"), ["SET readEULA \"0\"", "SET gxWindow \"1\""]);
+    Check(GameVersions.SkipAgreements(wow), "written");
+    ConfigWtf config = ConfigWtf.Load(wow);
+    Check(GameVersions.AgreementCVars.All(c => config.Get(c) == "1") && config.Get("gxWindow") == "1", "all four seen, the rest kept");
+    Check(!GameVersions.SkipAgreements(wow), "nothing to change the second time");
+    string fresh = TempDir();
+    Check(GameVersions.SkipAgreements(fresh) && ConfigWtf.Load(fresh).Get("readTOS") == "1", "a fresh install gets a Config.wtf");
+
+    // ptrCopyLiveSettings: a new PTR gets Live's settings it doesn't have; its own realm, debug and launcher-written lines stay
+    string root = TempDir(), live = Path.Combine(root, "Live"), ptr = Path.Combine(root, "Live PTR");
+    Directory.CreateDirectory(Path.Combine(live, "WTF"));
+    File.WriteAllLines(Path.Combine(live, "WTF", "Config.wtf"), ["SET realmName \"Temucraft\"", "SET realmList \"logon.example.com\"",
+        "SET gxResolution \"1920x1080\"", "SET farclip \"777\"", "SET Sound_MasterVolume \"0.3\"", "SET scriptErrors \"1\"", "SET accountName \"PLAYER\""]);
+    Dictionary<string, string> before = Snapshot(live);
+    Check(!GameVersions.SeedConfigFromLive(Path.Combine(root, "none"), ptr), "no Live settings: nothing");
+    Directory.CreateDirectory(Path.Combine(ptr, "WTF"));
+    File.WriteAllLines(Path.Combine(ptr, "WTF", "Config.wtf"), ["SET realmName \"[PTR] Falric\"", "SET farclip \"1277\""]);   // written by the launcher before the first PLAY
+    Check(GameVersions.SeedConfigFromLive(live, ptr), "seeded");
+    ConfigWtf seeded = ConfigWtf.Load(ptr);
+    Check(seeded.Get("gxResolution") == "1920x1080" && seeded.Get("Sound_MasterVolume") == "0.3" && seeded.Get("accountName") == "PLAYER", "Live's settings");
+    Check(seeded.Get("realmName") == "[PTR] Falric" && seeded.Get("realmList") is null && seeded.Get("scriptErrors") is null, "realm and debug lines are the PTR's own");
+    Check(seeded.Get("farclip") == "1277", "what the PTR already had stays");
+    Check(!GameVersions.SeedConfigFromLive(live, ptr), "once only: the PTR is set up now");
+    // Copy Account Data: every Live setting (but the realm and debug lines), the PTR's old file backed up first
+    void SetPtr(string name, string value) { ConfigWtf c = ConfigWtf.Load(ptr); c.Set(name, value); c.Save(); }
+    SetPtr("Sound_MasterVolume", "1.0");
+    List<string> kept = [];
+    Check(GameVersions.SeedConfigFromLive(live, ptr, force: true, keep: kept.Add), "copied on request");
+    seeded = ConfigWtf.Load(ptr);
+    Check(seeded.Get("farclip") == "777" && seeded.Get("Sound_MasterVolume") == "0.3" && seeded.Get("realmName") == "[PTR] Falric", "Live's values replace the PTR's");
+    Check(kept.SequenceEqual([Path.Combine(ptr, "WTF", "Config.wtf")]), "the PTR's file is backed up first");
+    Check(!GameVersions.SeedConfigFromLive(live, ptr, force: true), "the same values: nothing to copy");
+    Check(SameSnapshot(before, Snapshot(live)), "Live is left exactly as it was");
+
+    // Copy Account Data keeps copying the game settings (an explicit button), with the old Config.wtf in its backup
+    foreach (string f in new[] { live, ptr }) { Directory.CreateDirectory(Path.Combine(f, "Data")); File.WriteAllText(Path.Combine(f, "Wow.exe"), "exe"); }
+    SetPtr("farclip", "300");
+    PtrCopy.Result data = PtrCopy.CopyAccountData(live, ptr, "Temucraft", "[PTR] Falric");
+    Check(ConfigWtf.Load(ptr).Get("farclip") == "777" && data.Files >= 1, "Copy Account Data copies the game settings");
+    Check(data.BackupFolder is { } backup && ConfigWtf.LoadFile(Path.Combine(backup, "WTF", "Config.wtf")).Get("farclip") == "300", "and keeps the PTR's old ones in its backup");
+    return Task.CompletedTask;
+}
+
+static Task PtrInstallCancelled()
+{
+    string root = TempDir(), live = Path.Combine(root, "Temucraft"), ptr = GameVersions.DefaultPtrFolder(live);
+    foreach (string f in new[] { "Wow.exe", Path.Combine("Data", "common.MPQ"), Path.Combine("Data", "patch-A.MPQ"), "Battle.net.dll" })
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(live, f))!);
+        File.WriteAllText(Path.Combine(live, f), f);
+    }
+    using CancellationTokenSource cts = new();
+    // stopped after the first file: Wow.exe comes last, so the half-made PTR isn't a game yet
+    Throws<OperationCanceledException>(() => PtrInstall.Prepare(live, ptr, status: new SyncProgress(_ => cts.Cancel()), token: cts.Token), "cancelled");
+    Check(!GameFolder.LooksLikeClient(ptr), "a half-made PTR isn't taken for a game");
+    PtrInstall.Result done = PtrInstall.Prepare(live, ptr);
+    Check(GameFolder.LooksLikeClient(ptr) && done.Linked + done.Copied == 3, $"made from Live again: {done.Linked} + {done.Copied}");
     return Task.CompletedTask;
 }
 
@@ -1838,4 +1921,10 @@ sealed class FakeGitHub : HttpMessageHandler
             ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) }
             : new HttpResponseMessage(HttpStatusCode.Forbidden));
     }
+}
+
+/// <summary>Reports at once, on the same thread (Progress&lt;T&gt; posts later).</summary>
+sealed class SyncProgress(Action<string> report) : IProgress<string>
+{
+    public void Report(string value) => report(value);
 }

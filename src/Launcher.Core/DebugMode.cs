@@ -13,6 +13,9 @@ public static class DebugMode
 
     static readonly (string CVar, string Value)[] CVars = [("scriptErrors", "1"), ("taintLog", "2")];
 
+    /// <summary>The Config.wtf settings debug mode turns on (each game version keeps its own).</summary>
+    public static IEnumerable<string> CVarNames => CVars.Select(c => c.CVar);
+
     /// <summary>On when the option's file is in the game folder (works before the launcher has talked to the server).</summary>
     public static bool IsOn(string wowFolder) => File.Exists(Path.Combine(wowFolder, Marker));
 
