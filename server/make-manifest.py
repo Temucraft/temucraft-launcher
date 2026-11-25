@@ -19,6 +19,13 @@ Folder layout (FILES_DIR is the folder SERVER_URL points at):
                                       "links": {"GitHub": "https://..."}};
                                       an option in "order" with no folder installs nothing ("On" / "Off" fixes)
         client-version.txt            the client version shown in the launcher (e.g. "Temucraft 1.0.0")
+        realm-name.txt                the realm the launcher logs into (optional; else the realm list's)
+        ptr/                          the PTR (test realm): its own manifest.json, built by running this script on
+                                      FILES_DIR/ptr (upload.py ptr does), listing only the files that differ from
+                                      Live (ptr/client/, ptr/patches/, ptr/locales/... as above), plus optional
+                                      ptr/addons.json (PTR-only addons), ptr/realm-name.txt and ptr/client-version.txt.
+                                      The launcher puts these over the Live manifest for its PTR install. This script
+                                      never lists ptr/ in the Live manifest.
         launcher-policy.json          ("_comment" notes allowed) the server's say over launcher settings: {"installAddons": {"value": true,
                                       "enforce": true}, "tweaks": {"farclip": {"value": 1277, "enforce": true}}, ...};
                                       see the launcher's README; options/<Group>/group.json may say "enforce": true too
@@ -267,6 +274,12 @@ def build(files_dir, realmlist, cache):
         if not isinstance(policy, dict):
             sys.exit("launcher-policy.json must be an object: {\"setting\": {\"value\": ..., \"enforce\": true}, ...}")
         manifest["policy"] = policy   # passed through as it is: the launcher knows the names (unknown ones are skipped)
+    # realm-name.txt: the realm the launcher logs this game version into (SET realmName in Config.wtf, so the game
+    # skips the realm list), e.g. "[PTR] Falric" in ptr/; left out, the launcher takes it from the realm list
+    realm_file = os.path.join(files_dir, "realm-name.txt")
+    if os.path.isfile(realm_file):
+        with open(realm_file, encoding="utf-8-sig") as f:
+            manifest["realmName"] = f.read().strip()
     version_file = os.path.join(files_dir, "client-version.txt")
     if os.path.isfile(version_file):
         with open(version_file) as f:

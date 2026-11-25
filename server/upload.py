@@ -9,6 +9,9 @@ Uploader: puts your release files and server builds on the VPS over SSH (SFTP), 
                                                 # launcher/, news.json, changelog.json, addons.json, client-version.txt
     python3 upload.py server <local folder>     # a server build (worldserver, authserver, configs, data...)
     python3 upload.py manifest                  # only rebuild manifest.json on the VPS
+    python3 upload.py ptr    <local folder>     # the PTR (test realm): "5) Release\\ptr" goes to the served folder's
+                                                # ptr/ (only the files that differ from Live), then ptr/manifest.json
+                                                # is rebuilt there; `files` never touches ptr/
 
 Only new or changed files are sent (size and modified time are compared; a changed file is written to a temporary
 name and renamed when complete, so players never download half a file). A file cut off by a dropped connection or
@@ -272,7 +275,8 @@ def put(client, sftp, path, target, size, already, openssh=None):
         already = 0
 
 
-def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None, delete_under=()):
+def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None, delete_under=(), skip_top=()):
+    """skip_top: top folders of `local` and `remote` left out completely (not sent, not listed, never deleted)."""
     sftp = client.open_sftp()
     if openssh and not dry:
         print("Sending big files with the system's sftp (OpenSSH), small ones over the open connection.")
@@ -281,6 +285,7 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
     if have is None:
         print("  (the server's find can't list it in one go; listing folder by folder)", flush=True)
         have = remote_files(sftp, remote)
+    have = {rel: v for rel, v in have.items() if rel.split("/")[0] not in skip_top}
     print(f"  {len(have)} file(s) there. Comparing with {local}...", flush=True)
     checked = 0
     made, sent, total = set(), 0, 0
@@ -288,7 +293,7 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
     pending = []
     for root, dirs, files in os.walk(local):
         # base/ (the full client, only for new players) goes last, so the files every player needs arrive first
-        dirs[:] = sorted((d for d in dirs if not d.startswith(".")),
+        dirs[:] = sorted((d for d in dirs if not d.startswith(".") and not (root == local and d in skip_top)),
                          key=lambda d: (root == local and d == "base", d))
         for name in files:
             if name.startswith(".") or name.endswith((".part", ".tmp")):
@@ -346,11 +351,16 @@ def sync(client, local, remote, delete, dry, skip=(), server=False, openssh=None
           f" {removed} deleted" + (" [dry run]" if dry else ""))
 
 
-def manifest(client, env, dry):
+PTR_DIR = "ptr"   # the PTR's channel: a folder of the served folder, with its own manifest.json
+
+
+def manifest(client, env, dry, channel=None):
     files_dir = env.get("REMOTE_FILES_DIR")
     if not files_dir:
         sys.exit("upload.env has no REMOTE_FILES_DIR.")
     tool = env.get("REMOTE_MANIFEST_TOOL", posixpath.join(files_dir, "..", "make-manifest.py"))
+    if channel:
+        files_dir = posixpath.join(files_dir, channel)
     # the server's manifest tool is kept the same version as this one (it knows the launcher's newest settings)
     local_tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "make-manifest.py")
     print(f"Updating {tool} on the server...", flush=True)
@@ -358,7 +368,7 @@ def manifest(client, env, dry):
         sftp = client.open_sftp()
         sftp.put(local_tool, tool)
         sftp.close()
-    print("Rebuilding manifest.json on the server (new or changed files are hashed)...", flush=True)
+    print(f"Rebuilding {posixpath.join(channel, 'manifest.json') if channel else 'manifest.json'} on the server (new or changed files are hashed)...", flush=True)
     command = f"python3 {shlex.quote(tool)} {shlex.quote(files_dir)}"
     if env.get("REALMLIST"):
         command += f" --realmlist {shlex.quote(env['REALMLIST'])}"
@@ -367,7 +377,7 @@ def manifest(client, env, dry):
 
 def main():
     parser = argparse.ArgumentParser(description="Upload release files, developer tools (dev, never served) or a server build to the VPS.")
-    parser.add_argument("what", choices=["files", "server", "manifest", "dev"])
+    parser.add_argument("what", choices=["files", "ptr", "server", "manifest", "dev"])
     parser.add_argument("folder", nargs="?")
     parser.add_argument("--env", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "upload.env"))
     parser.add_argument("--delete", action="store_true", help="remove files on the VPS that are gone locally")
@@ -393,9 +403,20 @@ def main():
             sync(client, args.folder, remote, args.delete, args.dry_run, openssh=openssh_command(env))
             return
         if args.what == "files":
+            # ptr/ is the PTR's own channel (upload.py ptr): never sent or deleted from here
             sync(client, args.folder, env["REMOTE_FILES_DIR"], args.delete, args.dry_run, skip={"manifest.json"},
-                 openssh=openssh_command(env), delete_under=() if args.keep_old_options else ("options",))
+                 openssh=openssh_command(env), delete_under=() if args.keep_old_options else ("options",), skip_top={PTR_DIR})
             manifest(client, env, args.dry_run)
+        elif args.what == "ptr":
+            if os.path.basename(os.path.normpath(args.folder)).lower() != PTR_DIR:
+                sys.exit(f'Give the PTR folder itself (e.g. "F:\\TemuCraft Server\\5) Release\\{PTR_DIR}").')
+            if os.path.isdir(os.path.join(args.folder, PTR_DIR)) or os.path.isdir(os.path.join(args.folder, "base")):
+                sys.exit("That looks like the whole release folder, not its ptr/ folder.")
+            remote = posixpath.join(env["REMOTE_FILES_DIR"], PTR_DIR)
+            # like files: options/ that are gone locally go on the server too (--delete removes the rest)
+            sync(client, args.folder, remote, args.delete, args.dry_run, skip={"manifest.json"},
+                 openssh=openssh_command(env), delete_under=() if args.keep_old_options else ("options",))
+            manifest(client, env, args.dry_run, channel=PTR_DIR)
         else:
             if not env.get("REMOTE_SERVER_DIR"):
                 sys.exit("upload.env has no REMOTE_SERVER_DIR.")
