@@ -1548,6 +1548,9 @@ public partial class MainWindow : Window
         bool install = (NoGameYet || Folder.Length == 0) && _server is not null;
         PlayButton.Content = install ? "INSTALL" : _pendingFiles > 0 ? "UPDATE" : "PLAY";
         PlayButton.Classes.Set("update", install || _pendingFiles > 0);
+        // Debug mode (Mods page, on by default): said above the button so nobody plays with it on without knowing
+        DebugEnabledText.Text = Translation.T("Debug is enabled");
+        DebugEnabledText.IsVisible = !install && Folder.Length > 0 && DebugMode.IsOn(Folder);
     }
 
     async Task InstallAsync(ServerClient client, IReadOnlyList<PlannedFile> outdated, string? wowFolder, CancellationToken token)

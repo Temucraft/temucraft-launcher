@@ -196,6 +196,9 @@
           <Button Name="CancelButton" Content="Cancel" IsVisible="False" Click="OnCancel" />
         </StackPanel>
         <StackPanel Grid.Column="2">
+          <TextBlock Name="DebugEnabledText" Text="Debug is enabled" IsVisible="False" HorizontalAlignment="Center" FontSize="12"
+                     FontWeight="SemiBold" Foreground="{DynamicResource T.accent}" Margin="0,0,0,4"
+                     ToolTip.Tip="Debug mode is on (Mods page): the game logs every interface error to Logs\TemucraftDebug.log, shows error popups and opens its console with the ` key. Copy diagnostics adds the logs. Turn it off on the Mods page." />
           <Button Name="PlayButton" Classes="play" Content="PLAY" Click="OnPlay" />
           <Button Name="ReportBugButton" Classes="link" HorizontalAlignment="Right" FontSize="12" Margin="0,4,0,0" Click="OnReportBug"
                   ToolTip.Tip="Report bug: copies a short report about your game files and the last log lines to paste in your message" />
