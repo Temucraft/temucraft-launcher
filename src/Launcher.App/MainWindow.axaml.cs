@@ -1997,6 +1997,13 @@ public partial class MainWindow : Window
             await CheckAsync(download: true);
             return;
         }
+        // The PTR realm must be up: when the game can't find its realm it logs into another one (Live), with the PTR's
+        // client files. The realm list from the website says whether it is up; when it can't be read, PLAY goes ahead.
+        if (IsPtr && GameVersions.PtrRealmDown(_ptrManifest, _policy, _realmStatus) is { } down)
+        {
+            Status(string.Format(Translation.T("The PTR realm ({0}) is offline right now, so the game would log you into Live with the PTR's files. Try again when it's back up."), down));
+            return;
+        }
         // Shift + left click: debug mode for this game only (asked the first time); nothing to do when it's on anyway
         bool oneOffDebug = shift && !DebugMode.IsOn(Folder);
         if (oneOffDebug && !await AskDebugPlayAsync()) return;
@@ -2051,8 +2058,16 @@ public partial class MainWindow : Window
             }
             _gameRunning = false;
             Log($"The game closed (exit code {game.ExitCode})");
+            // a crash report written while it ran: say so, and where (Copy diagnostics adds the newest ones)
+            List<string> crashes = CrashReports.Since(Folder, started);
+            if (crashes.Count > 0)
+            {
+                if (_settings.OnGameLaunch is "minimize" or "hide") BringBack();
+                Logger.Warning($"The game crashed: {string.Join(", ", crashes.Select(Path.GetFileName))}");
+                Status(string.Format(Translation.T("The game crashed. Its crash report is in the game's Errors folder ({0}). Press Copy diagnostics on the Launcher page and send it to the server's admin: it has the report in it."), Path.GetFileName(crashes[0])));
+            }
             if (oneOffDebug) EndOneOffDebug();
-            if (game.ExitCode != 0 && DateTime.Now - started < TimeSpan.FromSeconds(90))
+            if (crashes.Count == 0 && game.ExitCode != 0 && DateTime.Now - started < TimeSpan.FromSeconds(90))
             {
                 // closed with an error right after starting: most often an extra under Mods, or a broken file
                 if (_settings.OnGameLaunch is "minimize" or "hide") BringBack();

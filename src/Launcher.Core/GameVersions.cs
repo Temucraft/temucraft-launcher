@@ -110,6 +110,17 @@ public static class GameVersions
         return DefaultPtrRealm;
     }
 
+    /// <summary>The PTR realm's name when the realm list says it is offline or doesn't list it at all; null when it is up
+    /// or when there is no realm list to ask (then nobody can tell).</summary>
+    public static string? PtrRealmDown(Manifest? ptr, LauncherPolicy policy, RealmStatus? realms)
+    {
+        if (realms is null || realms.Realms.Count == 0) return null;
+        string name = PtrRealmName(ptr, policy, realms);
+        RealmInfo? realm = realms.Realms.FirstOrDefault(r => string.Equals(r.Name.Trim(), name, StringComparison.OrdinalIgnoreCase))
+                           ?? realms.Realms.FirstOrDefault(r => r.Id == PtrRealmId);
+        return realm is { Online: true } ? null : name;
+    }
+
     /// <summary>
     /// Writes the realm the game goes to into the install's WTF\Config.wtf: SET realmName (the game then logs straight
     /// into that realm, no realm list) and SET realmList (the login server). Null or empty values are left as they are.

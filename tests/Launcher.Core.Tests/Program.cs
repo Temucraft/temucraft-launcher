@@ -128,6 +128,10 @@ static Task PtrRealms()
     Check(GameVersions.LiveRealmName(null, none, realms) == "Temucraft", "Live from the realm list");
     Check(GameVersions.PtrRealmName(null, none, realms) == "[PTR] Falric Test", "PTR is realm 3 of the realm list");
     Check(GameVersions.PtrRealmName(null, none, null) == "[PTR] Falric", "PTR default");
+    Check(GameVersions.PtrRealmDown(null, none, realms) is null, "PTR up: PLAY goes ahead");
+    Check(GameVersions.PtrRealmDown(null, none, RealmStatus.Parse("""{"realms":[{"id":1,"name":"Temucraft","online":true},{"id":3,"name":"[PTR] Falric","online":false}]}""")) == "[PTR] Falric", "PTR offline: PLAY stops");
+    Check(GameVersions.PtrRealmDown(new Manifest { RealmName = "[PTR] Falric" }, none, RealmStatus.Parse("""{"realms":[{"id":1,"name":"Temucraft","online":true}]}""")) == "[PTR] Falric", "PTR not listed: PLAY stops");
+    Check(GameVersions.PtrRealmDown(null, none, null) is null, "no realm list: can't tell, PLAY goes ahead");
     Check(GameVersions.LiveRealmName(null, none, null) is null, "Live unknown without a list");
     Check(GameVersions.LiveRealmName(null, none, RealmStatus.Parse("""{"realms":[{"id":2,"name":"A"},{"id":4,"name":"B"}]}""")) is null, "two realms, no id 1: not guessed");
     LauncherPolicy set = LauncherPolicy.From(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(

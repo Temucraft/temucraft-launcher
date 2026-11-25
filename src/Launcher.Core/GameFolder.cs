@@ -350,4 +350,28 @@ public static class SelfCheck
             return true;
         return await Hashing.Sha256Async(CurrentExe, token: token) == manifest.Launcher.Sha256;
     }
+
+}
+
+/// <summary>The game's crash reports, for the message after a crash.</summary>
+public static class CrashReports
+{
+    /// <summary>The crash reports the game (Errors\*Crash.txt) and TemucraftCrash (Errors\Temucraft-*.txt) wrote since
+    /// <paramref name="since"/>, newest first.</summary>
+    public static List<string> Since(string wowFolder, DateTime since)
+    {
+        string errors = Path.Combine(wowFolder, "Errors");
+        if (!Directory.Exists(errors)) return [];
+        try
+        {
+            return Directory.EnumerateFiles(errors, "*.txt")
+                .Where(f => Path.GetFileName(f).Contains("Crash", StringComparison.OrdinalIgnoreCase)
+                            || Path.GetFileName(f).StartsWith("Temucraft-", StringComparison.OrdinalIgnoreCase))
+                .Where(f => File.GetLastWriteTime(f) >= since.AddSeconds(-2))
+                .OrderByDescending(File.GetLastWriteTime)
+                .ToList();
+        }
+        catch (IOException) { return []; }
+        catch (UnauthorizedAccessException) { return []; }
+    }
 }
