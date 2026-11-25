@@ -19,6 +19,8 @@ public static class GameVersions
     /// <summary>The PTR realm when neither the server nor the realm list names it (realm id <see cref="PtrRealmId"/>).</summary>
     public const string DefaultPtrRealm = "[PTR] Falric";
     public const int PtrRealmId = 3;
+    /// <summary>The Live realm's id (for per-realm server rules such as launcherUpdate).</summary>
+    public const int LiveRealmId = 1;
 
     public static bool IsPtr(string? version) => string.Equals(version, Ptr, StringComparison.OrdinalIgnoreCase);
 

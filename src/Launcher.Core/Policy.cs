@@ -46,7 +46,8 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// settings (d3d9.samplerAnisotropy...) go to dxvk.conf</item>
 /// <item>downloadLimit: the most KB/s each player may download at (0 or -1: no cap); players can set a lower limit</item>
 /// <item>launcherUpdate: "required" (the default: a new launcher is installed before anything else) or "recommended"
-/// (a banner the player can put off)</item>
+/// (a banner the player can put off), for all realms, or per realm id:
+/// {"required": [1, 2, 3], "recommended": [4, 5, 6], "default": "required"}</item>
 /// <item>liveRealmName / ptrRealmName: the realm each game version logs into (when realm-name.txt doesn't say)</item>
 /// <item>theme: the launcher's theme ("temucraft", "wotlk"...) and themeMode: "dark" or "light"</item>
 /// </list>
@@ -120,8 +121,30 @@ public sealed class LauncherPolicy
     public long DownloadLimitKBps => Setting("downloadLimit")?.Int is int kb and > 0 ? kb : 0;
 
     /// <summary>Whether a new launcher is installed before anything else (the default), or only recommended.</summary>
-    public bool LauncherUpdateFirst => Setting("launcherUpdate") is not { } rule
-        || !(rule.Bool == false || string.Equals(rule.Strings.FirstOrDefault(), "recommended", StringComparison.OrdinalIgnoreCase));
+    public bool LauncherUpdateFirst => LauncherUpdateRequired(0);
+
+    /// <summary>
+    /// The same, for the realm the player picked (Live or the PTR). launcherUpdate's value is either one word for every
+    /// realm ("required" / "recommended", or true / false), or per realm:
+    /// <c>{"required": [1, 2, 3], "recommended": [4, 5, 6], "default": "required"}</c> (realm ids; a realm in neither
+    /// list follows "default", which is "required" when left out). realmId 0 = no realm known: the default.
+    /// </summary>
+    public bool LauncherUpdateRequired(int realmId)
+    {
+        if (Setting("launcherUpdate") is not { } rule) return true;
+        JsonElement v = rule.Value;
+        if (v.ValueKind == JsonValueKind.Object)
+        {
+            static bool Has(JsonElement list, int id) => list.ValueKind == JsonValueKind.Array && list.EnumerateArray().Any(e =>
+                (e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out int n) && n == id) ||
+                (e.ValueKind == JsonValueKind.String && int.TryParse(e.GetString(), CultureInfo.InvariantCulture, out int m) && m == id));
+            if (realmId > 0 && v.TryGetProperty("required", out JsonElement req) && Has(req, realmId)) return true;
+            if (realmId > 0 && v.TryGetProperty("recommended", out JsonElement rec) && Has(rec, realmId)) return false;
+            return !(v.TryGetProperty("default", out JsonElement def) && def.ValueKind == JsonValueKind.String
+                     && string.Equals(def.GetString(), "recommended", StringComparison.OrdinalIgnoreCase));
+        }
+        return !(rule.Bool == false || string.Equals(rule.Strings.FirstOrDefault(), "recommended", StringComparison.OrdinalIgnoreCase));
+    }
 
     public IEnumerable<KeyValuePair<string, PolicyRule>> EnforcedTweaks => Tweaks.Where(t => t.Value.Enforce);
 

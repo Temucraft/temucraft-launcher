@@ -726,7 +726,7 @@ public partial class MainWindow : Window
         if (!launcherOk) Log("Self-check: this launcher differs from the server's copy");
         bool firstCheck = !_launcherChecked;
         _launcherChecked = true;
-        if (!launcherOk && manifest.Launcher is not null && manifest.Rules.LauncherUpdateFirst && firstCheck)
+        if (!launcherOk && manifest.Launcher is not null && manifest.Rules.LauncherUpdateRequired(PickedRealmId) && firstCheck)
         {
             // the server wants the new launcher first: get it now, then start it (nothing else runs before)
             Status("Updating the launcher first…");
@@ -1160,11 +1160,14 @@ public partial class MainWindow : Window
 
     /// <summary>The server hands out a different launcher (normally a newer one): a banner that recommends updating,
     /// with what changed (the changelog's newest "Launcher ..." entry). Not forced: "Later" hides it until the next start.</summary>
+    /// <summary>The realm id of the picked game version, for the server's per-realm rules.</summary>
+    int PickedRealmId => IsPtr ? GameVersions.PtrRealmId : GameVersions.LiveRealmId;
+
     void ShowLauncherUpdate(bool differs)
     {
         // required by the server (launcherUpdate policy): in the middle of the window, no "Later";
         // recommended: the banner at the top that can be put off
-        bool required = differs && (_manifest?.Rules.LauncherUpdateFirst ?? false);
+        bool required = differs && (_manifest?.Rules.LauncherUpdateRequired(PickedRealmId) ?? false);
         LauncherUpdateOverlay.IsVisible = required;
         if (required)
         {
