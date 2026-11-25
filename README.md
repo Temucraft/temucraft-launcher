@@ -25,7 +25,10 @@ the repository or in the exe.
 - Locales: tick the languages you want; their files go to `Data\<locale>\`.
 - Addons: the server's addons go to `Interface\AddOns\` (can be turned off).
 - Self-check: compares itself with the launcher on the server and warns when it differs (outdated or changed).
-- Play: clears the client's `Cache` folder (optional) and starts `Wow.exe`.
+- Play: clears the client's `Cache` folder (optional), writes the picked game version's realm into `WTF\Config.wtf`
+  (so the game skips the realm list), skips the game's first-start agreement screens (optional) and starts `Wow.exe`.
+- Live and PTR: "Game version" above PLAY picks Live or the PTR (the test realm), each with its own install, addons
+  and settings (see Live and PTR below).
 - The password can be saved in the operating system's password store (Windows Credential Manager, also under Wine;
   the macOS Keychain; on Linux the desktop keyring through `secret-tool`); nothing secret is written to a file.
 
@@ -44,8 +47,9 @@ The window has six pages:
 - **Options**: the server's switchable fixes and cosmetic patches (`options/<Group>/<Option>/...`), one pick per group;
   everything the game needs goes in `patches/` and is always installed; untracked patches in Data that neither the
   client nor the server hand out, with remove.
-- **Settings**: account, game folder (and installing the game into an empty one), languages, game settings (the
-  server's addons, clearing the Cache), backups (WTF and AddOns zipped before each update and on request, restore),
+- **Settings**: account, game folder (and installing the game into an empty one), the PTR's folder with Copy Account
+  Data and Copy Key Bindings, languages, game settings (the server's addons, clearing the Cache, skipping the game's
+  first-start agreement screens, whether a new PTR starts with your Live game settings), backups (WTF and AddOns zipped before each update and on request, restore),
   macros and key bindings export/import, verify game files.
 - **Launcher**: the launcher's own settings (reopen after WoW closes, remember the window, background picture), its
   version and the log.
@@ -77,8 +81,10 @@ recommendation (and as the value outright where the launcher has no box for it).
 | Name | Value | What it does |
 |---|---|---|
 | `installAddons`, `clearCache`, `reopenAfterGame`, `rememberWindow`, `backupBeforeUpdate` | true / false | the launcher's switches |
+| `skipGameAgreements` | true / false | skip the game's first-start agreement screens (on by default) |
+| `ptrCopyLiveSettings` | true / false | a new PTR install starts with the player's Live `WTF\Config.wtf` settings (resolution, graphics, sound, interface; on by default); false: fresh settings, like a new install. Copy Account Data copies them whatever this says (it's an explicit button). |
 | `largeAddressAware` | true / false | Wow.exe's 4 GB switch; enforced, it's set again after every update |
-| `launcherUpdate` | "required" / "recommended" | A new launcher: installed before anything else (the default), or only a banner |
+| `launcherUpdate` | "required" / "recommended", or per realm | A new launcher: installed before anything else (the default; a window in the middle, "There's an update"), or only a banner at the top the player can put off. Per realm id: `{"required": [1, 2], "recommended": [3], "default": "required"}`; a realm in neither list follows `default` (`required` when left out). The realm is the picked game version's: 1 for Live, 3 for the PTR. |
 | `backupsToKeep` | a number | how many backups the launcher keeps |
 | `defaultLocale` | e.g. `"enUS"` | the server's default language (its base client's): always installed, ticked and greyed out; `enUS` when not set. The game's own language is always kept too. |
 | `requiredLocales` | e.g. `["deDE"]` | extra languages everyone gets (players can still add more) |
@@ -106,6 +112,9 @@ against the free space on that drive.
 **Downloads** are at full speed unless the player sets a limit (Launcher page) or the server caps them
 (`downloadLimit`). "Test my speed" measures the speed to the server for a few seconds and suggests a limit (80% of it).
 The status line shows each file as "(12/188)", the speed and the time left; sizes read as "16.6 GB (17029.3 MB)".
+Two bars show the progress: the file being downloaded (only while an update has more than one file) and, under it,
+the whole update, each with its percentage. On Windows the launcher's taskbar button shows the whole update's
+progress too.
 
 **The computer stays awake** while the launcher downloads, installs or checks files, so a long download goes on
 with the screen locked or off (Windows: SetThreadExecutionState; macOS: caffeinate; Linux: systemd-inhibit). It may
@@ -115,9 +124,11 @@ sleep again as soon as the job ends.
 hours, and never while the game is running.
 
 **Launcher updates.** When the server hands out a different launcher (`publish.sh` puts the new one in the files
-folder), a banner recommends updating and shows the changelog's newest "Launcher ..." entry. "Update the launcher"
-downloads it (checked against the manifest), swaps it with the running one and restarts; "Later" hides the banner
-until the next start. It is never forced.
+folder), what happens follows `launcherUpdate` for the realm of the picked game version. Required (the default): the
+new launcher is downloaded before anything else, and a window in the middle ("There's an update") shows the
+changelog's newest "Launcher ..." entry with "Update the launcher" and no "Later". Recommended: a banner at the top
+shows the same; "Later" hides it until the next start. "Update the launcher" downloads it (checked against the
+manifest), swaps it with the running one and restarts.
 
 ## Play tickets: the game only through the launcher
 
@@ -150,11 +161,23 @@ server can do the same between PCs: `mod-temucraft-account-wide` (`Temucraft.Acc
 
 ## Live and PTR (the test realm)
 
-"Game version" above PLAY picks Live or the PTR (remembered). Each has its own install: the PTR's folder is on the
-Game files page (the Live folder's name + " PTR" unless you pick another). INSTALL on the PTR makes it from the Live
-game: the MPQs under `Data` are hard linked when both folders are on the same drive (no extra space; the launcher only
-ever moves new files over them, so Live's copies are never changed), everything else is copied, and `WTF`,
-`Interface\AddOns`, `Cache`, `Logs` and `Screenshots` are left out (fresh settings, no addons). The PTR's file list is
+"Game version" above PLAY picks Live or the PTR (remembered); updates, Tweaks, Addons, Mods and PLAY then work on that
+install. Each has its own install: the PTR's folder is on the Settings page (the Live folder's name + " PTR" unless you
+pick another; never the Live folder or a folder inside it). INSTALL on the PTR makes it from the Live game: the MPQs
+under `Data` (and the kept option files) are hard linked when both folders are on the same drive (no extra space; the
+launcher only ever moves new files over them, never writes into one, so Live's copies are never changed). On another
+drive, or a file system without hard links, they are copied instead (needing the space twice). Everything else is
+copied, `Wow.exe` last (a cancelled install is made from Live again next time, not downloaded), and `WTF`,
+`Interface\AddOns`, `Cache`, `Logs` and `Screenshots` are left out (no addons). Nothing is ever written into the Live
+folder, except "Also install on Live" when the player asks for it.
+
+A new PTR starts with the Live game's settings from `WTF\Config.wtf` (resolution, graphics, sound, interface, saved
+account name) the first time it is played, while the PTR has never been set up: only settings the PTR doesn't have yet
+are added, and the realm and debug mode lines stay the PTR's own. "A new PTR install starts with my Live game settings"
+(Settings page, policy `ptrCopyLiveSettings`) turned off gives it fresh settings instead, like a new install.
+
+Addons are per version: each install has its own `Interface\AddOns` and its own list of what the launcher installed
+from the server's addon list (and at which commit), so an update on one never touches the other. The PTR's file list is
 the Live manifest with the server's `ptr/manifest.json` over it (only the files that differ from Live, downloaded from
 `ptr/`); its addon list is `addons.json` with `ptr/addons.json` over it (PTR-only addons get "Also install on Live").
 The game never shows a realm list: before it starts, the launcher writes `SET realmName` and `SET realmList` into that
@@ -164,10 +187,27 @@ else the realm status's only non-PTR realm (id 1 when there are several). The PT
 
 Copying from Live (only the PTR folder is written; whatever it replaces is kept in the PTR's `_Temucraft\Backups`):
 "Copy my addons from Live" (Addons page, PTR only: `Interface\AddOns` and the addons' `SavedVariables`), "Copy Account
-Data" (`config-cache.wtf`, `macros-cache.txt`, `SavedVariables`, and each character's files) and "Copy Key Bindings"
-(`bindings-cache.wtf`, per account and per character), both on the Game files page. Characters go from the Live
+Data" (the game settings in `WTF\Config.wtf` but the realm and debug lines, whatever `ptrCopyLiveSettings` says;
+`config-cache.wtf`, `macros-cache.txt`, `SavedVariables`, and each character's files) and "Copy Key Bindings"
+(`bindings-cache.wtf`, per account and per character), both on the Settings page. Each asks first and waits for the
+PTR game to be closed. Characters go from the Live
 realm's folder to the PTR realm's (`WTF\Account\NAME\<realm>\<character>`); copied files get a fresh `cache.md5`
 entry, so the game keeps them and sends them to the PTR realm.
+
+**Realm names.** Live's realm comes from `realm-name.txt` next to the manifest, the PTR's from `ptr/realm-name.txt`;
+without them, the policy's `liveRealmName` / `ptrRealmName`, then the realm status (see above). `make-manifest.py`
+puts the file's text in the manifest as `realmName`.
+
+**The PTR on the server** is the `ptr/` folder of the served folder: only the files that differ from Live (`ptr/client/`,
+`ptr/patches/`, `ptr/locales/`... laid out like the Live folder), optional `ptr/addons.json`, `ptr/realm-name.txt` and
+`ptr/client-version.txt`, and its own `ptr/manifest.json`. Keep it in `5) Release\ptr` and send it with
+`upload.py ptr` (see Uploading); `upload.py files` never touches it. A `launcher-policy.json` in `ptr/` goes over Live's
+for the PTR.
+
+**DEBUG tab.** Under PLAY a small tab says DEBUG: green while Debug mode (Mods page) is on for the picked game version,
+red while it is off. With Debug mode on, PLAY turns on the game's error popups and taint log in that version's
+`Config.wtf`, starts the game with its console (the ` key) and Copy diagnostics adds the debug and taint logs; turned
+off, the launcher takes those settings out again. Each game version remembers this for itself.
 
 ## Languages
 
@@ -227,8 +267,9 @@ your disk: a file it has already checked with the same hash (another path in the
 name), or the same-named file of another installed language (`lichking-locale-enUS.MPQ` for
 `lichking-locale-deDE.MPQ`). It copies that instead and checks the copy against the manifest's hash like a download.
 
-The bottom bar shows the client version (`client-version.txt`), whether an update is waiting (PLAY turns into
-UPDATE) and the untracked-files warning.
+The bottom bar shows the game files' version ("Game version: ...", from `client-version.txt`; the PTR's
+`ptr/client-version.txt` when it has one), whether an update is waiting (PLAY turns into UPDATE) and the
+untracked-files warning. The launcher's own version is on the bug button next to PLAY ("Launcher v1.5.0").
 
 ## Server setup (VPS with Apache)
 
@@ -246,7 +287,8 @@ UPDATE) and the untracked-files warning.
 2. Copy `server/apache-temucraft.conf.example` into your Apache config (a self-signed certificate is fine: put its
    SHA-256 fingerprint in `launcher.env` as `CERT_SHA256`, and the launcher trusts exactly that certificate), set your whitelisted addresses and the path,
    create the users with `htpasswd`, and reload Apache. Use https.
-3. Optional files next to the manifest: `client-version.txt`, `news.json`, `changelog.json`, `addons.json` and the
+3. Optional files next to the manifest: `client-version.txt`, `realm-name.txt`, `news.json`, `changelog.json`,
+   `addons.json`, the `ptr/` folder for the PTR (see Live and PTR) and the
    `options/` folder for **cosmetic** patches and switchable fixes (an option group with an `On` folder and `"order": ["On", "Off"]` in its `group.json` is on by
    default and can be turned off; `Off` needs no folder) (see `server/examples/` and the top of `make-manifest.py`); patches the
    game or the server need belong in `patches/`, which every player gets.
@@ -296,7 +338,9 @@ With the .NET 10 SDK, run `publish.bat` on Windows or `./publish.sh` on Linux (y
 `dotnet run --project tests/Launcher.Core.Tests` checks the manifest rules (no paths outside the WoW folder, no
 outside URLs), `launcher.env` parsing, update planning, the hash cache, verified and resumed downloads, and login
 errors, against a fake server; saving the settings, Config.wtf keeping accented names, addons from a repository's
-sub folder (and the zip fallback), README previews and the log. With `LAUNCHER_SAMPLE_MANIFEST=<path to manifest.json>` it also reads a manifest made by
+sub folder (and the zip fallback), README previews and the log; the PTR (its manifest over Live's, realm names, the
+install from Live with hard links that never writes into Live, the copies from Live with backups) and the server
+settings, `skipGameAgreements` and `ptrCopyLiveSettings` among them. With `LAUNCHER_SAMPLE_MANIFEST=<path to manifest.json>` it also reads a manifest made by
 `make-manifest.py`.
 
 ## Layout

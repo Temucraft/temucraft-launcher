@@ -7,12 +7,14 @@
     "Leave a setting out to let the launcher use its own default. Any \"_comment\" is only a note: the launcher ignores it."
   ],
 
-  "launcherUpdate": { "_comment": "A new launcher on the server: \"required\" installs it before the player can do anything else, \"recommended\" only shows a banner the player can put off. Left out: required.", "value": "required" },
+  "launcherUpdate": { "_comment": "A new launcher on the server: \"required\" shows a window in the middle that installs it before the player can do anything else, \"recommended\" only shows a banner the player can put off. Left out: required. Per realm: {\"required\": [1], \"recommended\": [3], \"default\": \"required\"} (realm ids: 1 Live, 3 PTR).", "value": "required" },
   "installAddons": { "_comment": "Install and update the addons that come with the server (Interface/AddOns)", "value": true, "enforce": false },
   "clearCache": { "_comment": "Empty the game's Cache folder before starting WoW (fixes old item and quest text after updates)", "value": true, "enforce": false },
   "reopenAfterGame": { "_comment": "Open the launcher again when WoW closes", "value": true, "enforce": false },
   "rememberWindow": { "_comment": "Remember where the launcher window was and how big it was", "value": false, "enforce": false },
   "backupBeforeUpdate": { "_comment": "Back up the player's settings and addons (WTF, Interface) before every update", "value": true, "enforce": false },
+  "skipGameAgreements": { "_comment": "Skip the game's first-start agreement screens", "value": true, "enforce": false },
+  "ptrCopyLiveSettings": { "_comment": "A new PTR install starts with the player's Live game settings; false = fresh settings. Copy Account Data still copies them when asked.", "value": true, "enforce": false },
   "backupsToKeep": { "_comment": "How many of those backups to keep; the oldest are deleted first", "value": 10, "enforce": false },
   "largeAddressAware": { "_comment": "Let Wow.exe use up to 4 GB of memory instead of 2 GB (fewer out of memory crashes)", "value": true, "enforce": false },
 
