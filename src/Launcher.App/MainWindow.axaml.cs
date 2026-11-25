@@ -1578,8 +1578,13 @@ public partial class MainWindow : Window
         PlayButton.Content = install ? "INSTALL" : _pendingFiles > 0 ? "UPDATE" : "PLAY";
         PlayButton.Classes.Set("update", install || _pendingFiles > 0);
         // Debug mode (Mods page, on by default): said above the button so nobody plays with it on without knowing
-        DebugEnabledText.Text = Translation.T("Debug is enabled");
-        DebugEnabledText.IsVisible = !install && Folder.Length > 0 && DebugMode.IsOn(Folder);
+        bool debugOn = Folder.Length > 0 && DebugMode.IsOn(Folder);
+        DebugBadge.IsVisible = !install && Folder.Length > 0;
+        IBrush colour = new SolidColorBrush(Color.Parse(debugOn ? "#5FBF3A" : "#C8443A"));
+        DebugEnabledText.Text = Translation.T("DEBUG");
+        DebugEnabledText.Foreground = colour;
+        DebugBadge.BorderBrush = colour;
+        DebugBadge.Background = new SolidColorBrush(Color.Parse(debugOn ? "#1F3A12" : "#3A1412"));
     }
 
     async Task InstallAsync(ServerClient client, IReadOnlyList<PlannedFile> outdated, string? wowFolder, CancellationToken token)

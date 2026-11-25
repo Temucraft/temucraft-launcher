@@ -212,10 +212,13 @@
           </StackPanel>
           <TextBlock Name="GameVersionText" IsVisible="False" HorizontalAlignment="Center" FontSize="12" FontWeight="SemiBold"
                      Foreground="{DynamicResource T.accent}" Margin="0,0,0,4" />
-          <TextBlock Name="DebugEnabledText" Text="Debug is enabled" IsVisible="False" HorizontalAlignment="Center" FontSize="12"
-                     FontWeight="SemiBold" Foreground="{DynamicResource T.accent}" Margin="0,0,0,4"
-                     ToolTip.Tip="Debug mode is on (Mods page): the game logs every interface error to Logs\TemucraftDebug.log, shows error popups and opens its console with the ` key. Copy diagnostics adds the logs. Turn it off on the Mods page." />
           <Button Name="PlayButton" Classes="play" Content="PLAY" Click="OnPlay" />
+          <!-- debug mode, right under PLAY as a small tab of the button: green DEBUG = on, red = off -->
+          <Border Name="DebugBadge" IsVisible="False" HorizontalAlignment="Stretch" Margin="6,0,6,0" Padding="0,1,0,2"
+                  CornerRadius="0,0,6,6" BorderThickness="1,0,1,1">
+            <TextBlock Name="DebugEnabledText" Text="DEBUG" HorizontalAlignment="Center" FontSize="11" FontWeight="Bold"
+                       ToolTip.Tip="Debug mode (Mods page). On: the game logs every interface error to Logs\TemucraftDebug.log, shows error popups and opens its console with the ` key, and Copy diagnostics adds the logs. Turn it on or off on the Mods page." />
+          </Border>
           <Button Name="ReportBugButton" Classes="link" HorizontalAlignment="Right" FontSize="12" Margin="0,4,0,0" Click="OnReportBug"
                   ToolTip.Tip="Report bug: copies a short report about your game files and the last log lines to paste in your message" />
         </StackPanel>

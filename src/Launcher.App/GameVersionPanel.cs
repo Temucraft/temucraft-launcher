@@ -105,7 +105,7 @@ public partial class MainWindow
         CopyAddonsFromLiveButton.IsVisible = IsPtr;
         CopyAddonsFromLiveButton.IsEnabled = installed;
         GameVersionText.Text = IsPtr ? Translation.T("PTR: the test realm") : "";
-        GameVersionText.IsVisible = IsPtr;
+        GameVersionText.IsVisible = false;   // the dropdown above already says Live or PTR
     }
 
     // ------------------------------------------------------------------------------------------- server data
