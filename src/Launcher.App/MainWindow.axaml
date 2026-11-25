@@ -204,6 +204,14 @@
           <Button Name="CancelButton" Content="Cancel" IsVisible="False" Click="OnCancel" />
         </StackPanel>
         <StackPanel Grid.Column="2">
+          <!-- Live or the PTR (test realm): each has its own install, addons and settings -->
+          <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" Margin="0,0,0,4">
+            <TextBlock Text="Game version" Classes="dim" FontSize="12" VerticalAlignment="Center" />
+            <ComboBox Name="GameVersionBox" MinWidth="150" FontSize="12"
+                      ToolTip.Tip="Live: the normal realm. PTR: the test realm, with its own install (Settings page), addons and settings. PLAY goes straight into the picked realm." />
+          </StackPanel>
+          <TextBlock Name="GameVersionText" IsVisible="False" HorizontalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                     Foreground="{DynamicResource T.accent}" Margin="0,0,0,4" />
           <TextBlock Name="DebugEnabledText" Text="Debug is enabled" IsVisible="False" HorizontalAlignment="Center" FontSize="12"
                      FontWeight="SemiBold" Foreground="{DynamicResource T.accent}" Margin="0,0,0,4"
                      ToolTip.Tip="Debug mode is on (Mods page): the game logs every interface error to Logs\TemucraftDebug.log, shows error popups and opens its console with the ` key. Copy diagnostics adds the logs. Turn it off on the Mods page." />
@@ -373,6 +381,8 @@
                 <Button Content="Update all" Click="OnUpdateAllAddons" />
                 <Button Name="InstallRecommendedButton" Content="Install recommended" Click="OnInstallRecommended" />
                 <Button Content="Open AddOns folder" Click="OnOpenAddons" />
+                <Button Name="CopyAddonsFromLiveButton" Content="Copy my addons from Live" Click="OnCopyAddonsFromLive" IsVisible="False"
+                        ToolTip.Tip="Copies every addon in your Live Interface\AddOns, with its settings, to the PTR (once; the PTR's old ones are backed up)" />
               </StackPanel>
               <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,18,8">
                 <TextBlock Classes="title" Name="CatalogTitle" Text="FROM THE SERVER" />
@@ -434,6 +444,25 @@
                 <Button Grid.Column="6" Name="ClientButton" Content="Install game files…" Click="OnDownloadClient" />
               </Grid>
               <TextBlock Classes="dim" Margin="0,4,0,0" Text="No game yet? Press Install game files… and pick an empty folder: the whole client is downloaded there." />
+              </StackPanel>
+              </Border>
+
+              <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+              <StackPanel>
+              <TextBlock Classes="section" Margin="0,0,0,6" Text="PTR (TEST REALM) FOLDER" />
+              <Grid ColumnDefinitions="*,8,Auto,8,Auto">
+                <TextBox Name="PtrFolderBox" />
+                <Button Grid.Column="2" Content="Browse…" Click="OnBrowsePtr" />
+                <Button Grid.Column="4" Content="Open folder" Click="OnOpenPtrFolder" ToolTip.Tip="Open the PTR's folder in your file manager" />
+              </Grid>
+              <TextBlock Name="PtrStateText" Classes="dim" Margin="0,4,0,0" TextWrapping="Wrap" />
+              <TextBlock Classes="dim" Margin="0,2,0,0" TextWrapping="Wrap" Text="The PTR has its own settings, key bindings and addons. Copy yours from Live when you want them there (the PTR's old files are backed up; Live is never changed):" />
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+                <Button Name="CopyAccountDataButton" Content="Copy Account Data" Click="OnCopyAccountData"
+                        ToolTip.Tip="Live's game settings, macros and addon settings (per account and per character) to the PTR" />
+                <Button Name="CopyKeyBindingsButton" Content="Copy Key Bindings" Click="OnCopyKeyBindings"
+                        ToolTip.Tip="Live's key bindings (per account and per character) to the PTR" />
+              </StackPanel>
               </StackPanel>
               </Border>
 

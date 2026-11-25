@@ -93,6 +93,7 @@ public partial class MainWindow : Window
         RememberBox.IsEnabled = CredentialStore.IsSupported;
         RememberBox.Content = CredentialStore.IsSupported ? $"Remember password ({CredentialStore.StoreName})" : "Remember password (no password store on this system)";
         WowFolderBox.Text = _settings.WowFolder;
+        HookGameVersions();
         WowFolderBox.TextChanged += (_, _) => { ShowPlayState(); LoadTweaks(); ShowLocales(_manifest?.Locales ?? []); };
         AddonsBox.IsChecked = _settings.InstallAddons;
         ClearCacheBox.IsChecked = _settings.ClearCacheOnPlay;
@@ -191,8 +192,6 @@ public partial class MainWindow : Window
 
     void Status(string text) => Dispatcher.UIThread.Post(() => StatusText.Text = text);
 
-    string Folder => WowFolderBox.Text?.Trim() ?? "";
-
     /// <summary>Saves the settings and the password; never throws (a failure is logged and shown).</summary>
     bool SaveSettings()
     {
@@ -213,7 +212,8 @@ public partial class MainWindow : Window
     {
         _settings.Username = UsernameBox.Text?.Trim() ?? "";
         _settings.RememberPassword = RememberBox.IsChecked == true;
-        _settings.WowFolder = Folder;
+        _settings.WowFolder = LiveFolder;
+        _settings.PtrFolder = PtrFolderBox.Text?.Trim() ?? "";
         _settings.InstallAddons = AddonsBox.IsChecked == true;
         _settings.ClearCacheOnPlay = ClearCacheBox.IsChecked == true;
         _settings.ReopenAfterGame = ReopenBox.IsChecked == true;
@@ -309,7 +309,7 @@ public partial class MainWindow : Window
     void SetBusy(bool busy)
     {
         UpdateButton.IsEnabled = ClientButton.IsEnabled = !busy && _server is not null;
-        PlayButton.IsEnabled = PreviewInstall.IsEnabled = !busy;
+        PlayButton.IsEnabled = PreviewInstall.IsEnabled = GameVersionBox.IsEnabled = !busy;
         CancelButton.IsVisible = busy;
         if (!busy)
         {
@@ -691,15 +691,16 @@ public partial class MainWindow : Window
     async Task<Manifest> FetchManifestAsync(ServerClient client, CancellationToken token)
     {
         Status("Connecting…");
-        Manifest manifest = await client.GetManifestAsync(token);
+        bool ptr = IsPtr;
+        Manifest live = await client.GetManifestAsync(token);
+        Log($"Server lists {live.Files.Count} files");
+        // Live's, or the PTR's (Live's with ptr/manifest.json over it); the addon list too
+        Manifest manifest = await ManifestForVersionAsync(client, live, ptr, token);
         _manifest = manifest;
-        Log($"Server lists {manifest.Files.Count} files");
 
         bool launcherOk = await SelfCheck.MatchesAsync(manifest, token);
         string? newsText = await client.GetTextAsync("news.json", token);
         string? changelogText = await client.GetTextAsync("changelog.json", token);
-        string? catalog = await client.GetTextAsync("addons.json", token);
-        _catalog = catalog is null ? [] : AddonFolder.ParseCatalog(catalog);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -1148,7 +1149,7 @@ public partial class MainWindow : Window
             Manifest manifest = await client.GetManifestAsync();
             if (manifest.Launcher is null || await SelfCheck.MatchesAsync(manifest)) return;
             _manifest ??= manifest;
-            if (_manifest.Launcher?.Sha256 != manifest.Launcher.Sha256) _manifest = manifest;
+            if (!IsPtr && _manifest.Launcher?.Sha256 != manifest.Launcher.Sha256) _manifest = manifest;
             if (_launcherLater && _laterSha != manifest.Launcher.Sha256) _launcherLater = false;   // a newer one since "Later"
             Log("A new launcher is on the server");
             ShowLauncherUpdate(true);
@@ -1459,13 +1460,15 @@ public partial class MainWindow : Window
         bool haveGame = GameFolder.LooksLikeClient(Folder);
         if (download && NoGameYet)
         {
-            if (await InstallGameFilesAsync(Folder)) await CheckAsync(download: true);
+            // the PTR is made from the Live game; Live downloads the whole game
+            if (IsPtr ? await InstallPtrAsync() : await InstallGameFilesAsync(Folder)) await CheckAsync(download: true);
             return;
         }
         if (download && NeedFolder()) return;
         // everything the work needs from the window, read here on the window's thread
         InstallChoice choice = Choice();
         string folder = choice.WowFolder;
+        bool ptrMode = IsPtr;
         ServerClient client = NewClient();
         await RunAsync(download ? "Update" : "Check", async token =>
         {
@@ -1480,7 +1483,9 @@ public partial class MainWindow : Window
             if (!haveGame)
             {
                 // connected, but no game yet: the tabs are filled in; the game files come from Install game files…
-                Status(folder.Length > 0   // the value read before the job: the folder box only works on the window's thread
+                Status(ptrMode
+                    ? Translation.T("Connected. The PTR isn't installed yet: press INSTALL to make it from your Live game.")
+                    : folder.Length > 0   // the value read before the job: the folder box only works on the window's thread
                     ? string.Format(Translation.T("Connected. There's no game in your WoW folder yet: press INSTALL to download it there{0}."), InstallSizeHint(manifest, choice))
                     : "Connected. Pick your WoW folder under Game files, or an empty folder to install the game into.");
                 await Dispatcher.UIThread.InvokeAsync(ShowPlayState);
@@ -1686,6 +1691,12 @@ public partial class MainWindow : Window
     {
         if (_server is null || Busy) return;
         if (!HaveLogin || !Agreed) { AskForLogin(); return; }
+        if (IsPtr)
+        {
+            // the PTR isn't downloaded whole: it is made from the Live game, then updated
+            if (await InstallPtrAsync()) await CheckAsync(download: true);
+            return;
+        }
         if (_manifest is null) await CheckAsync(download: false);
         if (_manifest is not { } manifest) return;
         if (!manifest.Files.Any(f => f.Category == FileCategory.Base))
@@ -1955,6 +1966,7 @@ public partial class MainWindow : Window
         {
             if (ClearCacheBox.IsChecked == true) GameFolder.ClearCache(Folder);
             if (_manifest is not null) GameFolder.WriteRealmlist(Folder, _manifest.Realmlist);
+            WriteGameRealm(Folder);   // straight into the version's realm: no realm list
             ShareSettings(Folder);
             EnableRequiredAddons(Folder);
             ApplyLoginScenes(Folder);
@@ -2654,11 +2666,11 @@ public partial class MainWindow : Window
     bool IsInstalled(CatalogAddon addon, string folder) =>
         GameFolder.LooksLikeClient(folder) && (addon.Folders.Count > 0
             ? addon.Folders.All(f => Directory.Exists(Path.Combine(AddonFolder.Path(folder), f)))
-            : _settings.AddonCommits.ContainsKey(addon.Name));
+            : CommitsFor(folder).ContainsKey(addon.Name));
 
     bool NeedsInstall(CatalogAddon addon, string folder) =>
         !IsInstalled(addon, folder) || (_latestCommits.TryGetValue(addon.Name, out string? latest)
-                                        && (!_settings.AddonCommits.TryGetValue(addon.Name, out string? have) || have != latest));
+                                        && (!CommitsFor(folder).TryGetValue(addon.Name, out string? have) || have != latest));
 
     string _catalogCategory = "";   // "" = all, "\u0001" = needed only
     bool _catalogHooked;
@@ -2730,10 +2742,11 @@ public partial class MainWindow : Window
                 int count = shown.Count(a => GroupOf(a) == group);
                 CatalogList.Children.Add(new TextBlock { Text = $"{group}  ({count})", Classes = { "section" }, Margin = new Thickness(0, 10, 0, 2) });
             }
-            Grid row = new() { ColumnDefinitions = new ColumnDefinitions("2*,3*,Auto"), Margin = new Thickness(0, 2), Background = Brushes.Transparent };
+            Grid row = new() { ColumnDefinitions = new ColumnDefinitions("2*,3*,Auto,Auto"), Margin = new Thickness(0, 2), Background = Brushes.Transparent };
+            bool ptrOnly = IsPtr && _ptrOnlyAddons.Contains(addon.Name);
             // the Temucraft label first, then the name (shortened with … when the column is narrow)
             Grid name = new() { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-            string tag = addon.Required ? "needed" : addon.Recommended ? "recommended" : addon.Default ? "default" : "";
+            string tag = ptrOnly ? "PTR only" : addon.Required ? "needed" : addon.Recommended ? "recommended" : addon.Default ? "default" : "";
             TextBlock title = new()
             {
                 FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center,
@@ -2775,6 +2788,16 @@ public partial class MainWindow : Window
             };
             Grid.SetColumn(action, 2);
             row.Children.Add(action);
+            if (ptrOnly && installed)
+            {
+                // an addon only the PTR's list has: the player may want it on Live too
+                bool onLive = IsInstalled(addon, LiveFolder);
+                Button live = new() { Content = onLive ? "On Live" : "Also install on Live", FontSize = 12, IsEnabled = !onLive, Margin = new Thickness(6, 0, 0, 0) };
+                ToolTip.SetTip(live, "Install this PTR addon on your Live game too");
+                live.Click += async (_, _) => await InstallOnLiveAsync(addon);
+                Grid.SetColumn(live, 3);
+                row.Children.Add(live);
+            }
             row.PointerPressed += async (_, _) => await PreviewAsync(addon);
             CatalogList.Children.Add(row);
         }
@@ -2835,7 +2858,7 @@ public partial class MainWindow : Window
         Status($"{addon.Name} installed.");
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            _settings.AddonCommits[addon.Name] = commit;
+            CommitsFor(folder)[addon.Name] = commit;
             SaveSettings();
             RefreshInstalledAddons();
             RefreshCatalog();

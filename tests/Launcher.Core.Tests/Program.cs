@@ -70,9 +70,198 @@ List<(string Name, Func<Task> Body)> tests =
     ("testing.env copies test files in and takes them out again", TestingFilesInAndOut),
     ("Character screen scenes: Classic / HD defaults and the player's picks in TemucraftScenes.lua", CharacterScenesFile),
     ("HD character models: patch-K and patch-_ built per race from the pieces", HdModelsBuild),
+    ("PTR: its manifest goes over Live's, from ptr/, and its addons are told apart", PtrManifestMerge),
+    ("PTR: each version's realm goes into its own Config.wtf", PtrRealms),
+    ("PTR: made from Live with linked MPQs and copies, never writing into Live", PtrInstallFromLive),
+    ("PTR: account data, key bindings and addons copied from Live, with backups", PtrCopyFromLive),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
+
+static Task PtrManifestMerge()
+{
+    byte[] exe = "live exe"u8.ToArray(), ptrExe = "ptr exe"u8.ToArray(), patch = "patch"u8.ToArray(), tilde = "races 30"u8.ToArray();
+    Manifest live = new()
+    {
+        Realmlist = "logon.example.com", RealmName = "Temucraft", ClientVersion = "Temucraft 1.5.0",
+        Files = [File1("Wow.exe", exe), File1("Data/patch-A.MPQ", patch), File1("Data/patch-~.MPQ", patch)],
+        Obsolete = ["Data/patch-D.MPQ"],
+        OptionGroups = [new OptionGroup { Name = "Night sky", Options = ["On", "Off"] }],
+    };
+    Manifest ptr = new()
+    {
+        Realmlist = "", RealmName = "[PTR] Falric", ClientVersion = "Temucraft 1.6.0 PTR",
+        Files = [new ManifestFile { Path = "wow.exe", Url = "client/Wow.exe", Size = ptrExe.Length, Sha256 = Sha(ptrExe), Category = FileCategory.Patch },
+                 new ManifestFile { Path = "Data/patch-~.MPQ", Url = "patches/patch-~.MPQ", Size = tilde.Length, Sha256 = Sha(tilde), Category = FileCategory.Patch }],
+        // a PTR file that is gone from the PTR but Live still has is not deleted
+        Obsolete = ["Data/patch-A.MPQ", "Data/patch-^.MPQ"],
+    };
+    Manifest merged = Manifest.Parse(GameVersions.MergePtr(live, ptr).ToJson());
+    Check(merged.Files.Count == 3, "three files: " + string.Join(", ", merged.Files.Select(f => f.Path)));
+    Check(merged.Files.Single(f => f.Path.Equals("Wow.exe", StringComparison.OrdinalIgnoreCase)) is { Url: "ptr/client/Wow.exe" } w && w.Sha256 == Sha(ptrExe), "the PTR's Wow.exe from ptr/");
+    Check(merged.Files.Single(f => f.Path == "Data/patch-~.MPQ").Url == "ptr/patches/patch-~.MPQ", "the PTR's patch-~");
+    Check(merged.Files.Single(f => f.Path == "Data/patch-A.MPQ").Url == "files/Data/patch-A.MPQ", "Live's other files as they are");
+    Check(merged.Obsolete.SequenceEqual(["Data/patch-D.MPQ", "Data/patch-^.MPQ"]), "obsolete: " + string.Join(", ", merged.Obsolete));
+    Check(merged is { Realmlist: "logon.example.com", RealmName: "[PTR] Falric", ClientVersion: "Temucraft 1.6.0 PTR" } && merged.OptionGroups.Count == 1, "realm and version");
+    Check(live.Files[0].Url == "files/Wow.exe" && ptr.Files[0].Url == "client/Wow.exe", "the two manifests are left as they were");
+
+    IReadOnlyList<CatalogAddon> catalog = GameVersions.MergeCatalog(
+        [new CatalogAddon { Name = "Leatrix", Repo = "a/leatrix" }, new CatalogAddon { Name = "Plater", Repo = "a/plater" }],
+        [new CatalogAddon { Name = "Plater", Repo = "a/plater-ptr" }, new CatalogAddon { Name = "NewThing", Repo = "a/new" }], out HashSet<string> ptrOnly);
+    Check(catalog.Count == 3 && catalog.Single(a => a.Name == "Plater").Repo == "a/plater-ptr", "the PTR's entry wins");
+    Check(ptrOnly.SetEquals(["NewThing"]), "PTR-only addons: " + string.Join(", ", ptrOnly));
+
+    Check(GameVersions.DefaultPtrFolder(Path.Combine("games", "Temucraft") + Path.DirectorySeparatorChar) == Path.Combine("games", "Temucraft PTR"), "default PTR folder: " + GameVersions.DefaultPtrFolder(Path.Combine("games", "Temucraft")));
+    Check(GameVersions.DefaultPtrFolder("") == "", "no Live folder, no PTR folder");
+    Check(GameVersions.Overlap("/a/b", "/a/b/c") && GameVersions.Overlap("/a/b", "/a/b") && !GameVersions.Overlap("/a/b", "/a/b PTR"), "folders apart");
+    return Task.CompletedTask;
+}
+
+static Task PtrRealms()
+{
+    LauncherPolicy none = LauncherPolicy.From(null);
+    RealmStatus realms = RealmStatus.Parse("""{"realms":[{"id":1,"name":"Temucraft","online":true},{"id":3,"name":"[PTR] Falric Test","online":true}]}""");
+    Check(realms.Realms[1].Id == 3, "realm ids are read");
+    Check(GameVersions.LiveRealmName(null, none, realms) == "Temucraft", "Live from the realm list");
+    Check(GameVersions.PtrRealmName(null, none, realms) == "[PTR] Falric Test", "PTR is realm 3 of the realm list");
+    Check(GameVersions.PtrRealmName(null, none, null) == "[PTR] Falric", "PTR default");
+    Check(GameVersions.LiveRealmName(null, none, null) is null, "Live unknown without a list");
+    Check(GameVersions.LiveRealmName(null, none, RealmStatus.Parse("""{"realms":[{"id":2,"name":"A"},{"id":4,"name":"B"}]}""")) is null, "two realms, no id 1: not guessed");
+    LauncherPolicy set = LauncherPolicy.From(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(
+        """{"liveRealmName":{"value":"Live Realm"},"ptrRealmName":"Test Realm"}"""));
+    Check(set.Unknown.Count == 0, "realm names are known policy settings");
+    Check(GameVersions.LiveRealmName(null, set, realms) == "Live Realm" && GameVersions.PtrRealmName(null, set, realms) == "Test Realm", "the policy's names");
+    Check(GameVersions.LiveRealmName(new Manifest { RealmName = "From file" }, set, realms) == "From file", "realm-name.txt first");
+
+    string wow = TempDir();
+    Directory.CreateDirectory(Path.Combine(wow, "WTF"));
+    File.WriteAllLines(Path.Combine(wow, "WTF", "Config.wtf"), ["SET realmName \"Old\"", "SET gxWindow \"1\""]);
+    Check(GameVersions.WriteRealm(wow, "[PTR] Falric", "logon.example.com"), "written");
+    ConfigWtf config = ConfigWtf.Load(wow);
+    Check(config.Get("realmName") == "[PTR] Falric" && config.Get("realmList") == "logon.example.com" && config.Get("gxWindow") == "1", "Config.wtf has the realm");
+    Check(!GameVersions.WriteRealm(wow, "[PTR] Falric", "logon.example.com"), "nothing to change the second time");
+    Check(!GameVersions.WriteRealm(wow, null, "") && ConfigWtf.Load(wow).Get("realmName") == "[PTR] Falric", "unknown values leave it alone");
+    string fresh = TempDir();
+    GameVersions.WriteRealm(fresh, "Temucraft", "logon.example.com");
+    Check(ConfigWtf.Load(fresh).Get("realmName") == "Temucraft", "a fresh install gets a Config.wtf");
+    return Task.CompletedTask;
+}
+
+/// <summary>Every file under a folder with its content, to show a folder was left alone.</summary>
+static Dictionary<string, string> Snapshot(string folder) =>
+    Directory.GetFiles(folder, "*", SearchOption.AllDirectories)
+        .ToDictionary(f => Path.GetRelativePath(folder, f), f => Sha(File.ReadAllBytes(f)) + File.GetLastWriteTimeUtc(f).Ticks);
+
+static bool SameSnapshot(Dictionary<string, string> a, Dictionary<string, string> b) =>
+    a.Count == b.Count && a.All(p => b.TryGetValue(p.Key, out string? v) && v == p.Value);
+
+static async Task PtrInstallFromLive()
+{
+    string root = TempDir(), live = Path.Combine(root, "Temucraft"), ptr = GameVersions.DefaultPtrFolder(live);
+    void Put(string relative, string text) { string f = Path.Combine(live, relative); Directory.CreateDirectory(Path.GetDirectoryName(f)!); File.WriteAllText(f, text); }
+    Put("Wow.exe", "exe");
+    Put(Path.Combine("Data", "common.MPQ"), "common");
+    Put(Path.Combine("Data", "patch-A.MPQ"), "patch A");
+    Put(Path.Combine("Data", "enUS", "realmlist.wtf"), "set realmlist live");
+    Put(Path.Combine("Data", "enUS", "patch-enUS-T.MPQ"), "locale T");
+    Put(Path.Combine("Interface", "loginui.lua"), "login");
+    Put(Path.Combine("Interface", "AddOns", "Leatrix", "Leatrix.toc"), "## Title: Leatrix");
+    Put(Path.Combine("WTF", "Config.wtf"), "SET realmName \"Temucraft\"");
+    Put(Path.Combine("Cache", "WDB", "item.wdb"), "cache");
+    Put(Path.Combine("Data", "patch-B.MPQ.part"), "half");
+    Put(Path.Combine("_Temucraft", "Kept", HexOf('a')), "kept option");
+
+    HashCache cache = HashCache.Load(Path.Combine(root, "hash-cache.json"));
+    string patchA = Path.Combine(live, "Data", "patch-A.MPQ");
+    await cache.GetAsync(patchA);
+    Dictionary<string, string> before = Snapshot(live);
+    PtrInstall.Result result = PtrInstall.Prepare(live, ptr, cache);
+    Check(GameFolder.LooksLikeClient(ptr), "the PTR is a game folder");
+    Check(result is { Linked: 4, Copied: 3 }, $"linked {result.Linked} (the MPQs and the kept file), copied {result.Copied}");
+    foreach (string gone in new[] { "WTF", "Cache", Path.Combine("Interface", "AddOns"), Path.Combine("Data", "patch-B.MPQ.part") })
+        Check(!Path.Exists(Path.Combine(ptr, gone)), gone + " is not made");
+    Check(File.ReadAllText(Path.Combine(ptr, "Data", "patch-A.MPQ")) == "patch A" && File.ReadAllText(Path.Combine(ptr, "Interface", "loginui.lua")) == "login", "content");
+    Check(cache.Known(Path.Combine(ptr, "Data", "patch-A.MPQ")) == cache.Known(patchA) && cache.Known(patchA) is not null, "the known hash is carried over");
+
+    // the PTR's own changes never reach Live: realmlist.wtf is a copy, an update moves a new file over a linked MPQ
+    GameFolder.WriteRealmlist(ptr, "ptr.example.com");
+    GameVersions.WriteRealm(ptr, "[PTR] Falric", "ptr.example.com");
+    string fresh = Path.Combine(ptr, "Data", "patch-A.MPQ.part");
+    File.WriteAllText(fresh, "patch A for the PTR");
+    File.Move(fresh, Path.Combine(ptr, "Data", "patch-A.MPQ"), overwrite: true);
+    File.Delete(Path.Combine(ptr, "Data", "common.MPQ"));
+    Check(SameSnapshot(before, Snapshot(live)), "Live is left exactly as it was");
+
+    // a linked file really is the same file (on Linux and Windows test machines on one drive)
+    if (result.Linked > 0)
+    {
+        using (FileStream s = new(Path.Combine(live, "Data", "enUS", "patch-enUS-T.MPQ"), FileMode.Append)) s.WriteByte((byte)'!');
+        Check(File.ReadAllText(Path.Combine(ptr, "Data", "enUS", "patch-enUS-T.MPQ")) == "locale T!", "linked, not copied");
+    }
+    // again: only what's missing
+    PtrInstall.Result again = PtrInstall.Prepare(live, ptr, cache);
+    Check(again.Linked == 1 && again.Copied == 0, $"only the deleted file again: {again.Linked} + {again.Copied}");
+    Throws<InvalidOperationException>(() => PtrInstall.Prepare(live, Path.Combine(live, "PTR")), "a PTR inside Live is refused");
+    Check(PtrInstall.Linkable("Data/deDE/patch-deDE-2.MPQ") && !PtrInstall.Linkable("Wow.exe") && !PtrInstall.Linkable("Data/enUS/realmlist.wtf"), "what is linked");
+}
+
+static Task PtrCopyFromLive()
+{
+    string root = TempDir(), live = Path.Combine(root, "Live"), ptr = Path.Combine(root, "Live PTR");
+    foreach (string f in new[] { live, ptr }) { Directory.CreateDirectory(Path.Combine(f, "Data")); File.WriteAllText(Path.Combine(f, "Wow.exe"), "exe"); }
+    void Put(string folder, string relative, string text) { string f = Path.Combine(folder, relative); Directory.CreateDirectory(Path.GetDirectoryName(f)!); File.WriteAllText(f, text); }
+    string acc = Path.Combine("WTF", "Account", "PLAYER"), hero = Path.Combine(acc, "Temucraft", "Hero");
+    Put(live, Path.Combine(acc, "config-cache.wtf"), "SET autoLootDefault \"1\"");
+    Put(live, Path.Combine(acc, "bindings-cache.wtf"), "bind A STRAFELEFT");
+    Put(live, Path.Combine(acc, "macros-cache.txt"), "MACRO 1 \"Hi\"");
+    Put(live, Path.Combine(acc, "SavedVariables", "Leatrix.lua"), "LeatrixDB = {}");
+    Put(live, Path.Combine(acc, "SavedVariables", "Blizzard_Other.lua"), "x = 1");
+    Put(live, Path.Combine(hero, "bindings-cache.wtf"), "bind B hero");
+    Put(live, Path.Combine(hero, "macros-cache.txt"), "hero macros");
+    Put(live, Path.Combine(hero, "layout-local.txt"), "layout");
+    Put(live, Path.Combine(hero, "AddOns.txt"), "Leatrix: enabled");
+    Put(live, Path.Combine(hero, "SavedVariables", "Leatrix.lua"), "LeatrixCharDB = {}");
+    Put(live, Path.Combine("Interface", "AddOns", "Leatrix", "Leatrix.toc"), "## Title: Leatrix");
+    Put(live, Path.Combine("Interface", "AddOns", "Leatrix", "Core.lua"), "-- live");
+    // the PTR already has its own (older) settings and an older Leatrix
+    Put(ptr, Path.Combine(acc, "config-cache.wtf"), "SET autoLootDefault \"0\"");
+    Put(ptr, Path.Combine("Interface", "AddOns", "Leatrix", "Old.lua"), "-- old");
+    Dictionary<string, string> before = Snapshot(live);
+
+    PtrCopy.Result data = PtrCopy.CopyAccountData(live, ptr, "Temucraft", "[PTR] Falric");
+    string ptrAcc = Path.Combine(ptr, acc), ptrHero = Path.Combine(ptrAcc, "[PTR] Falric", "Hero");
+    Check(File.ReadAllText(Path.Combine(ptrAcc, "config-cache.wtf")).Contains("\"1\""), "account settings copied");
+    Check(File.Exists(Path.Combine(ptrAcc, "macros-cache.txt")) && !File.Exists(Path.Combine(ptrAcc, "bindings-cache.wtf")), "account data, not key bindings");
+    Check(File.ReadAllText(Path.Combine(ptrAcc, "SavedVariables", "Blizzard_Other.lua")) == "x = 1", "every SavedVariables file");
+    Check(File.Exists(Path.Combine(ptrHero, "layout-local.txt")) && File.Exists(Path.Combine(ptrHero, "AddOns.txt")) && File.Exists(Path.Combine(ptrHero, "SavedVariables", "Leatrix.lua"))
+          && !File.Exists(Path.Combine(ptrHero, "bindings-cache.wtf")), "the character goes to the PTR realm's folder, without its key bindings");
+    byte[] md5 = File.ReadAllBytes(Path.Combine(ptrAcc, "cache.md5"));
+    Check(md5.Length == 60 && md5.AsSpan(0, 16).SequenceEqual(MD5.HashData(File.ReadAllBytes(Path.Combine(ptrAcc, "config-cache.wtf")))), "the account's cache.md5 knows the copied file");
+    Check(File.Exists(Path.Combine(ptrHero, "cache.md5")), "the character's cache.md5 is made");
+    Check(data.BackupFolder is { } backup && File.ReadAllText(Path.Combine(backup, acc, "config-cache.wtf")).Contains("\"0\""), "the PTR's old account settings are kept");
+
+    PtrCopy.Result keys = PtrCopy.CopyKeyBindings(live, ptr, "Temucraft", "[PTR] Falric");
+    Check(keys.Files == 2 && File.ReadAllText(Path.Combine(ptrAcc, "bindings-cache.wtf")) == "bind A STRAFELEFT"
+          && File.ReadAllText(Path.Combine(ptrHero, "bindings-cache.wtf")) == "bind B hero", "account and character key bindings: " + keys.Files);
+    Check(File.ReadAllBytes(Path.Combine(ptrAcc, "cache.md5")).AsSpan(20, 16).SequenceEqual(MD5.HashData("bind A STRAFELEFT"u8.ToArray())), "bindings entry in cache.md5");
+
+    // without the realm's name: the account's only realm folder is used
+    string ptr2 = Path.Combine(root, "Other PTR");
+    Directory.CreateDirectory(Path.Combine(ptr2, "Data")); File.WriteAllText(Path.Combine(ptr2, "Wow.exe"), "exe");
+    PtrCopy.CopyKeyBindings(live, ptr2, null, "[PTR] Falric");
+    Check(File.Exists(Path.Combine(ptr2, acc, "[PTR] Falric", "Hero", "bindings-cache.wtf")), "the only Live realm is used");
+
+    PtrCopy.Result addons = PtrCopy.CopyAddons(live, ptr, "Temucraft", "[PTR] Falric");
+    string leatrix = Path.Combine(ptr, "Interface", "AddOns", "Leatrix");
+    Check(addons.Addons == 1 && File.ReadAllText(Path.Combine(leatrix, "Core.lua")) == "-- live" && !File.Exists(Path.Combine(leatrix, "Old.lua")), "Live's addon replaces the PTR's");
+    Check(addons.BackupFolder is { } b2 && File.Exists(Path.Combine(b2, "Interface", "AddOns", "Leatrix", "Old.lua")), "the PTR's old addon is kept in the backup");
+    Check(File.Exists(Path.Combine(ptrAcc, "SavedVariables", "Leatrix.lua")), "with its settings");
+
+    Check(SameSnapshot(before, Snapshot(live)), "Live is left exactly as it was");
+    Throws<InvalidOperationException>(() => PtrCopy.CopyKeyBindings(live, Path.Combine(root, "missing"), null, "x"), "no PTR installed: refused");
+    Throws<InvalidOperationException>(() => PtrCopy.CopyKeyBindings(live, live, null, "x"), "Live as the PTR: refused");
+    return Task.CompletedTask;
+}
 
 static Task HdModelsBuild()
 {

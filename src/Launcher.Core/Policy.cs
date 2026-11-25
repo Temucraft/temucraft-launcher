@@ -47,6 +47,7 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 /// <item>downloadLimit: the most KB/s each player may download at (0 or -1: no cap); players can set a lower limit</item>
 /// <item>launcherUpdate: "required" (the default: a new launcher is installed before anything else) or "recommended"
 /// (a banner the player can put off)</item>
+/// <item>liveRealmName / ptrRealmName: the realm each game version logs into (when realm-name.txt doesn't say)</item>
 /// <item>theme: the launcher's theme ("temucraft", "wotlk"...) and themeMode: "dark" or "light"</item>
 /// </list>
 /// Names starting with "_" (like "_comment") are notes and are skipped. Names the launcher doesn't know are kept in <see cref="Unknown"/> (and logged), never an error.
@@ -54,7 +55,7 @@ public sealed record PolicyRule(JsonElement Value, bool Enforce)
 public sealed class LauncherPolicy
 {
     public static readonly string[] OnOff = ["installAddons", "clearCache", "reopenAfterGame", "rememberWindow", "backupBeforeUpdate", "largeAddressAware"];
-    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog", "theme", "themeMode", "downloadLimit", "launcherUpdate"];
+    public static readonly string[] Known = [.. OnOff, "backupsToKeep", "requiredLocales", "defaultLocale", "tweaks", "news", "changelog", "theme", "themeMode", "downloadLimit", "launcherUpdate", "liveRealmName", "ptrRealmName"];
 
     /// <summary>Web addresses the launcher opens or reads: the bug report page, the realm status block and the player map.</summary>
     public static readonly string[] Links = ["reportBugUrl", "realmStatusUrl", "playerMapUrl"];

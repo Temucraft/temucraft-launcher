@@ -90,6 +90,7 @@ recommendation (and as the value outright where the launcher has no box for it).
 | `reportBugUrl` | a web address | where the bug icon next to Play sends players (the launcher's GitHub issues when not set) |
 | `realmStatusUrl` | a web address, or `false` | the realm status over the news (online or offline, players, peak, uptime): the website's `?realm-status=data`. Not set: the NAV link named like Database / AoWoW / Website (else the first) with `?realm-status=data`; `false` hides it |
 | `playerMapUrl` | a web address, or `false` | the "Player map" link next to the realm status; not set: the map address the website sends (`?player-map`) |
+| `liveRealmName` / `ptrRealmName` | a realm's name | the realm PLAY logs Live / the PTR into (see Live and PTR below), when `realm-name.txt` doesn't say |
 
 Names the launcher doesn't know are skipped and noted in its log, so a newer policy never breaks an older launcher.
 `launcher-policy.json` may hold `"_comment"` notes (on the file, on a setting or in `tweaks`); `make-manifest.py` removes them and the launcher skips them. Plain JSON, so editors don't complain. See
@@ -146,6 +147,27 @@ newest `config-cache.wtf` (auto loot and the other account settings), `bindings-
 each account in `WTF\Account` over the older ones, before the game starts and after it closes (a backup is made
 first). It can also share addon settings (`SavedVariables`) and each character's own key bindings and macros. The
 server can do the same between PCs: `mod-temucraft-account-wide` (`Temucraft.AccountWide.Settings.*`).
+
+## Live and PTR (the test realm)
+
+"Game version" above PLAY picks Live or the PTR (remembered). Each has its own install: the PTR's folder is on the
+Game files page (the Live folder's name + " PTR" unless you pick another). INSTALL on the PTR makes it from the Live
+game: the MPQs under `Data` are hard linked when both folders are on the same drive (no extra space; the launcher only
+ever moves new files over them, so Live's copies are never changed), everything else is copied, and `WTF`,
+`Interface\AddOns`, `Cache`, `Logs` and `Screenshots` are left out (fresh settings, no addons). The PTR's file list is
+the Live manifest with the server's `ptr/manifest.json` over it (only the files that differ from Live, downloaded from
+`ptr/`); its addon list is `addons.json` with `ptr/addons.json` over it (PTR-only addons get "Also install on Live").
+The game never shows a realm list: before it starts, the launcher writes `SET realmName` and `SET realmList` into that
+install's `WTF\Config.wtf`. Live's realm: `realm-name.txt` next to the manifest, else the policy's `liveRealmName`,
+else the realm status's only non-PTR realm (id 1 when there are several). The PTR's: `ptr/realm-name.txt`, else
+`ptrRealmName`, else realm id 3 in the realm status, else `[PTR] Falric`.
+
+Copying from Live (only the PTR folder is written; whatever it replaces is kept in the PTR's `_Temucraft\Backups`):
+"Copy my addons from Live" (Addons page, PTR only: `Interface\AddOns` and the addons' `SavedVariables`), "Copy Account
+Data" (`config-cache.wtf`, `macros-cache.txt`, `SavedVariables`, and each character's files) and "Copy Key Bindings"
+(`bindings-cache.wtf`, per account and per character), both on the Game files page. Characters go from the Live
+realm's folder to the PTR realm's (`WTF\Account\NAME\<realm>\<character>`); copied files get a fresh `cache.md5`
+entry, so the game keeps them and sends them to the PTR realm.
 
 ## Languages
 
@@ -250,7 +272,10 @@ pip install paramiko
 python3 server/upload.py files  "D:\Temucraft release"      # patches/, locales/, addons/, options/, news.json...
 python3 server/upload.py server "D:\AzerothCore build"      # worldserver, authserver, configs (stops/starts it)
 python3 server/upload.py manifest                            # only rebuild manifest.json
+python3 server/upload.py ptr    "D:\Temucraft release\ptr"   # the PTR's files to ptr/, then ptr/manifest.json
 ```
+
+`files` never sends, lists or deletes the `ptr/` folder; `ptr` only works on it.
 
 Only new or changed files are sent, each under a temporary name until it is complete (`make-manifest.py` skips
 unfinished `.upload` files); `--delete` removes what's gone locally, `--dry-run` shows the plan. `--delete` never

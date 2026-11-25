@@ -29,6 +29,9 @@ public static class SharedSettings
         { ["config-cache.wtf"] = 0, ["bindings-cache.wtf"] = 1, ["macros-cache.txt"] = 2, ["layout-local.txt"] = 3, ["chat-cache.txt"] = 4 };
     const int CacheEntry = 20;
 
+    /// <summary>Whether the game keeps a character file of this name in the character's cache.md5.</summary>
+    internal static bool HasCacheEntry(string name) => CharacterCacheIndex.ContainsKey(name);
+
     /// <summary>The account folders (WTF\Account\NAME), without the shared SavedVariables folder.</summary>
     public static IReadOnlyList<string> Accounts(string wowFolder)
     {
@@ -151,7 +154,7 @@ public static class SharedSettings
 
     /// <summary>Writes a copied file's MD5 and save time into its folder's cache.md5 (made when missing), with a time
     /// newer than the one there, so the game keeps the file and sends it to the server instead of replacing it.</summary>
-    static void SetCacheEntry(string file, byte[] content, uint savedAt)
+    internal static void SetCacheEntry(string file, byte[] content, uint savedAt)
     {
         int index = CacheIndex(file, out int entries);
         if (index < 0) return;

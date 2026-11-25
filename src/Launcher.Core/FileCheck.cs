@@ -73,6 +73,15 @@ public sealed class HashCache
         return sha;
     }
 
+    /// <summary>The hash this cache knows for a file that hasn't changed since (same size and time); null otherwise.
+    /// Never reads the file.</summary>
+    public string? Known(string path)
+    {
+        FileInfo info = new(path);
+        return info.Exists && _entries.TryGetValue(Path.GetFullPath(path).ToLowerInvariant(), out Entry? entry)
+               && entry.Size == info.Length && entry.ModifiedTicks == info.LastWriteTimeUtc.Ticks ? entry.Sha256 : null;
+    }
+
     /// <summary>Records a file just downloaded and verified, so the next check doesn't hash it again.</summary>
     public void Remember(string path, string sha256)
     {

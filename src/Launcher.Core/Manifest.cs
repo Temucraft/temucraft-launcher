@@ -11,6 +11,10 @@ public sealed class Manifest
     /// <summary>Written to realmlist.wtf in every installed locale. Empty leaves realmlist.wtf alone.</summary>
     public string Realmlist { get; set; } = "";
 
+    /// <summary>The realm the game goes to (realm-name.txt next to the manifest), written to Config.wtf as SET realmName so
+    /// the game skips the realm list; empty: not set by the server (see <see cref="GameVersions"/>).</summary>
+    public string RealmName { get; set; } = "";
+
     /// <summary>The Windows launcher ("launcher" in manifest.json; launchers before 1.4 only know this one).</summary>
     [JsonPropertyName("launcher")]
     public ManifestFile? WindowsLauncher { get; set; }

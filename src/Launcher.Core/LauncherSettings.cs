@@ -130,6 +130,10 @@ public sealed record NavLink(string Name, Uri Url, string Tip)
 public sealed class UserSettings
 {
     public string WowFolder { get; set; } = "";
+    /// <summary>The game version PLAY starts: "live" or "ptr" (the test realm, see <see cref="GameVersions"/>).</summary>
+    public string GameVersion { get; set; } = GameVersions.Live;
+    /// <summary>The PTR's own install; "" = the Live folder + " PTR".</summary>
+    public string PtrFolder { get; set; } = "";
     public string Username { get; set; } = "";
     public bool RememberPassword { get; set; }
     public List<string> Locales { get; set; } = [];
@@ -201,6 +205,8 @@ public sealed class UserSettings
     public int BackupsToKeep { get; set; } = 10;
     /// <summary>Installed catalog addons and the commit they were installed from (to offer updates).</summary>
     public Dictionary<string, string> AddonCommits { get; set; } = [];
+    /// <summary>The same for the PTR's own addons.</summary>
+    public Dictionary<string, string> PtrAddonCommits { get; set; } = [];
     /// <summary>Default addons already installed once (not installed again if the player removes them).</summary>
     public List<string> DefaultAddonsDone { get; set; } = [];
     /// <summary>Set by the install window: the next update also installs the recommended addons (once).</summary>

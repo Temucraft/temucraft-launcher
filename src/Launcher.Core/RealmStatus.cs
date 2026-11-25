@@ -3,8 +3,9 @@ using System.Text.Json;
 
 namespace Launcher.Core;
 
-/// <summary>One realm from the website's <c>?realm-status=data</c>: counts only, nothing about single players.</summary>
-public sealed record RealmInfo(string Name, bool Online, int Players, int Alliance, int Horde, int Peak, long PeakTime, long Uptime);
+/// <summary>One realm from the website's <c>?realm-status=data</c>: counts only, nothing about single players. Id is the
+/// realm's id in the login server's realmlist (0 when the website doesn't send it).</summary>
+public sealed record RealmInfo(string Name, bool Online, int Players, int Alliance, int Horde, int Peak, long PeakTime, long Uptime, int Id = 0);
 
 /// <summary>
 /// The realm status block on the main page. The website (AoWoW) answers <c>?realm-status=data</c> with the realms, players
@@ -30,7 +31,7 @@ public sealed class RealmStatus
             foreach (JsonElement r in list.EnumerateArray())
                 realms.Add(new RealmInfo(Text(r, "name"), r.TryGetProperty("online", out JsonElement on) && on.ValueKind == JsonValueKind.True,
                     (int)Number(r, "players"), (int)Number(r, "alliance"), (int)Number(r, "horde"), (int)Number(r, "peak"),
-                    Number(r, "peakTime"), Number(r, "uptime")));
+                    Number(r, "peakTime"), Number(r, "uptime"), (int)Number(r, "id")));
         return new RealmStatus
         {
             Realms = realms,

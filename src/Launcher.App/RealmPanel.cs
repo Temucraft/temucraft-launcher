@@ -52,6 +52,7 @@ public partial class MainWindow
         try
         {
             RealmStatus status = await RealmStatus.FetchAsync(url, _server?.CertificateSha256);
+            _realmStatus = status;   // also the realm names PLAY writes into Config.wtf
             _playerMapUrl = RealmStatus.PlayerMapUrl(_policy, NavLinksOrNone, status, url);
             ShowRealms(status);
         }

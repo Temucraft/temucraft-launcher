@@ -88,8 +88,10 @@ public static class TestingFiles
             FileInfo from = new(source), to = new(full);
             if (to.Exists && to.Length == from.Length && to.LastWriteTimeUtc == from.LastWriteTimeUtc) continue;
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            File.Copy(source, full, overwrite: true);
-            File.SetLastWriteTimeUtc(full, from.LastWriteTimeUtc);
+            // a new file moved over the old name, never written into it: in a PTR folder the old one may be a Live file's hard link
+            File.Copy(source, full + ".tmp", overwrite: true);
+            File.SetLastWriteTimeUtc(full + ".tmp", from.LastWriteTimeUtc);
+            File.Move(full + ".tmp", full, overwrite: true);
             log.Add($"Testing: copied {source} to {target}");
         }
         foreach (string old in before.Where(b => !now.Contains(b)))
