@@ -160,6 +160,14 @@ public static class Look
                 app.Resources[$"SystemAccentColorDark{i}"] = Shade(c, 1 - 0.15 * i);
                 app.Resources[$"SystemAccentColorLight{i}"] = Shade(c, 1 + 0.15 * i);
             }
+            // text on accent-coloured buttons (picked presets, race chips, checked toggles): dark on a bright
+            // accent like the gold, white on a dark one, so it stays readable
+            double lum = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+            IBrush onAccent = new SolidColorBrush(lum > 0.55 ? Color.Parse("#1E1208") : Colors.White);
+            foreach (string key in new[] { "ToggleButtonForegroundChecked", "ToggleButtonForegroundCheckedPointerOver",
+                                           "ToggleButtonForegroundCheckedPressed", "AccentButtonForeground",
+                                           "AccentButtonForegroundPointerOver", "AccentButtonForegroundPressed" })
+                app.Resources[key] = onAccent;
         }
     }
 
