@@ -1891,6 +1891,15 @@ static Task DebugModeSettings()
         File.WriteAllLines(Path.Combine(dir, "Logs", "TemucraftDebug.log"), Enumerable.Range(1, 100).Select(i => $"line {i}"));
         List<string> tail = DebugMode.LogTails(dir, 10);
         Assert(tail.Any(l => l.Contains("last 10 of 100")) && tail.Last() == "  line 100", "log tail");
+        // the performance log: its own number of lines, after the debug log, readable while the game has it open
+        string perfPath = Path.Combine(dir, "Logs", "TemucraftPerf.log");
+        File.WriteAllLines(perfPath, Enumerable.Range(1, 200).Select(i => $"perf {i}"));
+        using (new FileStream(perfPath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+            tail = DebugMode.LogTails(dir, 10);
+        int perfAt = tail.FindIndex(l => l.StartsWith("Performance log (Logs\\TemucraftPerf.log, last 60 of 200 lines)"));
+        Assert(perfAt > tail.FindIndex(l => l.StartsWith("Debug log")) && tail[perfAt + 1] == "  perf 141" && tail[perfAt + 60] == "  perf 200",
+               "performance log tail: " + string.Join(" | ", tail.Take(4)));
+        Assert(DebugMode.LogTails(dir, 10, 5).Count(l => l.StartsWith("  perf ")) == 5, "performance log line count");
         File.WriteAllText(Path.Combine(dir, DebugMode.Marker), "");
         Assert(DebugMode.IsOn(dir), "on with the file");
     }

@@ -45,22 +45,31 @@ public static class DebugMode
     /// <summary>Command line for Wow.exe: the console while debug mode is on.</summary>
     public static IReadOnlyList<string> Arguments(bool on) => on ? ["-console"] : [];
 
-    /// <summary>The ends of Logs\TemucraftDebug.log and Logs\taint.log for Copy diagnostics (nothing when neither exists).</summary>
-    public static List<string> LogTails(string wowFolder, int lines = 80)
+    /// <summary>The ends of Logs\TemucraftDebug.log, Logs\TemucraftPerf.log (TemucraftCrash's performance log, written
+    /// in debug mode; its last <paramref name="perfLines"/> lines) and Logs\taint.log for Copy diagnostics (nothing for a
+    /// log that doesn't exist). The logs are read while the game may still be writing them.</summary>
+    public static List<string> LogTails(string wowFolder, int lines = 80, int perfLines = 60)
     {
         List<string> result = [];
-        foreach ((string name, string title) in new[] { ("TemucraftDebug.log", "Debug log"), ("taint.log", "Taint log") })
+        foreach ((string name, string title, int count) in new[]
+                 {
+                     ("TemucraftDebug.log", "Debug log", lines), ("TemucraftPerf.log", "Performance log", perfLines),
+                     ("taint.log", "Taint log", lines),
+                 })
         {
             string path = Path.Combine(wowFolder, "Logs", name);
             if (!File.Exists(path)) continue;
             try
             {
-                string[] all = File.ReadAllLines(path, Encoding.UTF8);
+                List<string> all = [];
+                using (FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (StreamReader reader = new(stream, Encoding.UTF8))
+                    while (reader.ReadLine() is { } line) all.Add(line);
                 result.Add("");
-                result.Add($"{title} (Logs\\{name}, last {Math.Min(lines, all.Length)} of {all.Length} lines):");
-                foreach (string line in all.Skip(Math.Max(0, all.Length - lines))) result.Add("  " + line);
+                result.Add($"{title} (Logs\\{name}, last {Math.Min(count, all.Count)} of {all.Count} lines):");
+                foreach (string line in all.Skip(Math.Max(0, all.Count - count))) result.Add("  " + line);
             }
-            catch (IOException e) { result.Add($"{title}: can't read ({e.Message})"); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { result.Add($"{title}: can't read ({e.Message})"); }
         }
         return result;
     }
