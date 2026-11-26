@@ -68,6 +68,8 @@ List<(string Name, Func<Task> Body)> tests =
     ("Macro files read and write back the same; new ids and limits", MacroFileRoundTrip),
     ("Per character settings go to the character's config-cache.wtf", PerCharacterOptions),
     ("The old launcher a self update leaves behind is removed at the next start", SelfUpdateLeftovers),
+    ("A new launcher asks Update now / Later, required or optional; Later lasts until the next start or a newer one", LauncherUpdateAsks),
+    ("The launcher self update reports its progress, stops cleanly on Cancel and carries on from there", SelfUpdateProgressAndCancel),
     ("testing.env copies test files in and takes them out again", TestingFilesInAndOut),
     ("Character screen scenes: Classic / HD defaults and the player's picks in TemucraftScenes.lua", CharacterScenesFile),
     ("HD character models: patch-K and patch-_ built per race from the pieces", HdModelsBuild),
@@ -1613,6 +1615,89 @@ static async Task SelfUpdateLeftovers()
     Check(!File.Exists(exe + ".old"), "removed at start");
 }
 
+static Task LauncherUpdateAsks()
+{
+    static LauncherPolicy Rule(string json) => LauncherPolicy.From(new Dictionary<string, System.Text.Json.JsonElement>
+        { ["launcherUpdate"] = System.Text.Json.JsonDocument.Parse(json).RootElement });
+    LauncherPolicy required = LauncherPolicy.From(null), recommended = Rule("{\"value\": \"recommended\"}"),
+                   perRealm = Rule("{\"value\": {\"required\": [1], \"recommended\": [3]}}");
+    Check(LauncherUpdatePrompt.KindOf(false, required, 1) == LauncherUpdateKind.None, "the same launcher: nothing to ask");
+    Check(LauncherUpdatePrompt.KindOf(true, required, 1) == LauncherUpdateKind.Required, "required by default");
+    Check(LauncherUpdatePrompt.KindOf(true, recommended, 1) == LauncherUpdateKind.Optional, "recommended: optional");
+    Check(LauncherUpdatePrompt.KindOf(true, perRealm, 1) == LauncherUpdateKind.Required
+          && LauncherUpdatePrompt.KindOf(true, perRealm, 3) == LauncherUpdateKind.Optional, "per realm: Live required, PTR optional");
+    Check(LauncherUpdatePrompt.Message(LauncherUpdateKind.Optional).StartsWith("A new launcher is available.")
+          && LauncherUpdatePrompt.Message(LauncherUpdateKind.Required).Contains("needed to keep playing")
+          && LauncherUpdatePrompt.LaterNote(LauncherUpdateKind.Optional) is null
+          && LauncherUpdatePrompt.LaterNote(LauncherUpdateKind.Required)!.Contains("can't play"), "the words follow the kind");
+
+    // required: it asks (never installs by itself); Later closes it, PLAY waits, the button at the top stays
+    LauncherUpdatePrompt prompt = new();
+    Check(!prompt.Offer(LauncherUpdateKind.None, "") && !prompt.BlocksPlay && !prompt.ShowsBadge, "nothing on offer");
+    Check(prompt.Offer(LauncherUpdateKind.Required, "aaa"), "a required launcher asks");
+    Check(prompt.BlocksPlay && prompt.ShowsBadge && !prompt.PutOff, "PLAY waits while a required launcher is on offer");
+    prompt.Later();
+    Check(prompt.PutOff && prompt.BlocksPlay && prompt.ShowsBadge, "Later: still can't play, the button reopens it");
+    Check(!prompt.Offer(LauncherUpdateKind.Required, "AAA"), "the 5-minute checks don't ask again for the same launcher");
+    Check(prompt.Offer(LauncherUpdateKind.Required, "bbb"), "a newer launcher asks again");
+    // switching to a realm where it is only recommended: PLAY works, still put off
+    prompt.Later();
+    Check(!prompt.Offer(LauncherUpdateKind.Optional, "bbb") && !prompt.BlocksPlay && prompt.ShowsBadge, "optional: PLAY works");
+    Check(!prompt.Offer(LauncherUpdateKind.None, "") && !prompt.ShowsBadge && !prompt.BlocksPlay, "updated: nothing left");
+    // the next start is a new prompt: it asks again
+    Check(new LauncherUpdatePrompt().Offer(LauncherUpdateKind.Optional, "bbb"), "asks again at the next start");
+    return Task.CompletedTask;
+}
+
+static async Task SelfUpdateProgressAndCancel()
+{
+    // the progress line
+    SelfUpdateProgress line = new();
+    line.Report(0, 10 * 1048576, TimeSpan.Zero);
+    Check(line.Percent == 0 && line.Speed == 0 && line.Text() == "0%  ·  0 KB / 10.0 MB", line.Text());
+    line.Report(5 * 1048576, 10 * 1048576, TimeSpan.FromSeconds(2));
+    Check(line.Percent == 50 && Math.Abs(line.Fraction - 0.5) < 1e-9, "half way");
+    Check(line.Text() == "50%  ·  5.0 MB / 10.0 MB  ·  2.5 MB/s", line.Text());
+    SelfUpdateProgress resumed = new();
+    resumed.Report(8 * 1048576, 10 * 1048576, TimeSpan.Zero);
+    resumed.Report(9 * 1048576, 10 * 1048576, TimeSpan.FromSeconds(1));
+    Check(resumed.Speed == 1048576 && resumed.Percent == 90, "a resumed download counts its speed from where it carried on");
+    Check(new SelfUpdateProgress().Fraction == 0, "nothing known yet");
+
+    byte[] oldExe = "the running launcher"u8.ToArray(), newExe = RandomNumberGenerator.GetBytes(3_000_000);
+    string dir = TempDir(), exe = Path.Combine(dir, "TemucraftLauncher.exe");
+    await File.WriteAllBytesAsync(exe, oldExe);
+    ManifestFile launcher = File1("TemucraftLauncher.exe", newExe);
+    Manifest manifest = new() { Launchers = { [Manifest.ThisPlatform] = launcher } };
+    FakeServer server = new(new() { ["files/TemucraftLauncher.exe"] = newExe });
+    using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
+
+    // Cancel after the first piece: nothing swapped, the part and its .sha256 kept for the next try
+    using (CancellationTokenSource cancel = new())
+    {
+        bool stopped = false;
+        try
+        {
+            await SelfCheck.UpdateAsync(client, manifest, new SyncProgress<(long Done, long Total)>(_ => cancel.Cancel()), cancel.Token, exe);
+        }
+        catch (OperationCanceledException) { stopped = true; }
+        Check(stopped, "Cancel stops the download");
+    }
+    Check((await File.ReadAllBytesAsync(exe)).SequenceEqual(oldExe) && !File.Exists(exe + ".old") && !File.Exists(exe + ".new"), "nothing swapped");
+    long kept = File.Exists(exe + ".new.part") ? new FileInfo(exe + ".new.part").Length : -1;
+    Check(kept > 0 && kept < newExe.Length, "the part is kept: " + kept);
+    Check(File.ReadAllText(exe + ".new.part.sha256").Trim() == launcher.Sha256, "with the version it belongs to");
+
+    // Update now again: carries on from the part, reports up to the whole size, then swaps
+    List<(long Done, long Total)> reports = [];
+    string swapped = await SelfCheck.UpdateAsync(client, manifest, new SyncProgress<(long Done, long Total)>(reports.Add), CancellationToken.None, exe);
+    Check(swapped == exe && server.LastRangeFrom == kept, "resumed from the kept part (range from " + server.LastRangeFrom + ")");
+    Check(reports.Count > 0 && reports[0].Done > kept && reports[^1] == (newExe.Length, newExe.Length)
+          && reports.Zip(reports.Skip(1)).All(p => p.First.Done <= p.Second.Done) && reports.All(r => r.Total == newExe.Length), "progress counts up to the size");
+    Check((await File.ReadAllBytesAsync(exe)).SequenceEqual(newExe) && (await File.ReadAllBytesAsync(exe + ".old")).SequenceEqual(oldExe), "swapped, the old one kept as .old");
+    Check(!File.Exists(exe + ".new.part") && !File.Exists(exe + ".new.part.sha256") && !File.Exists(exe + ".new"), "no part left");
+}
+
 static Task NewsTags()
 {
     var parts = NewsItem.Segments("• [new] Login window\n• [Not live yet] Wardrobe [not a tag] [Fixed]");
@@ -1983,6 +2068,12 @@ static Task DebugModeSettings()
 
 
 /// <summary>Answers like Apache: files under the folder, Range requests with 206.</summary>
+/// <summary>Reports straight away, on the reporting thread (Progress&lt;T&gt; posts later).</summary>
+sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
+{
+    public void Report(T value) => report(value);
+}
+
 sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler
 {
     public Dictionary<string, byte[]> Files { get; } = files;

@@ -84,7 +84,7 @@ recommendation (and as the value outright where the launcher has no box for it).
 | `skipGameAgreements` | true / false | skip the game's first-start agreement screens (on by default) |
 | `ptrCopyLiveSettings` | true / false | a new PTR install starts with the player's Live `WTF\Config.wtf` settings (resolution, graphics, sound, interface; on by default); false: fresh settings, like a new install. Copy Account Data copies them whatever this says (it's an explicit button). |
 | `largeAddressAware` | true / false | Wow.exe's 4 GB switch; enforced, it's set again after every update |
-| `launcherUpdate` | "required" / "recommended", or per realm | A new launcher: installed before anything else (the default; a window in the middle, "There's an update"), or only a banner at the top the player can put off. Per realm id: `{"required": [1, 2], "recommended": [3], "default": "required"}`; a realm in neither list follows `default` (`required` when left out). The realm is the picked game version's: 1 for Live, 3 for the PTR. |
+| `launcherUpdate` | "required" / "recommended", or per realm | A new launcher: required to play (the default) or only recommended. Either way a window in the middle ("There's an update") asks Update now / Later; required, PLAY waits for the new launcher. Per realm id: `{"required": [1, 2], "recommended": [3], "default": "required"}`; a realm in neither list follows `default` (`required` when left out). The realm is the picked game version's: 1 for Live, 3 for the PTR. |
 | `backupsToKeep` | a number | how many backups the launcher keeps |
 | `defaultLocale` | e.g. `"enUS"` | the server's default language (its base client's): always installed, ticked and greyed out; `enUS` when not set. The game's own language is always kept too. |
 | `requiredLocales` | e.g. `["deDE"]` | extra languages everyone gets (players can still add more) |
@@ -124,11 +124,16 @@ sleep again as soon as the job ends.
 hours, and never while the game is running.
 
 **Launcher updates.** When the server hands out a different launcher (`publish.sh` puts the new one in the files
-folder), what happens follows `launcherUpdate` for the realm of the picked game version. Required (the default): the
-new launcher is downloaded before anything else, and a window in the middle ("There's an update") shows the
-changelog's newest "Launcher ..." entry with "Update the launcher" and no "Later". Recommended: a banner at the top
-shows the same; "Later" hides it until the next start. "Update the launcher" downloads it (checked against the
-manifest), swaps it with the running one and restarts.
+folder), a window in the middle ("There's an update") shows the changelog's newest "Launcher ..." entry and asks:
+**Update now** or **Later**. It is never installed without asking. `launcherUpdate` for the realm of the picked game
+version says what Later means. Recommended: "A new launcher is available", and everything keeps working. Required (the
+default): "A new launcher is needed to keep playing on this server". Settings, mods, game files and news still work,
+but PLAY doesn't start the game; it opens the window again. After Later, a **New launcher** button at the top opens the
+window again. The window asks again at the next start, or when the server hands out yet another launcher, and not at
+the 5-minute checks in between. Update now downloads it in the window with a bar, the percent, MB done / total and the
+speed. **Cancel** stops the download and keeps what came so far, so the next Update now carries on from there. A failed
+download shows in the window with Retry / Later. When it's done, the window says "Restarting the launcher…"; the new
+launcher is checked against the manifest, swapped with the running one and started.
 
 ## Play tickets: the game only through the launcher
 

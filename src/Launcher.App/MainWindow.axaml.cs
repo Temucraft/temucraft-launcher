@@ -128,6 +128,7 @@ public partial class MainWindow : Window
             if (!_quitting && _settings.OnClose == "tray" && HideToTray()) { e.Cancel = true; return; }
             SaveSettings();
             _work?.Cancel();
+            _launcherDownload?.Cancel();   // the half-downloaded launcher is kept and carries on next time
             _tray?.Dispose();
         };
         FillWindowSettings();
@@ -316,7 +317,6 @@ public partial class MainWindow : Window
         UpdateButton.IsEnabled = ClientButton.IsEnabled = !busy && _server is not null;
         PlayButton.IsEnabled = PreviewInstall.IsEnabled = GameVersionBox.IsEnabled = !busy;
         CancelButton.IsVisible = busy;
-        LauncherUpdateNowButton.IsEnabled = !busy;   // a running download finishes first (Cancel stays reachable below)
         if (!busy)
         {
             Progress.Value = 0;
@@ -718,28 +718,20 @@ public partial class MainWindow : Window
             ShowGatedTweaks();
             // the game files' version (the server's release); the launcher's own version is in the corner
             VersionText.Text = manifest.ClientVersion.Length > 0 ? string.Format(Translation.T("Game version: {0}"), manifest.ClientVersion) : "";
-            ShowLauncherUpdate(!launcherOk && manifest.Launcher is not null);
             // shown, and kept for the next start (before logging in, or when the server can't be reached)
             FeedCache feeds = new() { News = newsText ?? "", Changelog = changelogText ?? "", NewsRule = manifest.Rules.News,
                                       ChangelogRule = manifest.Rules.Changelog, Saved = DateTime.Now };
             ShowFeeds(feeds);
             feeds.Save(_feedFile);
+            ShowLauncherUpdate(!launcherOk && manifest.Launcher is not null);   // after the save: it shows the newest changelog
             RefreshCatalog();
             RefreshMusicChoices();   // the page was built before the server's music clips were known
             RefreshUntrackedButton();
             MaybeAskConfigPreset();
         });
         if (!launcherOk) Log("Self-check: this launcher differs from the server's copy");
-        bool firstCheck = !_launcherChecked;
+        // a new launcher is never installed by itself: ShowLauncherUpdate above asks (Update now / Later)
         _launcherChecked = true;
-        if (!launcherOk && manifest.Launcher is not null && manifest.Rules.LauncherUpdateRequired(PickedRealmId) && firstCheck)
-        {
-            // the server wants the new launcher first: get it now, then start it (nothing else runs before)
-            Status("Updating the launcher first…");
-            string exe = await SelfCheck.UpdateAsync(client, manifest, new UiProgress<(long Done, long Total)>(p =>
-                Progress.Value = p.Total == 0 ? 1 : (double)p.Done / p.Total), token);
-            throw new LauncherRestartException(exe);
-        }
         return manifest;
     }
 
@@ -1138,17 +1130,17 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------------------------------- launcher updates
-    bool _launcherLater;     // "Later" pressed: no banner again for that launcher
-    string _laterSha = "";   // the server's launcher when "Later" was pressed
-    bool _launcherChecked;   // the first check of this run is done (only that one installs a new launcher by itself)
+    readonly LauncherUpdatePrompt _launcherPrompt = new();   // asked once per start (and again for a newer launcher)
+    CancellationTokenSource? _launcherDownload;   // the new launcher downloading (in the update window)
+    bool _launcherChecked;   // the first check of this run is done (the 5-minute checks wait for it)
     readonly DispatcherTimer _launcherTimer = new() { Interval = TimeSpan.FromMinutes(5) };
     DateTime _lastLauncherCheck = DateTime.Now;
 
     /// <summary>While the launcher is open: every 5 minutes, and when the window gets focus again (at most once a minute),
-    /// whether the server has a new launcher (a banner asks).</summary>
+    /// whether the server has a new launcher. The window only opens again for a launcher "Later" wasn't pressed for.</summary>
     async Task CheckLauncherAsync()
     {
-        if (Busy || _server is null || !HaveLogin || !Agreed || !_launcherChecked) return;
+        if (Busy || _launcherDownload is not null || _server is null || !HaveLogin || !Agreed || !_launcherChecked) return;
         if (DateTime.Now - _lastLauncherCheck < TimeSpan.FromMinutes(1)) return;
         _lastLauncherCheck = DateTime.Now;
         try
@@ -1158,7 +1150,6 @@ public partial class MainWindow : Window
             if (manifest.Launcher is null || await SelfCheck.MatchesAsync(manifest)) return;
             _manifest ??= manifest;
             if (!IsPtr && _manifest.Launcher?.Sha256 != manifest.Launcher.Sha256) _manifest = manifest;
-            if (_launcherLater && _laterSha != manifest.Launcher.Sha256) _launcherLater = false;   // a newer one since "Later"
             Log("A new launcher is on the server");
             ShowLauncherUpdate(true);
         }
@@ -1168,37 +1159,64 @@ public partial class MainWindow : Window
     /// <summary>The realm id of the picked game version, for the server's per-realm rules.</summary>
     int PickedRealmId => IsPtr ? GameVersions.PtrRealmId : GameVersions.LiveRealmId;
 
-    /// <summary>The server hands out a different launcher (normally a newer one). Required (launcherUpdate policy for the
-    /// picked realm): a window in the middle with what changed and no "Later". Recommended: a banner that can be put off
-    /// until the next start, with what changed (the changelog's newest "Launcher ..." entry).</summary>
-
+    /// <summary>The server hands out a different launcher (normally a newer one). Required or recommended (launcherUpdate
+    /// for the picked realm), a window in the middle asks: Update now or Later, with what changed (the changelog's
+    /// newest "Launcher ..." entry). Later: the window stays closed until the next start (or a newer launcher), the
+    /// "New launcher" button at the top opens it again, and when the update is required PLAY waits for it.</summary>
     void ShowLauncherUpdate(bool differs)
     {
-        // required by the server (launcherUpdate policy): in the middle of the window, no "Later";
-        // recommended: the banner at the top that can be put off
-        bool required = differs && (_manifest?.Rules.LauncherUpdateRequired(PickedRealmId) ?? false);
-        LauncherUpdateOverlay.IsVisible = required;
-        if (required)
+        LauncherUpdateKind kind = _manifest is { Launcher: not null } manifest
+            ? LauncherUpdatePrompt.KindOf(differs, manifest.Rules, PickedRealmId) : LauncherUpdateKind.None;
+        bool ask = _launcherPrompt.Offer(kind, _manifest?.Launcher?.Sha256 ?? "");
+        LauncherUpdateBadge.IsVisible = _launcherPrompt.ShowsBadge;
+        if (_launcherDownload is not null) return;   // downloading: the window stays as it is
+        if (kind == LauncherUpdateKind.None) { LauncherUpdateOverlay.IsVisible = false; return; }
+        if (LauncherUpdateOverlay.IsVisible)
         {
-            LauncherUpdateOverlayText.Text = Translation.T("A new launcher is needed to keep playing on this server. It takes a few seconds and keeps your settings.");
-            NewsItem? whatsNew = null;
-            try { whatsNew = SelfCheck.WhatsNew(NewsItem.Parse(FeedCache.Load(_feedFile).Changelog)); }
-            catch (System.Text.Json.JsonException) { }
-            LauncherUpdateNewsList.Children.Clear();
-            if (whatsNew is not null) ShowNews(LauncherUpdateNewsList, [whatsNew], new FeedRule(true, 1, 1));
-            WarningBanner.IsVisible = false;
-            return;
+            if (!LauncherUpdateErrorText.IsVisible) FillLauncherUpdate();   // open: the words follow the picked realm
         }
-        WarningBanner.IsVisible = differs && !_launcherLater;
-        LauncherUpdateButtons.IsVisible = differs;
-        if (!differs) { WhatsNewPanel.IsVisible = false; return; }
-        WarningText.Text = Translation.T("A new launcher is available. Updating is strongly recommended: it takes a few seconds and keeps your settings.");
-        NewsItem? news = null;
-        try { news = SelfCheck.WhatsNew(NewsItem.Parse(FeedCache.Load(_feedFile).Changelog)); }
-        catch (System.Text.Json.JsonException) { }
-        WhatsNewButton.IsVisible = news is not null;
-        if (news is not null) ShowNews(WhatsNewList, [news], new FeedRule(true, 1, 1));
+        else if (ask)
+        {
+            OpenLauncherUpdate();
+            Log(kind == LauncherUpdateKind.Required ? "A new launcher is needed to play on this server: asking" : "A new launcher is available: asking");
+        }
     }
+
+    /// <summary>The update window's words for the launcher on offer, and its buttons back to Update now / Later.</summary>
+    void FillLauncherUpdate(string? error = null)
+    {
+        LauncherUpdateKind kind = _launcherPrompt.Kind;
+        LauncherUpdateOverlayText.Text = Translation.T(LauncherUpdatePrompt.Message(kind));
+        string? later = LauncherUpdatePrompt.LaterNote(kind);
+        LauncherUpdateLaterText.Text = later is null ? "" : Translation.T(later);
+        LauncherUpdateLaterText.IsVisible = later is not null;
+        LauncherUpdateErrorText.Text = error ?? "";
+        LauncherUpdateErrorText.IsVisible = error is not null;
+        LauncherUpdateNowButton.Content = Translation.T(error is null ? "Update now" : "Retry");
+        LauncherUpdateNowButton.IsVisible = LauncherLaterButton.IsVisible = true;
+        LauncherCancelDownloadButton.IsVisible = false;
+        if (error is not null) LauncherUpdateProgressPanel.IsVisible = false;
+        NewsItem? whatsNew = null;
+        try { whatsNew = SelfCheck.WhatsNew(NewsItem.Parse(FeedCache.Load(_feedFile).Changelog)); }
+        catch (System.Text.Json.JsonException) { }
+        LauncherUpdateNewsList.Children.Clear();
+        if (whatsNew is not null) ShowNews(LauncherUpdateNewsList, [whatsNew], new FeedRule(true, 1, 1));
+        LauncherUpdateNewsScroll.IsVisible = whatsNew is not null;
+    }
+
+    /// <summary>Opens the update window again (the "New launcher" button, or PLAY while the update is required).</summary>
+    void OpenLauncherUpdate()
+    {
+        if (_launcherPrompt.Kind == LauncherUpdateKind.None) return;
+        if (_launcherDownload is null)
+        {
+            FillLauncherUpdate();
+            LauncherUpdateProgressPanel.IsVisible = false;
+        }
+        LauncherUpdateOverlay.IsVisible = true;
+    }
+
+    void OnShowLauncherUpdate(object? sender, RoutedEventArgs e) => OpenLauncherUpdate();
 
     /// <summary>Mods cards share the page width: as many columns as fit (each at least 250 wide).</summary>
     double OptionCardWidth()
@@ -1210,33 +1228,82 @@ public partial class MainWindow : Window
         return Math.Floor(width / columns) - gap;
     }
 
-    void OnWhatsNew(object? sender, RoutedEventArgs e) => WhatsNewPanel.IsVisible = !WhatsNewPanel.IsVisible;
-
     void OnLauncherLater(object? sender, RoutedEventArgs e)
     {
-        _launcherLater = true;
-        _laterSha = _manifest?.Launcher?.Sha256 ?? "";
-        WarningBanner.IsVisible = false;
-        Log("Launcher update put off until the next start");
+        if (_launcherDownload is not null) return;
+        _launcherPrompt.Later();
+        LauncherUpdateOverlay.IsVisible = false;
+        Log(_launcherPrompt.BlocksPlay
+            ? "Launcher update put off: PLAY waits for it (New launcher at the top opens it again)"
+            : "Launcher update put off until the next start (New launcher at the top opens it again)");
     }
 
+    void OnCancelLauncherDownload(object? sender, RoutedEventArgs e) => _launcherDownload?.Cancel();
+
+    /// <summary>Update now: downloads the new launcher in the window (bar, percent, MB, speed; Cancel keeps what came
+    /// so far for the next try), swaps it with this one and restarts. A failure shows in the window with Retry / Later.</summary>
     async void OnUpdateLauncher(object? sender, RoutedEventArgs e)
     {
-        if (_server is null || _manifest is null || Busy) return;
-        if (_gameRunning) { Status(Translation.T("Close the game first, then update the launcher.")); return; }
+        if (_server is null || _manifest?.Launcher is null || _launcherDownload is not null) return;
+        if (_gameRunning) { FillLauncherUpdate(Translation.T("Close the game first, then update the launcher.")); return; }
         Manifest manifest = _manifest;
-        string? exe = null;
         ServerClient client = NewClient();   // reads the login boxes: on the window's thread
-        bool done = await RunAsync("Launcher update", async token =>
+        CancellationTokenSource cts = new();
+        _launcherDownload = cts;
+        SelfUpdateProgress progress = new();
+        bool finished = false;
+        LauncherUpdateErrorText.IsVisible = false;
+        LauncherUpdateNowButton.IsVisible = LauncherLaterButton.IsVisible = false;
+        LauncherCancelDownloadButton.IsVisible = true;
+        LauncherUpdateProgressPanel.IsVisible = true;
+        LauncherUpdateProgress.Value = 0;
+        LauncherUpdateProgressText.Text = Translation.T("Downloading the new launcher…");
+        Log("Downloading the new launcher");
+        UiProgress<(long Done, long Total)> report = new(p =>
         {
-            using ServerClient _ = client;
-            Status("Downloading the new launcher…");
-            exe = await SelfCheck.UpdateAsync(client, manifest, new UiProgress<(long Done, long Total)>(p =>
-                Progress.Value = p.Total == 0 ? 1 : (double)p.Done / p.Total), token);
+            if (finished || cts.IsCancellationRequested) return;
+            progress.Report(p.Done, p.Total);
+            LauncherUpdateProgress.Value = progress.Fraction;
+            LauncherUpdateProgressText.Text = progress.Text();
         });
-        if (!done || exe is null) return;
+        string exe;
+        try
+        {
+            using (client)
+            using (new KeepAwake("Launcher update"))
+                exe = await Task.Run(() => SelfCheck.UpdateAsync(client, manifest, report, cts.Token));
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            finished = true;
+            Log("Launcher download stopped; Update now carries on from there");
+            FillLauncherUpdate();
+            LauncherUpdateProgressText.Text = progress.Total > 0
+                ? string.Format(Translation.T("Stopped at {0}%. Update now carries on from there."), progress.Percent)
+                : Translation.T("Stopped.");
+            return;
+        }
+        catch (Exception error)
+        {
+            finished = true;
+            Logger.Error("Launcher update", error);
+            FillLauncherUpdate(string.Format(Translation.T("The new launcher couldn't be downloaded: {0}"), error.Message));
+            return;
+        }
+        finally
+        {
+            _launcherDownload = null;
+            cts.Dispose();
+        }
+        finished = true;
+        LauncherCancelDownloadButton.IsVisible = false;
+        LauncherUpdateProgress.Value = 1;
+        LauncherUpdateProgressText.Text = Translation.T("Restarting the launcher…");
         Log("Launcher updated; starting the new one");
+        await Task.Delay(700);   // long enough to read
+        _work?.Cancel();   // a game files download in progress carries on in the new launcher
         RestartInto(exe);
+        if (!_quitting) FillLauncherUpdate(Translation.T("The new launcher is ready: close this one and open it again."));
     }
 
     DateTime _progressTextAt = DateTime.MinValue;
@@ -1985,6 +2052,13 @@ public partial class MainWindow : Window
             return;
         }
         if (NeedFolder()) return;
+        if (_launcherPrompt.BlocksPlay && _server is not null)
+        {
+            // the server needs the new launcher to play ("Later" was pressed): ask again
+            Status(Translation.T("This server needs the new launcher to play. Update it first (a few seconds, your settings are kept)."));
+            OpenLauncherUpdate();
+            return;
+        }
         bool shift = _shiftPlay;
         _shiftPlay = false;
         EndOneOffDebug();   // a one-off debug mode left from a game the launcher didn't see close

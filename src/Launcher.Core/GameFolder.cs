@@ -296,11 +296,15 @@ public static class SelfCheck
     /// Downloads the server's launcher next to this one (checked against the manifest's SHA-256), then swaps them:
     /// the running exe is renamed to .old (Windows allows renaming a running program, not replacing it) and the new
     /// one takes its name. The caller starts it and closes. The .old file is removed at the next start.
+    /// Cancelled, nothing is swapped and the half-downloaded .new.part (with its .sha256) stays, so the next try resumes.
+    /// <paramref name="exe"/>: the launcher to replace (the running one when left out; tests pass their own).
     /// </summary>
-    public static async Task<string> UpdateAsync(ServerClient client, Manifest manifest, IProgress<(long Done, long Total)>? progress, CancellationToken token)
+    public static async Task<string> UpdateAsync(ServerClient client, Manifest manifest, IProgress<(long Done, long Total)>? progress,
+        CancellationToken token, string? exe = null)
     {
-        if (manifest.Launcher is null || CurrentExe is null) throw new InvalidOperationException("The server has no launcher to update to.");
-        string exe = CurrentExe, fresh = exe + ".new", old = exe + ".old";
+        exe ??= CurrentExe;
+        if (manifest.Launcher is null || exe is null) throw new InvalidOperationException("The server has no launcher to update to.");
+        string fresh = exe + ".new", old = exe + ".old";
         await client.DownloadAsync(manifest.Launcher, fresh, progress, token);
         if (!OperatingSystem.IsWindows())   // Linux / macOS: the downloaded file must be runnable
             File.SetUnixFileMode(fresh, File.GetUnixFileMode(exe) | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);

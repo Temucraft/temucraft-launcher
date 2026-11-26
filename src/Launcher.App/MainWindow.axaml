@@ -175,6 +175,10 @@
 
         <!-- right: the username, and the server's website links under it -->
         <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
+          <!-- a new launcher the player put off ("Later"): opens the update window again -->
+          <Button Name="LauncherUpdateBadge" Classes="accentButton" Content="New launcher" Click="OnShowLauncherUpdate" IsVisible="False"
+                  HorizontalAlignment="Right" FontSize="12" Padding="10,3" Margin="0,0,0,4"
+                  ToolTip.Tip="A new launcher is on the server: update it (a few seconds, your settings are kept)" />
           <TextBlock Name="AccountText" Foreground="{DynamicResource T.text}" HorizontalAlignment="Right" FontSize="13" />
           <StackPanel Name="NavLinks" Orientation="Horizontal" Spacing="0" HorizontalAlignment="Right" />
         </StackPanel>
@@ -253,22 +257,6 @@
           <Button Name="LauncherTab" Classes="tab" Click="OnTab" Tag="5">
             <StackPanel><TextBlock Classes="tabName" Text="LAUNCHER" /><TextBlock Classes="tabNote" Text="Account, look, privacy, log" /></StackPanel>
           </Button>
-        </StackPanel>
-      </Border>
-
-      <Border DockPanel.Dock="Top" Name="WarningBanner" IsVisible="False" Background="{DynamicResource T.warning}" CornerRadius="4" Padding="10,6" Margin="0,0,0,8">
-        <StackPanel Spacing="6">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Name="WarningText" TextWrapping="Wrap" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="1" Name="LauncherUpdateButtons" Orientation="Horizontal" Spacing="6" Margin="10,0,0,0" IsVisible="False">
-              <Button Name="WhatsNewButton" Content="What changed" Click="OnWhatsNew" />
-              <Button Name="UpdateLauncherButton" Classes="accentButton" Content="Update the launcher" Click="OnUpdateLauncher" />
-              <Button Content="Later" Click="OnLauncherLater" />
-            </StackPanel>
-          </Grid>
-          <Border Name="WhatsNewPanel" IsVisible="False" Classes="card" BorderThickness="1" CornerRadius="4" Padding="10,8" MaxHeight="260">
-            <ScrollViewer Classes="page"><StackPanel Name="WhatsNewList" /></ScrollViewer>
-          </Border>
         </StackPanel>
       </Border>
 
@@ -737,22 +725,39 @@
       </Border>
     </Grid>
 
-    <!-- a required launcher update (server policy launcherUpdate = required): in the middle of the window -->
+    <!-- a new launcher on the server: asks (Update now / Later, required or not), then shows the download in here -->
     <Grid Name="LauncherUpdateOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
-      <Border Background="{DynamicResource T.background}" Width="620" MaxHeight="620" Margin="20" CornerRadius="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Border Background="{DynamicResource T.background}" MaxWidth="620" MaxHeight="620" Margin="20" CornerRadius="6"
+              HorizontalAlignment="Stretch" VerticalAlignment="Center">
        <Border Classes="panel" CornerRadius="6" Padding="0">
         <DockPanel>
           <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource T.border}" BorderThickness="0,0,0,1" Padding="24,18">
-            <TextBlock Classes="title" Text="THERE'S AN UPDATE" FontSize="28" Margin="0" />
+            <TextBlock Classes="title" Text="THERE'S AN UPDATE" FontSize="28" Margin="0" TextWrapping="Wrap" />
           </Border>
-          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource T.border}" BorderThickness="0,1,0,0" Padding="24,12">
-            <Button Name="LauncherUpdateNowButton" Classes="play" Content="Update the launcher" HorizontalAlignment="Right" Click="OnUpdateLauncher" />
+          <!-- the buttons size to their text and go onto a second line when the window is narrow -->
+          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource T.border}" BorderThickness="0,1,0,0" Padding="24,10">
+            <WrapPanel HorizontalAlignment="Right">
+              <Button Name="LauncherLaterButton" Content="Later" Click="OnLauncherLater" FontSize="15" Padding="18,8" Margin="4" VerticalAlignment="Center" />
+              <Button Name="LauncherCancelDownloadButton" Content="Cancel" Click="OnCancelLauncherDownload" FontSize="15" Padding="18,8" Margin="4"
+                      VerticalAlignment="Center" IsVisible="False" />
+              <Button Name="LauncherUpdateNowButton" Classes="accentButton" Content="Update now" Click="OnUpdateLauncher" FontSize="16" Padding="22,8" Margin="4"
+                      VerticalAlignment="Center" />
+            </WrapPanel>
           </Border>
-          <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,14,24,14">
-            <StackPanel Spacing="10">
-              <TextBlock Name="LauncherUpdateOverlayText" TextWrapping="Wrap" FontSize="15" Foreground="{DynamicResource T.text}" />
-              <StackPanel Name="LauncherUpdateNewsList" />
-            </StackPanel>
+          <!-- while the new launcher downloads -->
+          <StackPanel DockPanel.Dock="Bottom" Name="LauncherUpdateProgressPanel" IsVisible="False" Margin="24,0,24,12" Spacing="4">
+            <ProgressBar Name="LauncherUpdateProgress" Minimum="0" Maximum="1" Height="8" Foreground="{DynamicResource T.accent}" />
+            <TextBlock Name="LauncherUpdateProgressText" Classes="dim" FontSize="12" FontFeatures="tnum" />
+          </StackPanel>
+          <StackPanel DockPanel.Dock="Top" Margin="24,14,24,0" Spacing="8">
+            <TextBlock Name="LauncherUpdateOverlayText" TextWrapping="Wrap" FontSize="15" Foreground="{DynamicResource T.text}" />
+            <TextBlock Name="LauncherUpdateLaterText" Classes="dim" FontSize="13" IsVisible="False" />
+            <TextBlock Name="LauncherUpdateErrorText" Foreground="{DynamicResource T.bad}" TextWrapping="Wrap" IsVisible="False" />
+          </StackPanel>
+          <!-- what the new launcher brings (the changelog's newest "Launcher ..." entry): scrolls in here -->
+          <ScrollViewer Name="LauncherUpdateNewsScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                        MaxHeight="280" Margin="24,12,10,14" Padding="0,0,14,0">
+            <StackPanel Name="LauncherUpdateNewsList" />
           </ScrollViewer>
         </DockPanel>
        </Border>
