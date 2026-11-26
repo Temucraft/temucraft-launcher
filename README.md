@@ -211,10 +211,15 @@ answers about:
   `/var/lib/temucraft/char-tickets.sqlite`) keeps only the ticket's SHA-256, the account id and name, the time, the IP
   it was issued to and a fingerprint of the account's salt and verifier, so a password change ends every ticket of
   that account. At most 20 tickets per account (the oldest go). A ticket that no longer works gets
-  `403 {"error": "ticket", "reason": "unknown|expired|ip|password"}` (and is deleted); `POST action=logout` with the
-  header ends it. Failed logins: `TICKET_LOGIN_RATE` (5 in 10 minutes) per IP and per account, then
-  `429 {"error": "rate", "retry_after": seconds}`. Passwords never reach the logs (Apache's error log gets "ticket
-  issued to RYAN from <ip>" and "too many failed logins").
+  `403 {"error": "ticket", "reason": "unknown|expired|ip|password|banned"}` (and is deleted); `POST action=logout` with
+  the header ends it. Failed logins: `TICKET_LOGIN_RATE` (5 in 10 minutes) per **account and IP together**, so somebody
+  typing wrong passwords for an account from their own IP never locks the player out from the player's IP, and
+  `TICKET_IP_RATE` (20 in 10 minutes) per IP over all accounts, against one IP trying many accounts; then
+  `429 {"error": "rate", "retry_after": seconds}`. **Bans:** a banned IP (`acore_auth.ip_banned`), or the right password
+  for a banned account (`account_banned` with `active = 1`, permanent or not over yet: the login server's own rule),
+  gets `403 {"error": "banned"}` and no ticket (the account's tickets are ended too); a ticket in use stops working
+  (`reason: banned`, deleted) as soon as its account or the IP using it is banned. Passwords never reach the logs
+  (Apache's error log gets "ticket issued to RYAN from <ip>", "too many failed logins" and "banned account or IP").
 - **Without a ticket** (older launchers, "Not now"): the launcher login Apache checked, as before: the account with the
   same name (`SAME_NAME=1`) or the ones listed for that login in `char-summary-accounts.txt`. With one shared launcher
   login (Temucraft) set `SAME_NAME=0`, so a no-ticket request gets an empty answer (and the launcher asks to log in).
@@ -232,7 +237,8 @@ Settings in `/etc/temucraft/char-summary.env` for the tickets (Temucraft's value
 | --- | --- | --- | --- |
 | `TICKET_DAYS` | `0` | `90` | Days until a ticket ends and the launcher asks for the password again; `0` or `-1`: never (it still ends at a password change, Log out or `--revoke`). |
 | `TICKET_SAME_IP` | `1` | `1` | `1`: a ticket works only from the IP it was issued to; from a new IP the launcher asks to log in again. `0`: from anywhere. |
-| `TICKET_LOGIN_RATE` | `5/600` | `5/600` | Failed logins allowed per IP and per account: tries/seconds. |
+| `TICKET_LOGIN_RATE` | `5/600` | `5/600` | Failed logins allowed per account and IP pair: tries/seconds. Never blocks the account from another IP. |
+| `TICKET_IP_RATE` | `20/600` | `20/600` | Failed logins allowed per IP over all accounts (password spraying): tries/seconds. |
 | `TICKET_DB` | (default) | `/var/lib/temucraft/char-tickets.sqlite` | The ticket file; its folder must be writable by Apache's user. |
 | `SAME_NAME` | `0` | `1` | See above: `0` with one shared launcher login. |
 
@@ -245,6 +251,8 @@ Setup (Linux, root):
    ```
    CREATE USER 'temucraft_summary'@'localhost' IDENTIFIED BY '<a password>';
    GRANT SELECT (id, username, salt, verifier) ON acore_auth.account TO 'temucraft_summary'@'localhost';
+   GRANT SELECT (id, bandate, unbandate, active) ON acore_auth.account_banned TO 'temucraft_summary'@'localhost';
+   GRANT SELECT (ip, bandate, unbandate) ON acore_auth.ip_banned TO 'temucraft_summary'@'localhost';
    GRANT SELECT (id, name) ON acore_auth.realmlist TO 'temucraft_summary'@'localhost';
    -- for each characters database (acore_characters, acore_ptr_characters):
    GRANT SELECT ON acore_characters.characters TO 'temucraft_summary'@'localhost';
@@ -257,7 +265,9 @@ Setup (Linux, root):
    ```
 
    (An existing user from before the tickets only needs the new columns:
-   `GRANT SELECT (id, username, salt, verifier) ON acore_auth.account TO 'temucraft_summary'@'localhost';`.)
+   `GRANT SELECT (id, username, salt, verifier) ON acore_auth.account TO 'temucraft_summary'@'localhost';`, and from
+   before the ban checks (2026-11-26) the two `account_banned` / `ip_banned` lines: without them every login and
+   ticket answers 500, never a ticket for a banned account.)
 3. `mkdir -p /etc/temucraft`; copy `server/char-summary.env.example` to `/etc/temucraft/char-summary.env` (the
    password, the realm list, the ticket keys above), `server/talent-trees.json` next to it, and
    `server/char-summary-accounts.txt.example` as `char-summary-accounts.txt` if any login needs it;
@@ -270,7 +280,7 @@ Setup (Linux, root):
 6. Add `server/apache-char-summary.conf.example` inside the files folder's `<Directory>` block (if it isn't there
    yet), then `systemctl reload apache2`. Apache passes the `X-Temucraft-Ticket` header to the script by itself.
 7. Check: `python3 server/char-summary.py --self-test` (SRP6 against AzerothCore's verifiers, expiry 0/-1/N, a new IP,
-   a password change, logout and the login limits, without a database).
+   a password change, logout, the per account+IP and per IP login limits and the bans, without a database).
    `curl -u temucraft --data-urlencode action=login --data-urlencode account=<GAMEACCOUNT> --data-urlencode password=<its password> https://<server>/wow-files/char-summary`
    gives a ticket (`-k` for a self-signed certificate; type the password at curl's prompt for the launcher login);
    `curl -u temucraft -H "X-Temucraft-Ticket: <ticket>" https://<server>/wow-files/char-summary` gives that account's

@@ -15,7 +15,10 @@ password, server/apache-temucraft.conf.example) before it runs. Which game accou
     tickets are in a small SQLite file (TICKET_DB), only as their SHA-256, with the account, the time, the IP they were
     issued to and a fingerprint of the account's salt and verifier: a changed password ends them. TICKET_DAYS (0 or -1:
     never) ends them after that many days; TICKET_SAME_IP=1 makes them work only from the IP they were issued to.
-    Failed logins are limited per IP and per account (TICKET_LOGIN_RATE). POST action=logout ends a ticket.
+    Failed logins are limited per account and IP pair (TICKET_LOGIN_RATE: someone else's wrong passwords never lock an
+    account out from the player's own IP) and, looser, per IP across all accounts (TICKET_IP_RATE, against password
+    spraying). Banned accounts (acore_auth.account_banned) and banned IPs (ip_banned) get no ticket, and a ticket stops
+    working (and is deleted) once its account or the IP using it is banned. POST action=logout ends a ticket.
   - Without a ticket, the username Apache checked (REMOTE_USER), as before:
     - char-summary-accounts.txt (ACCOUNT_MAP): "launcher login = GAMEACCOUNT, GAMEACCOUNT2" lines, for logins whose
       game account has another name (or several game accounts). A login listed there gets only those accounts.
@@ -23,9 +26,10 @@ password, server/apache-temucraft.conf.example) before it runs. Which game accou
     - otherwise nothing (an empty answer). With one shared launcher login for everybody, set SAME_NAME=0.
 
     GET  char-summary                                       the summary (X-Temucraft-Ticket: <ticket>, or by REMOTE_USER)
-         403 {"error": "ticket", "reason": "unknown|expired|ip|password"}   the ticket no longer works: log in again
+         403 {"error": "ticket", "reason": "unknown|expired|ip|password|banned"}   the ticket no longer works: log in again
     POST char-summary  action=login&account=..&password=..  200 {"ticket": "...", "account": "RYAN", "expires": 0}
          403 {"error": "login"}  wrong account or password;  429 {"error": "rate", "retry_after": 600}  too many tries
+         403 {"error": "banned"}  the IP is banned, or the password was right but the account is banned
     POST char-summary  action=logout  (with the ticket header)  200 {"ok": true}
 
 No account names, ids, guids or IPs are sent back: per realm (realm id and its realmlist name) the characters by name,
@@ -40,7 +44,7 @@ variable points (SetEnv in Apache). Needs PyMySQL (apt install python3-pymysql) 
 (made by talent-trees.py from the server's Talent.dbc and TalentTab.dbc) next to the settings. The tickets need
 Python's sqlite3 module (part of python3) and a folder www-data may write (TICKET_DB, /var/lib/temucraft/).
 
-    python3 char-summary.py --self-test            checks the summary, SRP6 and ticket logic without a database
+    python3 char-summary.py --self-test            checks the summary, SRP6, ticket, login-limit and ban logic without a database
     REMOTE_USER=ryan python3 char-summary.py       what the launcher would get for "ryan" (run as www-data)
     python3 char-summary.py --tickets              how many tickets each account has (run as www-data)
     python3 char-summary.py --revoke RYAN          ends every ticket of that account (run as www-data)
@@ -87,11 +91,13 @@ def settings():
         "ACCOUNT_MAP": "",
         "TALENT_TREES": "",
         # character tickets: the SQLite file, days until a ticket ends (0 or -1: never), whether it works only from the
-        # IP it was issued to, and failed logins allowed per IP and per account: "tries/seconds"
+        # IP it was issued to, failed logins allowed per account and IP pair, and (looser) per IP over all accounts:
+        # "tries/seconds"
         "TICKET_DB": "/var/lib/temucraft/char-tickets.sqlite",
         "TICKET_DAYS": "90",
         "TICKET_SAME_IP": "1",
         "TICKET_LOGIN_RATE": "5/600",
+        "TICKET_IP_RATE": "20/600",
     }
     path = os.environ.get("CHAR_SUMMARY_ENV", DEFAULT_ENV)
     if os.path.isfile(path):
@@ -251,14 +257,25 @@ class TicketError(Exception):
         self.reason = reason
 
 
-def login_rate(cfg):
+LOGIN_RATE_DEFAULT = (5, 600)    # failed logins per (account, IP) pair
+IP_RATE_DEFAULT = (20, 600)      # failed logins per IP, over all accounts
+
+
+def login_rate(cfg, key="TICKET_LOGIN_RATE", default=LOGIN_RATE_DEFAULT):
+    """(tries, seconds) of a "tries/seconds" setting; the default when it is missing or wrong."""
     try:
-        tries, seconds = (int(v) for v in cfg.get("TICKET_LOGIN_RATE", "5/600").split("/", 1))
+        tries, seconds = (int(v) for v in str(cfg.get(key, "%d/%d" % default)).split("/", 1))
         if tries > 0 and seconds > 0:
             return tries, seconds
     except ValueError:
         pass
-    return 5, 600
+    return default
+
+
+def plain_ip(ip):
+    """An IPv4 address the way ip_banned stores it ("::ffff:1.2.3.4" from a dual-stack Apache becomes "1.2.3.4")."""
+    ip = (ip or "").strip()
+    return ip[7:] if ip.lower().startswith("::ffff:") and "." in ip else ip
 
 
 def ticket_days(cfg):
@@ -307,6 +324,7 @@ class Tickets:
         return max(wait, 0)
 
     def failed(self, keys, now, seconds):
+        """Records a failed login for each key; forgets failures older than seconds (the longest window in use)."""
         self.db.execute("DELETE FROM failures WHERE at <= ?", (now - seconds,))
         self.db.executemany("INSERT INTO failures (key, at) VALUES (?, ?)", [(k, now) for k in keys])
 
@@ -324,9 +342,10 @@ class Tickets:
                         "account_id = ? ORDER BY issued DESC, rowid DESC LIMIT ?)", (account_id, account_id, TICKETS_PER_ACCOUNT))
         return ticket
 
-    def resolve(self, ticket, ip, current_print, now, days, same_ip):
+    def resolve(self, ticket, ip, current_print, now, days, same_ip, banned=None):
         """(account id, account name) of a working ticket; else TicketError (and a dead ticket is deleted).
-        current_print(account id): the account's fingerprint now, or None when the account is gone."""
+        current_print(account id): the account's fingerprint now, or None when the account is gone.
+        banned(account id, ip): True when the account or the IP using the ticket is banned now."""
         key = ticket_hash(ticket or "")
         row = self.db.execute("SELECT account_id, account, issued, ip, fingerprint FROM tickets WHERE hash = ?", (key,)).fetchone()
         if row is None:
@@ -341,6 +360,8 @@ class Tickets:
             now_print = current_print(account_id)
             if now_print is None or not hmac.compare_digest(now_print, print_):
                 reason = "password"
+            elif banned is not None and banned(account_id, ip):
+                reason = "banned"
         if reason:
             self.db.execute("DELETE FROM tickets WHERE hash = ?", (key,))
             raise TicketError(reason)
@@ -353,6 +374,9 @@ class Tickets:
     def revoke_account(self, account):
         return self.db.execute("DELETE FROM tickets WHERE account = ?", (upper_latin(account),)).rowcount
 
+    def revoke_account_id(self, account_id):
+        return self.db.execute("DELETE FROM tickets WHERE account_id = ?", (account_id,)).rowcount
+
     def counts(self):
         return self.db.execute("SELECT account, COUNT(*), MAX(used) FROM tickets GROUP BY account ORDER BY account").fetchall()
 
@@ -361,22 +385,35 @@ DUMMY_SALT = bytes(32)
 DUMMY_VERIFIER = bytes(32)
 
 
-def login(tickets, cfg, lookup, account, password, ip, now):
-    """Checks a game login and issues a ticket. lookup(ACCOUNT): (id, salt, verifier) or None.
-    Returns (status, body) for the answer. The password is never stored, logged or sent anywhere."""
+def login(tickets, cfg, lookup, account, password, ip, now, ip_banned=None):
+    """Checks a game login and issues a ticket. lookup(ACCOUNT): (id, salt, verifier, banned) or None (banned: the
+    account has an active ban now). ip_banned(ip): True when the IP is banned now.
+    Returns (status, body) for the answer. The password is never stored, logged or sent anywhere.
+
+    Failed logins count per (account, IP) pair (TICKET_LOGIN_RATE) and per IP over all accounts (TICKET_IP_RATE):
+    wrong passwords from one IP never block the account from another IP."""
     tries, seconds = login_rate(cfg)
+    ip_tries, ip_seconds = login_rate(cfg, "TICKET_IP_RATE", IP_RATE_DEFAULT)
     name = upper_latin((account or "").strip())
-    ip_key, account_key = "ip:" + (ip or "?"), "account:" + name
-    wait = tickets.blocked_for([ip_key, account_key], now, tries, seconds)
+    ip = plain_ip(ip) or "?"
+    if ip_banned is not None and ip_banned(ip):
+        return "403 Forbidden", {"error": "banned"}
+    pair_key, ip_key = "pair:" + name + "|" + ip, "ip:" + ip
+    wait = max(tickets.blocked_for([pair_key], now, tries, seconds),
+               tickets.blocked_for([ip_key], now, ip_tries, ip_seconds))
     if wait > 0:
         return "429 Too Many Requests", {"error": "rate", "retry_after": int(wait)}
     found = lookup(name) if ACCOUNT.match(name) and password and len(password) <= 128 else None
     salt, verifier = (found[1], found[2]) if found else (DUMMY_SALT, DUMMY_VERIFIER)
     good = srp6_check(name, password or "", salt, verifier)   # worked out for unknown names too: the same time
     if not found or not good:
-        tickets.failed([ip_key, account_key], now, seconds)
+        tickets.failed([pair_key, ip_key], now, max(seconds, ip_seconds))
         return "403 Forbidden", {"error": "login"}
-    tickets.forget_failures(account_key)
+    tickets.forget_failures(pair_key)
+    if len(found) > 3 and found[3]:
+        # the right password, but the account is banned: no ticket, and the ones it has stop working
+        tickets.revoke_account_id(int(found[0]))
+        return "403 Forbidden", {"error": "banned"}
     days = ticket_days(cfg)
     ticket = tickets.issue(int(found[0]), name, ip or "?", fingerprint(salt, verifier), now, days)
     return "200 OK", {"ticket": ticket, "account": name, "expires": now + days * 86400 if days > 0 else 0}
@@ -472,10 +509,37 @@ def build(login, cfg):
         db.close()
 
 
+# A ban is on, as AzerothCore's login server reads it (LoginDatabase.cpp): an active account ban that is permanent
+# (unbandate = bandate) or not over yet; an IP ban the same way (ip_banned has no "active" column).
+ACCOUNT_BANNED_SQL = ("EXISTS (SELECT 1 FROM `{auth}`.account_banned ab WHERE ab.id = a.id AND ab.active = 1 "
+                      "AND (ab.unbandate > UNIX_TIMESTAMP() OR ab.unbandate = ab.bandate))")
+IP_BANNED_SQL = ("SELECT 1 FROM `{auth}`.ip_banned WHERE ip = %s AND (unbandate > UNIX_TIMESTAMP() OR unbandate = bandate) "
+                 "LIMIT 1")
+
+
 def account_row(db, cfg, name):
-    """(id, salt, verifier) of a game account, or None."""
-    rows = query(db, f"SELECT id, salt, verifier FROM `{auth_db(cfg)}`.account WHERE username = %s", (name,))
-    return (int(rows[0][0]), bytes(rows[0][1]), bytes(rows[0][2])) if rows else None
+    """(id, salt, verifier, banned) of a game account, or None."""
+    auth = auth_db(cfg)
+    rows = query(db, f"SELECT a.id, a.salt, a.verifier, {ACCOUNT_BANNED_SQL.format(auth=auth)} FROM `{auth}`.account a "
+                     f"WHERE a.username = %s", (name,))
+    return (int(rows[0][0]), bytes(rows[0][1]), bytes(rows[0][2]), bool(rows[0][3])) if rows else None
+
+
+def ip_banned_check(db, cfg):
+    def banned(ip):
+        ip = plain_ip(ip)
+        return bool(ip) and bool(query(db, IP_BANNED_SQL.format(auth=auth_db(cfg)), (ip,)))
+    return banned
+
+
+def banned_check(db, cfg):
+    """banned(account id, ip) for Tickets.resolve: the account or the IP has a ban on now."""
+    ip_banned = ip_banned_check(db, cfg)
+    def banned(account_id, ip):
+        auth = auth_db(cfg)
+        rows = query(db, f"SELECT {ACCOUNT_BANNED_SQL.format(auth=auth)} FROM `{auth}`.account a WHERE a.id = %s", (account_id,))
+        return bool(rows and rows[0][0]) or ip_banned(ip)
+    return banned
 
 
 def current_print(db, cfg):
@@ -492,8 +556,10 @@ def build_for_ticket(ticket, ip, cfg):
     try:
         try:
             account_id, _ = tickets.resolve(ticket, ip, current_print(db, cfg), int(time.time()), ticket_days(cfg),
-                                            on(cfg["TICKET_SAME_IP"]))
+                                            on(cfg["TICKET_SAME_IP"]), banned_check(db, cfg))
         except TicketError as error:
+            if error.reason == "banned":
+                print(f"char-summary: ticket of a banned account or IP ended ({ip})", file=sys.stderr)
             return "403 Forbidden", {"error": "ticket", "reason": error.reason}
         return "200 OK", summary_of(db, cfg, [account_id], realms_of(cfg))
     finally:
@@ -531,13 +597,22 @@ def post(cfg):
     tickets = Tickets(cfg["TICKET_DB"])
     db = None
     try:
-        def lookup(name):
+        def database():
             nonlocal db
             db = db or connect(cfg)
-            return account_row(db, cfg, name)
-        status, body = login(tickets, cfg, lookup, form.get("account", ""), form.get("password", ""), ip, int(time.time()))
+            return db
+
+        def lookup(name):
+            return account_row(database(), cfg, name)
+
+        def ip_banned(address):
+            return ip_banned_check(database(), cfg)(address)
+        status, body = login(tickets, cfg, lookup, form.get("account", ""), form.get("password", ""), ip, int(time.time()),
+                             ip_banned)
         if status.startswith("200"):
             print(f"char-summary: ticket issued to {body['account']} from {ip}", file=sys.stderr)
+        elif body.get("error") == "banned":
+            print(f"char-summary: login refused, banned account or IP ({ip})", file=sys.stderr)
         elif status.startswith("429"):
             print(f"char-summary: too many failed logins ({ip})", file=sys.stderr)
         return status, body
@@ -600,7 +675,7 @@ def ticket_self_test():
     prints = lambda account_id: next((fingerprint(a[1], a[2]) for a in accounts.values() if a[0] == account_id), None)
     with tempfile.TemporaryDirectory() as folder:
         t = Tickets(os.path.join(folder, "t.sqlite"))
-        cfg = {"TICKET_DAYS": "0", "TICKET_SAME_IP": "1", "TICKET_LOGIN_RATE": "5/600"}
+        cfg = {"TICKET_DAYS": "0", "TICKET_SAME_IP": "1", "TICKET_LOGIN_RATE": "5/600", "TICKET_IP_RATE": "8/600"}
         now = 1_800_000_000
         status, body = login(t, cfg, lookup, "ryan", "hunter2!", "1.2.3.4", now)
         assert status.startswith("200") and body["account"] == "RYAN" and body["expires"] == 0 and len(body["ticket"]) >= 43, body
@@ -646,16 +721,23 @@ def ticket_self_test():
             raise AssertionError("logged out")
         except TicketError as e:
             assert e.reason == "unknown"
-        # failed logins: 5 per 10 minutes per account (from any IP) and per IP (any account)
+        # failed logins: 5 per 10 minutes per (account, IP) pair; others can't lock the account out
         for i in range(5):
-            assert login(t, cfg, lookup, "RYAN", "wrong", f"10.0.0.{i}", now + i)[0].startswith("403")
-        status, body = login(t, cfg, lookup, "RYAN", "newpass", "10.0.0.9", now + 10)
+            assert login(t, cfg, lookup, "RYAN", "wrong", "6.6.6.6", now + i)[0].startswith("403")
+        status, body = login(t, cfg, lookup, "RYAN", "newpass", "6.6.6.6", now + 10)
         assert status.startswith("429") and 0 < body["retry_after"] <= 600, (status, body)
-        assert login(t, cfg, lookup, "RYAN", "newpass", "10.0.0.9", now + 601)[0].startswith("200"), "the window passed"
-        for i in range(5):
-            assert login(t, cfg, lookup, f"NOBODY{i}", "x", "6.6.6.6", now)[0].startswith("403")
-        assert login(t, cfg, lookup, "RYAN", "newpass", "6.6.6.6", now + 1)[0].startswith("429"), "per IP too"
-        assert login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.7", now + 1)[0].startswith("200"), "other IPs still log in"
+        assert login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.7", now + 10)[0].startswith("200"), "not from other IPs"
+        assert login(t, cfg, lookup, "RYAN", "newpass", "6.6.6.6", now + 601)[0].startswith("200"), "the window passed"
+        # wrong passwords from many IPs don't add up for the account
+        for i in range(12):
+            assert login(t, cfg, lookup, "RYAN", "wrong", f"10.0.0.{i}", now + i)[0].startswith("403")
+        assert login(t, cfg, lookup, "RYAN", "newpass", "10.0.0.99", now + 20)[0].startswith("200"), "no account-wide lock"
+        # one IP spraying many accounts: TICKET_IP_RATE (here 8 in 10 minutes) over all accounts
+        for i in range(8):
+            assert login(t, cfg, lookup, f"NOBODY{i}", "x", "5.5.5.5", now)[0].startswith("403")
+        assert login(t, cfg, lookup, "RYAN", "newpass", "5.5.5.5", now + 1)[0].startswith("429"), "per IP too"
+        assert login(t, cfg, lookup, "RYAN", "newpass", "5.5.5.6", now + 1)[0].startswith("200"), "other IPs still log in"
+        assert login(t, cfg, lookup, "RYAN", "newpass", "::ffff:5.5.5.5", now + 2)[0].startswith("429"), "IPv4-mapped is the same IP"
         assert login(t, {**cfg, "TICKET_DAYS": "30"}, lookup, "RYAN", "newpass", "7.7.7.7", now)[1]["expires"] == now + 30 * 86400
         assert login(t, cfg, lookup, "a b", "x", "8.8.8.8", now)[0].startswith("403") and login(t, cfg, lookup, "RYAN", "", "8.8.8.8", now)[0].startswith("403")
         # at most TICKETS_PER_ACCOUNT per account
@@ -663,8 +745,42 @@ def ticket_self_test():
             login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.7", now + 1000 + i)
         assert t.db.execute("SELECT COUNT(*) FROM tickets WHERE account_id = 5").fetchone()[0] == TICKETS_PER_ACCOUNT
         assert t.revoke_account("ryan") == TICKETS_PER_ACCOUNT
+        # bans: an active account ban refuses a right password (and ends its tickets); a wrong one stays "login"
+        ticket = login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.7", now + 2000)[1]["ticket"]
+        accounts["RYAN"].append(True)
+        assert login(t, cfg, lookup, "RYAN", "wrong", "7.7.7.8", now + 2001) == ("403 Forbidden", {"error": "login"})
+        assert login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.8", now + 2001) == ("403 Forbidden", {"error": "banned"})
+        assert t.db.execute("SELECT COUNT(*) FROM tickets WHERE account_id = 5").fetchone()[0] == 0, "tickets revoked"
+        accounts["RYAN"][3] = False
+        # a ticket in use stops working when the account or the IP using it gets banned, and is deleted
+        bans = {"accounts": set(), "ips": set()}
+        banned = lambda account_id, ip: account_id in bans["accounts"] or ip in bans["ips"]
+        ticket = login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.7", now + 2002)[1]["ticket"]
+        assert t.resolve(ticket, "7.7.7.7", prints, now, 0, True, banned) == (5, "RYAN")
+        bans["accounts"].add(5)
+        for expected in ("banned", "unknown"):
+            try:
+                t.resolve(ticket, "7.7.7.7", prints, now, 0, True, banned)
+                raise AssertionError("banned account")
+            except TicketError as e:
+                assert e.reason == expected, e.reason
+        bans["accounts"].clear()
+        ticket = login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.7", now + 2003)[1]["ticket"]
+        bans["ips"].add("7.7.7.7")
+        try:
+            t.resolve(ticket, "7.7.7.7", prints, now, 0, False, banned)
+            raise AssertionError("banned IP")
+        except TicketError as e:
+            assert e.reason == "banned"
+        # a banned IP gets no ticket, even with the right password, and it isn't counted as a failed login
+        ip_banned = lambda ip: ip in bans["ips"]
+        assert login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.7", now + 2004, ip_banned) == ("403 Forbidden", {"error": "banned"})
+        assert login(t, cfg, lookup, "RYAN", "newpass", "::ffff:7.7.7.7", now + 2004, ip_banned)[1] == {"error": "banned"}
+        assert login(t, cfg, lookup, "RYAN", "newpass", "7.7.7.9", now + 2004, ip_banned)[0].startswith("200")
         t.close()
     assert ticket_days({"TICKET_DAYS": "x"}) == 90 and login_rate({"TICKET_LOGIN_RATE": "bad"}) == (5, 600)
+    assert login_rate({}, "TICKET_IP_RATE", IP_RATE_DEFAULT) == (20, 600) and login_rate({"TICKET_IP_RATE": "0/5"}, "TICKET_IP_RATE", IP_RATE_DEFAULT) == (20, 600)
+    assert plain_ip("::ffff:1.2.3.4") == "1.2.3.4" and plain_ip("2001:db8::1") == "2001:db8::1"
     assert on("1") and not on("0") and not on("")
 
 
