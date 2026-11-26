@@ -207,17 +207,18 @@
           <Button Name="UntrackedButton" Classes="link" Foreground="{DynamicResource T.accent}" IsVisible="False" Click="OnUntracked" />
           <Button Name="CancelButton" Content="Cancel" IsVisible="False" Click="OnCancel" />
         </StackPanel>
-        <StackPanel Grid.Column="2">
+        <!-- PLAY's column: the game version picker right above PLAY at PLAY's width, its label to the left of it -->
+        <Grid Grid.Column="2" ColumnDefinitions="Auto,150" RowDefinitions="Auto,Auto,Auto,Auto">
           <!-- Live or the PTR (test realm): each has its own install, addons and settings -->
-          <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" Margin="0,0,0,4">
-            <TextBlock Text="Game version" Classes="dim" FontSize="12" VerticalAlignment="Center" />
-            <ComboBox Name="GameVersionBox" MinWidth="150" FontSize="12"
-                      ToolTip.Tip="Live: the normal realm. PTR: the test realm, with its own install (Settings page), addons and settings. PLAY goes straight into the picked realm." />
-          </StackPanel>
-          <TextBlock Name="GameVersionText" IsVisible="False" HorizontalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                     Foreground="{DynamicResource T.accent}" Margin="0,0,0,4" />
+          <TextBlock Name="GameVersionLabel" Text="Game version" Classes="dim" FontSize="12" VerticalAlignment="Center"
+                     HorizontalAlignment="Right" TextAlignment="Right" MaxWidth="120" TextWrapping="Wrap" MaxLines="2"
+                     TextTrimming="CharacterEllipsis" Margin="0,0,8,4" />
+          <ComboBox Grid.Column="1" Name="GameVersionBox" HorizontalAlignment="Stretch" FontSize="12" Margin="0,0,0,4"
+                    ToolTip.Tip="Live: the normal realm. PTR: the test realm, with its own install (Settings page), addons and settings. PLAY goes straight into the picked realm." />
+          <TextBlock Grid.Row="1" Grid.Column="1" Name="GameVersionText" IsVisible="False" HorizontalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                     Foreground="{DynamicResource T.accent}" Margin="0,0,0,4" TextTrimming="CharacterEllipsis" />
           <!-- PLAY and its debug tab share one fixed width, so the tab sits exactly under the button -->
-          <StackPanel Width="150" HorizontalAlignment="Center">
+          <StackPanel Grid.Row="2" Grid.Column="1" Width="150" HorizontalAlignment="Center">
             <Button Name="PlayButton" Classes="play" Content="PLAY" Click="OnPlay" HorizontalAlignment="Stretch"
                     ToolTip.Tip="Shift + left click: play in debug mode, this time only (for the PTR and developers)" />
             <!-- debug mode, right under PLAY as a small tab of the button: green DEBUG = on, red = off -->
@@ -227,9 +228,9 @@
                          ToolTip.Tip="Debug mode (Mods page). On: the game logs every interface error to Logs\TemucraftDebug.log, shows error popups and opens its console with the ` key, and Copy diagnostics adds the logs. Turn it on or off on the Mods page, or Shift + left click PLAY to play in debug mode this time only." />
             </Border>
           </StackPanel>
-          <Button Name="ReportBugButton" Classes="link" HorizontalAlignment="Right" FontSize="12" Margin="0,4,0,0" Click="OnReportBug"
+          <Button Grid.Row="3" Grid.ColumnSpan="2" Name="ReportBugButton" Classes="link" HorizontalAlignment="Right" FontSize="12" Margin="0,4,0,0" Click="OnReportBug"
                   ToolTip.Tip="Report bug: copies a short report about your game files and the last log lines to paste in your message" />
-        </StackPanel>
+        </Grid>
       </Grid>
 
       <!-- the pages, down the left side: a name and what is on it -->

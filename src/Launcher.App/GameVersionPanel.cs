@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -50,6 +51,12 @@ public partial class MainWindow
         PtrFolderBox.TextChanged += (_, _) => { UpdatePtrFolderValue(); if (IsPtr) GameVersionChanged(); else ShowPtrPanel(); };
         WowFolderBox.TextChanged += (_, _) => { UpdatePtrFolderValue(); ShowPtrPanel(); };
         List<LookChoice> versions = [new(GameVersions.Live, Translation.T("Live")), new(GameVersions.Ptr, Translation.T("PTR (test realm)"))];
+        // the box is exactly PLAY's width: a long translation ends in "..." and shows whole as a tooltip
+        GameVersionBox.ItemTemplate = new FuncDataTemplate<LookChoice>((choice, _) => new TextBlock
+        {
+            Text = choice?.Text, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+            [ToolTip.TipProperty] = choice?.Text,
+        });
         _fillingGameVersion = true;
         GameVersionBox.ItemsSource = versions;
         GameVersionBox.SelectedItem = versions.FirstOrDefault(v => v.Value == (IsPtr ? GameVersions.Ptr : GameVersions.Live)) ?? versions[0];
