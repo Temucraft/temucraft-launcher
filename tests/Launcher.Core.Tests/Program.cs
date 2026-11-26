@@ -80,6 +80,10 @@ List<(string Name, Func<Task> Body)> tests =
     ("Server settings skipGameAgreements and ptrCopyLiveSettings: read, enforced, and what they do", AgreementsAndPtrSettings),
     ("PTR: a cancelled install from Live isn't taken for a game", PtrInstallCancelled),
     ("Character summary: Lua escaping, the file format, and a failure keeps the old file", CharacterSummaryFile),
+    ("Launcher self update reads manifest.json again before downloading, and retries a checksum mismatch once from zero", SelfUpdateFreshManifest),
+    ("Character ticket: saved encrypted for one server, never in plain text, cleared", CharacterTicketSaved),
+    ("Character login: asks once, Not now until restart, a dropped ticket asks again once", CharacterLoginFlow),
+    ("Character login: the server's answers, and the request the launcher sends", CharacterLoginAnswers),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -519,6 +523,164 @@ static async Task CharacterSummaryFile()
             Check((await CharacterSummary.RefreshAsync(t => refused.GetTextAsync(CharacterSummary.ServerPath, t), wow, 1, "Temucraft")).Outcome == CharacterSummary.Outcome.Failed && File.ReadAllText(file) == kept, "refused login: old file kept");
     }
     finally { try { Directory.Delete(wow, true); } catch (IOException) { } }
+}
+
+static Task CharacterTicketSaved()
+{
+    string dir = TempDir();
+    try
+    {
+        Uri server = new("https://files.example.com/wow/"), other = new("https://elsewhere.example.com/wow/");
+        XorProtector protector = new();
+        CharacterTicketStore store = new(Path.Combine(dir, "sub", "char-ticket.dat"), protector);
+        Check(store.IsSupported && store.Load(server) is null, "nothing saved yet");
+        CharacterTicket ticket = new(server.ToString(), "RYAN", "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG");
+        Check(store.Save(ticket) && protector.Calls == 1, "saved through the protector");
+        byte[] raw = File.ReadAllBytes(store.File);
+        string rawText = System.Text.Encoding.UTF8.GetString(raw);
+        Check(!rawText.Contains(ticket.Ticket) && !rawText.Contains("RYAN") && rawText.StartsWith("TCT1"), "encrypted on disk");
+        Check(store.Load(server) == ticket, "read back");
+        Check(store.Load(other) is null, "never sent to another server");
+        Check(new CharacterTicketStore(store.File, null).Load(server) is null && !new CharacterTicketStore(store.File, null).Save(ticket), "no protector: nothing kept");
+        File.WriteAllBytes(store.File, [.. "TCT1"u8.ToArray(), 1, 2, 3]);
+        Check(store.Load(server) is null, "a broken file: log in again");
+        store.Save(ticket);
+        store.Clear();
+        Check(!File.Exists(store.File) && store.Load(server) is null, "cleared");
+        store.Clear();   // twice is fine
+        if (OperatingSystem.IsWindows())
+        {
+            CharacterTicketStore dpapi = new(Path.Combine(dir, "dpapi.dat"), new DpapiProtector());
+            Check(dpapi.Save(ticket) && dpapi.Load(server) == ticket && !File.ReadAllText(dpapi.File).Contains(ticket.Ticket), "DPAPI round trip");
+        }
+        // the account name for the window comes from the game's Config.wtf
+        Directory.CreateDirectory(Path.Combine(dir, "WTF"));
+        File.WriteAllText(Path.Combine(dir, "WTF", "Config.wtf"), "SET realmName \"Temucraft\"\r\nSET accountName \"ryan\"\r\n");
+        Check(CharacterLogin.AccountFromConfig(dir) == "ryan" && CharacterLogin.AccountFromConfig(Path.Combine(dir, "none")) is null, "accountName");
+    }
+    finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
+    return Task.CompletedTask;
+}
+
+static async Task CharacterLoginFlow()
+{
+    string dir = TempDir();
+    string wow = Path.Combine(dir, "wow");
+    string file = Path.Combine(wow, "Interface", "TemucraftCharSummary.lua");
+    try
+    {
+        Uri server = new("https://files.example.com/wow/");
+        const string mine = """{"realms": [{"id": 1, "name": "Temucraft", "characters": {"Thrall": {"money": 5}}}]}""";
+        const string nobody = """{"generated": 1, "realms": []}""";
+        const string rejected = """{"error": "ticket", "reason": "expired"}""";
+        HashSet<string> good = ["T1", "T2"];
+        List<string?> sent = [];
+        Task<ServerAnswer> Get(string? ticket, CancellationToken _)
+        {
+            sent.Add(ticket);
+            return Task.FromResult(ticket is null ? new ServerAnswer(200, nobody) : good.Contains(ticket) ? new ServerAnswer(200, mine) : new ServerAnswer(403, rejected));
+        }
+        CharacterTicketStore store = new(Path.Combine(dir, "t.dat"), new XorProtector());
+        CharacterLoginSession session = new();
+        int asked = 0;
+        CharacterTicket? answer = null;
+        Task<CharacterTicket?> Ask() { asked++; return Task.FromResult(answer); }
+
+        // no ticket: asked; "Not now" (null) keeps the old file and isn't asked again this session
+        var r = await CharacterLogin.RefreshAsync(Get, () => { session.SayNotNow(); return Ask(); }, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 1 && r.Outcome == CharacterSummary.Outcome.NoRealm && !File.Exists(file), "Not now: nothing written " + r);
+        r = await CharacterLogin.RefreshAsync(Get, Ask, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 1 && sent.All(t => t is null), "Not now: no window at the next PLAY");
+        Check(!new CharacterLoginSession().NotNow, "a new launcher start asks again");
+
+        // logged in (Remember me: saved by the window): the summary comes with the ticket
+        session = new CharacterLoginSession();
+        answer = new CharacterTicket(server.ToString(), "RYAN", "T1");
+        sent.Clear();
+        r = await CharacterLogin.RefreshAsync(Get, () => { store.Save(answer!); return Ask(); }, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 2 && r.Outcome == CharacterSummary.Outcome.Written && File.ReadAllText(file).Contains("Thrall") && sent.SequenceEqual([null, "T1"]), "logged in: " + string.Join(",", sent));
+        sent.Clear();
+        r = await CharacterLogin.RefreshAsync(Get, Ask, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 2 && sent.SequenceEqual(["T1"]) && r.Outcome == CharacterSummary.Outcome.Unchanged, "saved ticket: one request, no window");
+
+        // the server no longer takes it: dropped, asked again once; a new ticket is used straight away
+        good.Remove("T1");
+        answer = new CharacterTicket(server.ToString(), "RYAN", "T2");
+        sent.Clear();
+        r = await CharacterLogin.RefreshAsync(Get, () => { store.Save(answer!); return Ask(); }, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 3 && r.Dropped == "expired" && sent.SequenceEqual(["T1", null, "T2"]) && store.Load(server)?.Ticket == "T2", "re-asked once: " + string.Join(",", sent) + " " + r);
+
+        // dropped again and the new login is refused too: asked only once, the old file stays
+        string kept = File.ReadAllText(file);
+        good.Clear();
+        answer = new CharacterTicket(server.ToString(), "RYAN", "T3");
+        sent.Clear();
+        r = await CharacterLogin.RefreshAsync(Get, () => { store.Save(answer!); return Ask(); }, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 4 && sent.SequenceEqual(["T2", null, "T3"]) && store.Load(server) is null && File.ReadAllText(file) == kept, "never twice: " + string.Join(",", sent));
+
+        // Remember me off: the ticket lives in the session only
+        good.Add("T4");
+        session = new CharacterLoginSession { SessionTicket = new CharacterTicket(server.ToString(), "RYAN", "T4") };
+        sent.Clear();
+        r = await CharacterLogin.RefreshAsync(Get, Ask, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 4 && sent.SequenceEqual(["T4"]) && !File.Exists(store.File), "session ticket, nothing on disk");
+
+        // a server whose launcher login already finds the account: no window
+        session = new CharacterLoginSession();
+        r = await CharacterLogin.RefreshAsync((_, _) => Task.FromResult(new ServerAnswer(200, mine)), Ask, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 4 && r.Outcome == CharacterSummary.Outcome.Unchanged, "no ticket needed: no window");
+        // no char-summary (404), or a timeout: no window, the old file stays
+        r = await CharacterLogin.RefreshAsync((_, _) => Task.FromResult(new ServerAnswer(404, "")), Ask, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 4 && r.Outcome == CharacterSummary.Outcome.NotOnServer, "404: no window");
+        r = await CharacterLogin.RefreshAsync((_, t) => Task.FromException<ServerAnswer>(new TaskCanceledException()), Ask, store, session, server, wow, 1, "Temucraft");
+        Check(asked == 4 && r.Outcome == CharacterSummary.Outcome.Failed && File.ReadAllText(file) == kept, "timeout: old file kept");
+        r = await CharacterLogin.RefreshAsync((_, _) => Task.FromResult(new ServerAnswer(500, "{}")), Ask, store, session, server, wow, 1, "Temucraft");
+        Check(r.Outcome == CharacterSummary.Outcome.Failed && File.ReadAllText(file) == kept, "500: old file kept");
+        // an older server without logins: the window isn't shown again this session
+        session.ServerHasNoLogin();
+        Check(!session.ShouldAsk(null), "no login on the server: not asked");
+        session.Reset();
+        Check(session.ShouldAsk(null) && !session.ShouldAsk(new CharacterTicket("", "A", "B")), "Log in on the Settings page asks again");
+
+        // Log out: the character screen's lines go
+        Check(CharacterSummary.Clear(wow) && !File.ReadAllText(file).Contains("Thrall") && File.ReadAllText(file).Contains("TEMUCRAFT_CHAR_SUMMARY = {\r\n};"), "cleared after Log out");
+        Check(!CharacterSummary.Clear(Path.Combine(dir, "no-game")), "no file: nothing written");
+    }
+    finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
+}
+
+static async Task CharacterLoginAnswers()
+{
+    Uri server = new("https://files.example.com/wow/");
+    TicketLoginResult ok = CharacterLogin.ReadLoginAnswer(server, new(200, """{"ticket": "abcdefghijklmnopqrstuvwxyz", "account": "RYAN", "expires": 0}"""));
+    Check(ok.Status == TicketLoginStatus.LoggedIn && ok.Ticket == new CharacterTicket(server.ToString(), "RYAN", "abcdefghijklmnopqrstuvwxyz"), "logged in");
+    Check(CharacterLogin.ReadLoginAnswer(server, new(403, """{"error": "login"}""")).Status == TicketLoginStatus.WrongLogin, "wrong password");
+    TicketLoginResult rate = CharacterLogin.ReadLoginAnswer(server, new(429, """{"error": "rate", "retry_after": 125}"""));
+    Check(rate.Status == TicketLoginStatus.TooManyTries && rate.RetryAfterSeconds == 125, "too many tries");
+    Check(CharacterLogin.ReadLoginAnswer(server, new(405, """{"error": "GET only"}""")).Status == TicketLoginStatus.NotOnServer, "an older char-summary");
+    Check(CharacterLogin.ReadLoginAnswer(server, new(404, "")).Status == TicketLoginStatus.NotOnServer, "no char-summary");
+    Check(CharacterLogin.ReadLoginAnswer(server, new(200, """{"realms": []}""")).Status == TicketLoginStatus.NotOnServer, "a summary, not a ticket");
+    Check(CharacterLogin.ReadLoginAnswer(server, new(401, "<html>")).Status == TicketLoginStatus.Failed, "the launcher login refused");
+    Check(CharacterLogin.RejectedTicket(new(403, """{"error": "ticket", "reason": "ip"}""")) == "ip" && CharacterLogin.RejectedTicket(new(403, "<html>Forbidden</html>")) is null
+          && CharacterLogin.RejectedTicket(new(200, """{"error": "ticket"}""")) is null, "a rejected ticket, not Apache's 403");
+
+    // through the real client: the form, the header and the launcher login all go along
+    ServerSettings settings = ServerSettings.Parse(["SERVER_URL=https://files.example.com/wow/"]);
+    FakeCharSummary fake = new();
+    using ServerClient client = new(settings, "temucraft", "shared", fake);
+    TicketLoginResult wrong = await CharacterLogin.LoginAsync((form, t) => client.RequestAsync(CharacterSummary.ServerPath, form, token: t), settings.ServerUrl, " ryan ", "nope");
+    Check(wrong.Status == TicketLoginStatus.WrongLogin && fake.LastBody == "action=login&account=ryan&password=nope", "wrong: " + fake.LastBody);
+    TicketLoginResult right = await CharacterLogin.LoginAsync((form, t) => client.RequestAsync(CharacterSummary.ServerPath, form, token: t), settings.ServerUrl, "ryan", "right!");
+    Check(right.Status == TicketLoginStatus.LoggedIn && right.Ticket!.Server == settings.ServerUrl.ToString(), "right");
+    fake.Good.Add(right.Ticket.Ticket);
+    ServerAnswer summary = await client.RequestAsync(CharacterSummary.ServerPath, headers: new Dictionary<string, string> { [CharacterLogin.Header] = right.Ticket.Ticket });
+    Check(summary.Status == 200 && summary.Body.Contains("Thrall") && fake.Seen.Last() == $"GET /wow/char-summary {right.Ticket.Ticket} Basic", "summary with the ticket: " + fake.Seen.Last());
+    await CharacterLogin.LogoutAsync((form, t) => client.RequestAsync(CharacterSummary.ServerPath, form, new Dictionary<string, string> { [CharacterLogin.Header] = right.Ticket.Ticket }, t));
+    Check(fake.Good.Count == 0 && fake.LastBody == "action=logout", "logged out on the server");
+    ServerAnswer after = await client.RequestAsync(CharacterSummary.ServerPath, headers: new Dictionary<string, string> { [CharacterLogin.Header] = right.Ticket.Ticket });
+    Check(CharacterLogin.RejectedTicket(after) == "ip", "the old ticket is refused");
+    TicketLoginResult down = await CharacterLogin.LoginAsync((_, _) => throw new HttpRequestException("no route"), settings.ServerUrl, "ryan", "x");
+    Check(down.Status == TicketLoginStatus.Failed && down.Error == "no route", "no answer: failed, never thrown");
 }
 
 static Task TestingFilesInAndOut()
@@ -1698,6 +1860,58 @@ static async Task SelfUpdateProgressAndCancel()
     Check(!File.Exists(exe + ".new.part") && !File.Exists(exe + ".new.part.sha256") && !File.Exists(exe + ".new"), "no part left");
 }
 
+static async Task SelfUpdateFreshManifest()
+{
+    string dir = TempDir(), exe = Path.Combine(dir, "TemucraftLauncher.exe");
+    try
+    {
+        byte[] oldExe = "the running launcher"u8.ToArray(), v152 = RandomNumberGenerator.GetBytes(200_000), v153 = RandomNumberGenerator.GetBytes(300_000);
+        await File.WriteAllBytesAsync(exe, oldExe);
+        // the check saw 1.5.2; then the release replaced the exe and manifest.json on the server
+        Manifest seen = new() { Launchers = { [Manifest.ThisPlatform] = File1("TemucraftLauncher.exe", v152) } };
+        Manifest released = new() { Launchers = { [Manifest.ThisPlatform] = File1("TemucraftLauncher.exe", v153) } };
+        FakeServer server = new(new() { ["files/TemucraftLauncher.exe"] = v153, ["manifest.json"] = System.Text.Encoding.UTF8.GetBytes(released.ToJson()) });
+        using ServerClient client = new(ServerSettings.Parse(["SERVER_URL=https://f.example/"]), "u", "p", server);
+        // a half download of 1.5.2 left from before: never resumed into 1.5.3
+        await File.WriteAllBytesAsync(exe + ".new.part", v152[..50_000]);
+        await File.WriteAllTextAsync(exe + ".new.part.sha256", seen.Launcher!.Sha256);
+        string swapped = await SelfCheck.UpdateAsync(client, seen, null, CancellationToken.None, exe, t => client.GetManifestAsync(t));
+        Check(swapped == exe && (await File.ReadAllBytesAsync(exe)).SequenceEqual(v153), "the released launcher, with the manifest read again");
+        Check(server.Requests.Contains("manifest.json") && server.LastRangeFrom is null, "manifest re-read, no resume of the old part");
+
+        // without reading the manifest again (the old way) the stale manifest gives the mismatch, after one more try
+        await File.WriteAllBytesAsync(exe, oldExe);
+        File.Delete(exe + ".old");
+        int before = server.Requests.Count(r => r == "files/TemucraftLauncher.exe");
+        bool threw = false;
+        try { await SelfCheck.UpdateAsync(client, seen, null, CancellationToken.None, exe); }
+        catch (InvalidDataException e) { threw = ChecksumMismatch.Is(e) && ChecksumMismatch.Expected(e) == seen.Launcher.Sha256 && ChecksumMismatch.Got(e) == Sha(v153) && e.Message.Contains("checksum mismatch"); }
+        Check(threw && server.Requests.Count(r => r == "files/TemucraftLauncher.exe") - before == 2, "stale manifest: tried twice, then the error");
+        Check((await File.ReadAllBytesAsync(exe)).SequenceEqual(oldExe) && !File.Exists(exe + ".new.part") && !File.Exists(exe + ".new"), "nothing swapped");
+
+        // the file changes while it downloads (the upload replaces it between the first and the second read)
+        await File.WriteAllBytesAsync(exe, oldExe);
+        server.Files["files/TemucraftLauncher.exe"] = v152;   // still the old exe while the manifest already says 1.5.3
+        int reads = 0;
+        async Task<Manifest> Fresh(CancellationToken t)
+        {
+            Manifest m = await client.GetManifestAsync(t);
+            if (++reads == 2) server.Files["files/TemucraftLauncher.exe"] = v153;   // the upload finished
+            return m;
+        }
+        swapped = await SelfCheck.UpdateAsync(client, seen, null, CancellationToken.None, exe, Fresh);
+        Check(reads == 2 && (await File.ReadAllBytesAsync(exe)).SequenceEqual(v153), "the automatic second try got it: " + reads);
+
+        // manifest.json can't be read: the check's manifest is used
+        File.Delete(exe + ".old");
+        await File.WriteAllBytesAsync(exe, oldExe);
+        server.Files["files/TemucraftLauncher.exe"] = v152;
+        swapped = await SelfCheck.UpdateAsync(client, seen, null, CancellationToken.None, exe, _ => throw new HttpRequestException("down"));
+        Check((await File.ReadAllBytesAsync(exe)).SequenceEqual(v152), "fell back to the last check's manifest");
+    }
+    finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
+}
+
 static Task NewsTags()
 {
     var parts = NewsItem.Segments("• [new] Login window\n• [Not live yet] Wardrobe [not a tag] [Fixed]");
@@ -2110,6 +2324,40 @@ sealed class FakeServer(Dictionary<string, byte[]> files) : HttpMessageHandler
             response.Content.Headers.ContentRange = new ContentRangeHeaderValue(from, data.Length - 1, data.Length);
         return Task.FromResult(response);
     }
+}
+
+/// <summary>A stand-in for DPAPI: reversible, and the plain text never shows in the file.</summary>
+sealed class XorProtector : ITicketProtector
+{
+    public int Calls;
+    public byte[] Protect(byte[] data) { Calls++; return data.Select(b => (byte)(b ^ 0x5A)).Reverse().ToArray(); }
+    public byte[] Unprotect(byte[] data) => data.Reverse().Select(b => (byte)(b ^ 0x5A)).ToArray();
+}
+
+/// <summary>Answers char-summary like server/char-summary.py: tickets it knows, login and logout by POST.</summary>
+sealed class FakeCharSummary : HttpMessageHandler
+{
+    public HashSet<string> Good { get; } = [];
+    public List<string> Seen { get; } = [];
+    public string? LastBody;
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+    {
+        string? ticket = request.Headers.TryGetValues(CharacterLogin.Header, out var v) ? v.First() : null;
+        Seen.Add($"{request.Method} {request.RequestUri!.AbsolutePath} {ticket ?? "-"} {request.Headers.Authorization?.Scheme}");
+        if (request.Method == HttpMethod.Post)
+        {
+            LastBody = await request.Content!.ReadAsStringAsync(token);
+            string type = request.Content.Headers.ContentType?.MediaType ?? "";
+            if (type != "application/x-www-form-urlencoded") return new HttpResponseMessage(HttpStatusCode.BadRequest);
+            if (LastBody.Contains("action=logout")) { if (ticket is not null) Good.Remove(ticket); return Json(200, """{"ok": true}"""); }
+            return LastBody.Contains("password=right%21")
+                ? Json(200, """{"ticket": "T-new-0123456789abcdefghij", "account": "RYAN", "expires": 0}""")
+                : Json(403, """{"error": "login"}""");
+        }
+        if (ticket is not null && !Good.Contains(ticket)) return Json(403, """{"error": "ticket", "reason": "ip"}""");
+        return Json(200, ticket is null ? """{"realms": []}""" : """{"realms": [{"id": 1, "name": "Temucraft", "characters": {"Thrall": {"money": 5}}}]}""");
+    }
+    static HttpResponseMessage Json(int status, string body) => new((HttpStatusCode)status) { Content = new StringContent(body) };
 }
 
 /// <summary>Answers like GitHub for the URLs it knows; anything else gets 403 (like the API's hourly limit).</summary>

@@ -4,7 +4,9 @@
 #   a2enmod cgid && systemctl reload apache2
 # and copy char-summary.py into that folder as "char-summary" (no extension), executable:
 #   install -m 755 char-summary.py /var/www/wow-files/char-summary
-# It answers only about the logged-in user's own game account(s) (REMOTE_USER, the name Apache checked).
+# It answers only about the game account of the player's character ticket (the launcher logs in with the game account
+# once, POST to the same address), or without a ticket about the login Apache checked (REMOTE_USER, see SAME_NAME).
+# The tickets need a folder Apache's user may write: install -d -o www-data -g www-data -m 700 /var/lib/temucraft
 
 <Files "char-summary">
     Options +ExecCGI

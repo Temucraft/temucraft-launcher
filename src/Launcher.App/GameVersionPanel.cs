@@ -161,25 +161,37 @@ public partial class MainWindow
 
     /// <summary>
     /// Interface\TemucraftCharSummary.lua for the picked version: spec, professions, gold and unread mail of the player's
-    /// characters on that version's realm, from the server's char-summary (<see cref="CharacterSummary"/>). Quiet: only
-    /// the log file hears about it, it waits at most 8 seconds, and on any failure the old file stays as it was.
+    /// characters on that version's realm, from the server's char-summary (<see cref="CharacterSummary"/>), for the
+    /// game account of the player's character ticket (<see cref="CharacterLogin"/>; with <paramref name="ask"/> the login
+    /// window comes when there is none and the player hasn't said "Not now"). Quiet otherwise: only the log file hears
+    /// about it, each request waits at most 8 seconds, and on any failure the old file stays as it was.
     /// </summary>
-    async Task RefreshCharacterSummaryAsync(string folder)
+    async Task RefreshCharacterSummaryAsync(string folder, bool ask = true)
     {
         if (_server is null || !HaveLogin || !Agreed || folder.Length == 0 || !GameFolder.LooksLikeClient(folder)) return;
         bool ptr = IsPtr;
         string? realm = ptr ? PtrRealm : LiveRealm;
         int realmId = ptr ? GameVersions.PtrRealmId : GameVersions.LiveRealmId;
         using ServerClient client = NewClient();   // reads the login boxes: on the window's thread
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(8));
-        (CharacterSummary.Outcome outcome, int count, string? error) = await CharacterSummary.RefreshAsync(
-            token => client.GetTextAsync(CharacterSummary.ServerPath, token), folder, realmId, realm, timeout.Token);
+        async Task<ServerAnswer> Get(string? ticket, CancellationToken token)
+        {
+            using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(8));
+            return await client.RequestAsync(CharacterSummary.ServerPath,
+                headers: ticket is null ? null : new Dictionary<string, string> { [CharacterLogin.Header] = ticket }, token: timeout.Token);
+        }
+        (CharacterSummary.Outcome outcome, int count, string? error, string? dropped) = await CharacterLogin.RefreshAsync(
+            Get, () => ask ? AskCharacterLoginAsync() : Task.FromResult<CharacterTicket?>(null),
+            _charTickets, _charSession, _server.ServerUrl, folder, realmId, realm);
+        if (dropped is not null)
+            Logger.Info($"Character summary: the server no longer takes the saved ticket ({dropped switch { "expired" => "it expired", "ip" => "a new IP", "password" => "the password changed", _ => "unknown ticket" }}); it was dropped", toWindow: false);
+        ShowCharacterLogin();
         Logger.Info(outcome switch
         {
             CharacterSummary.Outcome.Written => $"Character summary: {count} character(s) on {realm ?? $"realm {realmId}"} written to Interface\\TemucraftCharSummary.lua",
             CharacterSummary.Outcome.Unchanged => $"Character summary: unchanged ({count} character(s))",
             CharacterSummary.Outcome.NotOnServer => "Character summary: the server has none (no char-summary)",
-            CharacterSummary.Outcome.NoRealm => $"Character summary: the server sent nothing for realm {realmId}; the last one stays",
+            CharacterSummary.Outcome.NoRealm => $"Character summary: the server sent nothing for realm {realmId} (not logged in with the game account?); the last one stays",
             _ => $"Character summary: couldn't get it ({error}); the last one stays",
         }, toWindow: false);
     }

@@ -136,6 +136,14 @@ public static class CharacterSummary
         return true;
     }
 
+    /// <summary>After "Log out": an empty table, so the character screen shows nothing extra (only when the file is there).</summary>
+    public static bool Clear(string wowFolder)
+    {
+        string path = Path.Combine(wowFolder, "Interface", "TemucraftCharSummary.lua");
+        return File.Exists(path) && Write(wowFolder,
+            "-- Written by the Temucraft launcher: empty after Log out (Settings page, Character summary).\r\nTEMUCRAFT_CHAR_SUMMARY = {\r\n};\r\n");
+    }
+
     /// <summary>
     /// Asks the server (<paramref name="fetch"/>: the answer, or null when the server has no char-summary) and writes the
     /// realm's file into <paramref name="wowFolder"/>. Never throws: on any failure (no answer, a refused login, bad

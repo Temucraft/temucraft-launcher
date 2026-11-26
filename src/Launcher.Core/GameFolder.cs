@@ -297,15 +297,53 @@ public static class SelfCheck
     /// the running exe is renamed to .old (Windows allows renaming a running program, not replacing it) and the new
     /// one takes its name. The caller starts it and closes. The .old file is removed at the next start.
     /// Cancelled, nothing is swapped and the half-downloaded .new.part (with its .sha256) stays, so the next try resumes.
-    /// <paramref name="exe"/>: the launcher to replace (the running one when left out; tests pass their own).
+    /// <paramref name="freshManifest"/>: reads manifest.json again right before the download, so a release uploaded
+    /// since the last check (a new exe and a new manifest) is downloaded with its own SHA-256 and size; when that read
+    /// fails, <paramref name="manifest"/> is used. A checksum mismatch is tried once more by itself, with a manifest read
+    /// again and no resume, before it is shown. <paramref name="exe"/>: the launcher to replace (the running one when
+    /// left out; tests pass their own).
     /// </summary>
     public static async Task<string> UpdateAsync(ServerClient client, Manifest manifest, IProgress<(long Done, long Total)>? progress,
-        CancellationToken token, string? exe = null)
+        CancellationToken token, string? exe = null, Func<CancellationToken, Task<Manifest>>? freshManifest = null)
     {
         exe ??= CurrentExe;
-        if (manifest.Launcher is null || exe is null) throw new InvalidOperationException("The server has no launcher to update to.");
+        if (exe is null) throw new InvalidOperationException("The server has no launcher to update to.");
         string fresh = exe + ".new", old = exe + ".old";
-        await client.DownloadAsync(manifest.Launcher, fresh, progress, token);
+        for (int attempt = 1; ; attempt++)
+        {
+            Manifest current = manifest;
+            DateTime read = DateTime.Now;
+            if (freshManifest is not null)
+            {
+                try { current = await freshManifest(token); read = DateTime.Now; }
+                catch (Exception error) when (error is not OperationCanceledException || !token.IsCancellationRequested)
+                {
+                    Logger.Warning("Couldn't read manifest.json again before the launcher download; using the one from the last check", error);
+                    current = manifest;
+                }
+            }
+            if (current.Launcher is not { } file) throw new InvalidOperationException("The server has no launcher to update to.");
+            if (attempt > 1)
+                foreach (string part in new[] { fresh + ".part", fresh + ".part.sha256" })
+                    if (File.Exists(part)) File.Delete(part);   // no resume: from zero
+            Logger.Info($"Launcher download (try {attempt}): {file.Path}, {file.Size} bytes, SHA-256 {file.Sha256}, manifest read {read:HH:mm:ss}" +
+                        (freshManifest is null ? " (the last check's)" : ""), toWindow: false);
+            try
+            {
+                await client.DownloadAsync(file, fresh, progress, token);
+                break;
+            }
+            catch (InvalidDataException mismatch) when (attempt == 1 && ChecksumMismatch.Is(mismatch))
+            {
+                Logger.Warning($"Launcher download: checksum mismatch (expected {ChecksumMismatch.Expected(mismatch)}, got {ChecksumMismatch.Got(mismatch)}, manifest read {read:HH:mm:ss}); " +
+                               "trying once more with manifest.json read again, from zero");
+            }
+            catch (InvalidDataException mismatch) when (ChecksumMismatch.Is(mismatch))
+            {
+                Logger.Warning($"Launcher download: checksum mismatch again (expected {ChecksumMismatch.Expected(mismatch)}, got {ChecksumMismatch.Got(mismatch)}, manifest read {read:HH:mm:ss})");
+                throw;
+            }
+        }
         if (!OperatingSystem.IsWindows())   // Linux / macOS: the downloaded file must be runnable
             File.SetUnixFileMode(fresh, File.GetUnixFileMode(exe) | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
         if (File.Exists(old)) File.Delete(old);

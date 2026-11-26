@@ -133,7 +133,11 @@ window again. The window asks again at the next start, or when the server hands 
 the 5-minute checks in between. Update now downloads it in the window with a bar, the percent, MB done / total and the
 speed. **Cancel** stops the download and keeps what came so far, so the next Update now carries on from there. A failed
 download shows in the window with Retry / Later. When it's done, the window says "Restarting the launcher…"; the new
-launcher is checked against the manifest, swapped with the running one and started.
+launcher is checked against the manifest, swapped with the running one and started. Since 1.5.3 the launcher reads
+`manifest.json` again right before each download try (Update now and Retry), so a release uploaded after the last check
+is downloaded with its own SHA-256 and size; a part of another version is never resumed. A checksum mismatch is tried
+once more by itself (manifest read again, from zero) before the error shows; the log has the expected and the received
+SHA-256 and when the manifest was read.
 
 ## Play tickets: the game only through the launcher
 
@@ -158,10 +162,12 @@ so the launcher and the game come from the same address.
 
 ## Character summary: spec, professions, gold and mail on character select
 
+(The game login with a character ticket: launcher 1.5.3.)
+
 The character select screen (`TemucraftCharSelect.lua` in patch-^) shows each character's spec, professions and gold
 in its card tooltip, and an envelope badge for unread mail. The game's own character list doesn't carry those, so the
 launcher fetches them: before PLAY, and when the player switches between Live and PTR, it asks for
-`<SERVER_URL>char-summary` (with the player's login, at most 8 seconds) and writes the picked version's realm into
+`<SERVER_URL>char-summary` (with the player's character ticket, at most 8 seconds a request) and writes the picked version's realm into
 that version's game folder as `Interface\TemucraftCharSummary.lua` (patch-^ ships an empty copy):
 
 ```
@@ -176,25 +182,69 @@ The realm key is the name the game shows (the realm the launcher writes into Con
 name too if that differs). It is quiet: only the log file says what happened. When the server has no `char-summary`
 (404), the login is refused, the answer is broken or the realm is missing from it, the old file stays as it was.
 
+**Whose characters: the player's game login (a character ticket).** The launcher login is one shared login for
+everybody on Temucraft, so it can't say whose characters to show. So at PLAY (and at the Live/PTR switch), while the
+launcher has no ticket and the summary without one comes back empty, a small window asks once: "Show your characters'
+spec, gold, professions and mail on the character screen", with the game account name (filled in from the game's
+`WTF\Config.wtf` `accountName` when there is one), the password, "Remember me" (on), **Log in** and **Not now**. The
+launcher sends them once (POST to `char-summary`, over the same https and launcher login) and keeps only the ticket the
+server answers with: in `%AppData%\TemucraftLauncher\char-ticket.dat`, encrypted with Windows DPAPI for that Windows
+user, and only for that server address (with Remember me off: in memory until the launcher closes). The password is
+never stored or logged. The summary is then asked for with the header `X-Temucraft-Ticket`. "Not now" lasts until the
+launcher starts again (no window at every PLAY). When the server no longer takes the ticket (it expired, the player is on
+a new IP, the password changed, or it was ended on the server), the launcher drops it and asks once more; a timeout or
+any other failure keeps the old summary file as before. The Settings page shows "Character summary: logged in as
+RYAN" with **Log out** (the server ends the ticket, and the character screen's lines are emptied in both versions'
+folders), or **Log in**. Wrong passwords, too many tries ("Try again in N minute(s)") and an older server without logins
+("The server can't do this yet") show in the window.
+
 **On the server** (`server/char-summary.py`, a CGI program): it sits in the folder Apache serves, next to
-`play-ticket`, so Apache runs the same IP list and login on it as on every file there, and hands it the checked
-username. It answers only about that user's game account(s): the account with the same name as the launcher login
-(`SAME_NAME=1`), or the ones listed for that login in `char-summary-accounts.txt` (needed when the htpasswd name and
-the game account differ). Per realm (Live realm 1 in `acore_characters`, PTR realm 3 in `acore_ptr_characters`, set in
-`REALMS`) it sends the characters by name: `money`, professions (`character_skills`: the primary ones by skill, then
-First Aid, Cooking, Fishing), the spec (the talent tree with the most points in the active talent group, from
-`character_talent` and `talent-trees.json`) and the senders of unread, delivered mail (a character's name,
-"Auction House", the creature or object for NPC mail, else "Mailbox"; at most 8). No account names, ids, guids or IPs
-are sent. One query per table per realm, all by account id.
+`play-ticket`, so Apache runs the same IP list and launcher login on it as on every file there. Which game account it
+answers about:
+
+- **With a ticket** (`X-Temucraft-Ticket`): the account the ticket was issued to. `POST char-summary` with
+  `action=login&account=..&password=..` checks the game password the way the login server does: AzerothCore's SRP6,
+  `v = g^SHA1(salt | SHA1(ACCOUNT ":" PASSWORD)) mod N` (g = 7, the 3.3.5 N, little-endian, only a-z upper-cased)
+  against `acore_auth.account.salt` and `verifier`, compared in constant time; the self-test checks it against
+  verifiers made by AzerothCore's own `SRP6.cpp`. On success it answers `{"ticket", "account", "expires"}` (a random
+  256-bit ticket; `expires` 0 = never). The ticket file (SQLite, `TICKET_DB`, default
+  `/var/lib/temucraft/char-tickets.sqlite`) keeps only the ticket's SHA-256, the account id and name, the time, the IP
+  it was issued to and a fingerprint of the account's salt and verifier, so a password change ends every ticket of
+  that account. At most 20 tickets per account (the oldest go). A ticket that no longer works gets
+  `403 {"error": "ticket", "reason": "unknown|expired|ip|password"}` (and is deleted); `POST action=logout` with the
+  header ends it. Failed logins: `TICKET_LOGIN_RATE` (5 in 10 minutes) per IP and per account, then
+  `429 {"error": "rate", "retry_after": seconds}`. Passwords never reach the logs (Apache's error log gets "ticket
+  issued to RYAN from <ip>" and "too many failed logins").
+- **Without a ticket** (older launchers, "Not now"): the launcher login Apache checked, as before: the account with the
+  same name (`SAME_NAME=1`) or the ones listed for that login in `char-summary-accounts.txt`. With one shared launcher
+  login (Temucraft) set `SAME_NAME=0`, so a no-ticket request gets an empty answer (and the launcher asks to log in).
+
+Per realm (Live realm 1 in `acore_characters`, PTR realm 3 in `acore_ptr_characters`, set in `REALMS`) it sends the
+characters by name: `money`, professions (`character_skills`: the primary ones by skill, then First Aid, Cooking,
+Fishing), the spec (the talent tree with the most points in the active talent group, from `character_talent` and
+`talent-trees.json`) and the senders of unread, delivered mail (a character's name, "Auction House", the creature or
+object for NPC mail, else "Mailbox"; at most 8). No account names, ids, guids or IPs are sent in the summary. One query
+per table per realm, all by account id.
+
+Settings in `/etc/temucraft/char-summary.env` for the tickets (Temucraft's values; see `server/char-summary.env.example`):
+
+| Key | Temucraft | Without the line | What it does |
+| --- | --- | --- | --- |
+| `TICKET_DAYS` | `0` | `90` | Days until a ticket ends and the launcher asks for the password again; `0` or `-1`: never (it still ends at a password change, Log out or `--revoke`). |
+| `TICKET_SAME_IP` | `1` | `1` | `1`: a ticket works only from the IP it was issued to; from a new IP the launcher asks to log in again. `0`: from anywhere. |
+| `TICKET_LOGIN_RATE` | `5/600` | `5/600` | Failed logins allowed per IP and per account: tries/seconds. |
+| `TICKET_DB` | (default) | `/var/lib/temucraft/char-tickets.sqlite` | The ticket file; its folder must be writable by Apache's user. |
+| `SAME_NAME` | `0` | `1` | See above: `0` with one shared launcher login. |
 
 Setup (Linux, root):
 
-1. `apt install python3-pymysql && a2enmod cgid`
+1. `apt install python3-pymysql && a2enmod cgid` (the tickets use Python's own `sqlite3` module; the `sqlite3` command
+   is only handy for looking: `apt install sqlite3`).
 2. A MySQL user that may only read what it needs:
 
    ```
    CREATE USER 'temucraft_summary'@'localhost' IDENTIFIED BY '<a password>';
-   GRANT SELECT (id, username) ON acore_auth.account TO 'temucraft_summary'@'localhost';
+   GRANT SELECT (id, username, salt, verifier) ON acore_auth.account TO 'temucraft_summary'@'localhost';
    GRANT SELECT (id, name) ON acore_auth.realmlist TO 'temucraft_summary'@'localhost';
    -- for each characters database (acore_characters, acore_ptr_characters):
    GRANT SELECT ON acore_characters.characters TO 'temucraft_summary'@'localhost';
@@ -206,15 +256,28 @@ Setup (Linux, root):
    GRANT SELECT (entry, name) ON acore_world.gameobject_template TO 'temucraft_summary'@'localhost';
    ```
 
+   (An existing user from before the tickets only needs the new columns:
+   `GRANT SELECT (id, username, salt, verifier) ON acore_auth.account TO 'temucraft_summary'@'localhost';`.)
 3. `mkdir -p /etc/temucraft`; copy `server/char-summary.env.example` to `/etc/temucraft/char-summary.env` (the
-   password, the realm list), `server/talent-trees.json` next to it, and `server/char-summary-accounts.txt.example`
-   as `char-summary-accounts.txt` if any login needs it; `chown root:www-data /etc/temucraft/* && chmod 640 /etc/temucraft/*`.
-4. `install -m 755 server/char-summary.py /var/www/wow-files/char-summary` (no extension; `upload.py --delete` leaves it alone).
-5. Add `server/apache-char-summary.conf.example` inside the files folder's `<Directory>` block, then `systemctl reload apache2`.
-6. Check: `sudo -u www-data REMOTE_USER=<a launcher login> python3 /var/www/wow-files/char-summary` prints that
-   player's summary; `curl -u <login> https://<server>/char-summary` (with `-k` for a self-signed certificate) gives the
-   same through Apache, and without `-u` Apache refuses it. `python3 server/char-summary.py --self-test` checks the
-   logic without a database.
+   password, the realm list, the ticket keys above), `server/talent-trees.json` next to it, and
+   `server/char-summary-accounts.txt.example` as `char-summary-accounts.txt` if any login needs it;
+   `chown root:www-data /etc/temucraft/* && chmod 640 /etc/temucraft/*`.
+4. The ticket folder, writable only by Apache's user: `install -d -o www-data -g www-data -m 700 /var/lib/temucraft`
+   (the SQLite file and its `-wal`/`-shm` files are made there at the first login).
+5. `install -m 755 server/char-summary.py /var/www/wow-files/char-summary` (no extension; `upload.py --delete` leaves
+   it alone: `char-summary` is in `KEEP_REMOTE`). Login and logout are the same address (POST), so there is no new file
+   to serve and no Apache change beyond step 6.
+6. Add `server/apache-char-summary.conf.example` inside the files folder's `<Directory>` block (if it isn't there
+   yet), then `systemctl reload apache2`. Apache passes the `X-Temucraft-Ticket` header to the script by itself.
+7. Check: `python3 server/char-summary.py --self-test` (SRP6 against AzerothCore's verifiers, expiry 0/-1/N, a new IP,
+   a password change, logout and the login limits, without a database).
+   `curl -u temucraft --data-urlencode action=login --data-urlencode account=<GAMEACCOUNT> --data-urlencode password=<its password> https://<server>/wow-files/char-summary`
+   gives a ticket (`-k` for a self-signed certificate; type the password at curl's prompt for the launcher login);
+   `curl -u temucraft -H "X-Temucraft-Ticket: <ticket>" https://<server>/wow-files/char-summary` gives that account's
+   characters, and without `-u` Apache refuses it. `sudo -u www-data python3 /var/www/wow-files/char-summary --tickets`
+   lists the tickets per account; `--revoke <ACCOUNT>` ends all of an account's tickets.
+   `sudo -u www-data REMOTE_USER=<a launcher login> python3 /var/www/wow-files/char-summary` still prints the no-ticket
+   answer (empty with `SAME_NAME=0`).
 
 When talents are added or moved, run `python3 server/talent-trees.py <folder with the server's Talent.dbc and
 TalentTab.dbc>` and copy the new `talent-trees.json` to `/etc/temucraft/`. The spec names are English (the server's

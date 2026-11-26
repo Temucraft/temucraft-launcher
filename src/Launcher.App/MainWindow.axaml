@@ -593,6 +593,17 @@
                   </StackPanel>
                   </StackPanel>
                   </Border>
+                  <!-- the character summary's game login (CharacterLogin.cs): who the character screen's extra lines are for -->
+                  <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                  <StackPanel>
+                  <TextBlock Classes="section" Margin="0,0,0,6" Text="CHARACTER SUMMARY (spec, gold, professions and mail on the character screen)" />
+                  <Grid ColumnDefinitions="*,8,Auto">
+                    <TextBlock Name="CharLoginStateText" TextWrapping="Wrap" VerticalAlignment="Center" Text="Character summary: not logged in" />
+                    <Button Grid.Column="2" Name="CharLoginSettingsButton" Content="Log in" Click="OnCharLoginSettingsButton" />
+                  </Grid>
+                  <TextBlock Classes="dim" Margin="0,4,0,0" TextWrapping="Wrap" Text="Your game account (the one you log into the game with). Only a ticket from the server is kept on this PC, never the password." />
+                  </StackPanel>
+                  </Border>
                   <Border Classes="card" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
                   <StackPanel>
                   <TextBlock Classes="section" Margin="0,0,0,6" Text="LOOK" />
@@ -908,6 +919,28 @@
             </Border>
           </Grid>
         </ScrollViewer>
+      </Border>
+    </Grid>
+    <!-- the character summary's game login: asked at PLAY (and at the Live/PTR switch) until there is a ticket; "Not now"
+         lasts until the launcher starts again (CharacterLogin.cs) -->
+    <Grid Name="CharLoginOverlay" Background="{DynamicResource T.overlay}" IsVisible="False">
+      <Border Classes="panel" MaxWidth="460" Margin="20" HorizontalAlignment="Stretch" VerticalAlignment="Center" Padding="26,22">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="title" Text="YOUR CHARACTERS" FontSize="24" Margin="0" TextWrapping="Wrap" />
+          <TextBlock TextWrapping="Wrap" FontSize="15" Foreground="{DynamicResource T.text}"
+                     Text="Show your characters' spec, gold, professions and mail on the character screen" />
+          <TextBlock Classes="dim" TextWrapping="Wrap" FontSize="12"
+                     Text="Log in with your game account. The launcher keeps only a ticket from the server, never your password." />
+          <TextBox Name="CharLoginAccount" Watermark="Account name" />
+          <TextBox Name="CharLoginPassword" Watermark="Password" PasswordChar="•" />
+          <CheckBox Name="CharLoginRemember" Content="Remember me" IsChecked="True" />
+          <TextBlock Name="CharLoginError" Foreground="{DynamicResource T.bad}" TextWrapping="Wrap" IsVisible="False" />
+          <Grid ColumnDefinitions="*,8,Auto">
+            <Button Name="CharLoginButton" Classes="accentButton" Content="Log in" HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center" Click="OnCharLogin" />
+            <Button Grid.Column="2" Name="CharLoginNotNowButton" Content="Not now" Click="OnCharLoginNotNow" />
+          </Grid>
+        </StackPanel>
       </Border>
     </Grid>
     <!-- error popups -->

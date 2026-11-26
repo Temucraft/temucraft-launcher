@@ -10,6 +10,23 @@ namespace Launcher.Core;
 
 public sealed class LoginFailedException(string message) : Exception(message);
 
+
+/// <summary>A download whose SHA-256 isn't the manifest's (an InvalidDataException; the file is deleted, never installed).</summary>
+public static class ChecksumMismatch
+{
+    public static InvalidDataException Create(string message, string expected, string got)
+    {
+        InvalidDataException error = new(message);
+        error.Data["expected"] = expected;
+        error.Data["got"] = got;
+        return error;
+    }
+
+    public static bool Is(Exception error) => error is InvalidDataException && error.Data.Contains("expected");
+    public static string Expected(Exception error) => error.Data["expected"] as string ?? "?";
+    public static string Got(Exception error) => error.Data["got"] as string ?? "?";
+}
+
 /// <summary>A new launcher was installed: start it and close this one.</summary>
 public sealed class LauncherRestartException(string exe) : Exception("A new launcher was installed.")
 {
@@ -89,6 +106,25 @@ public sealed class ServerClient : IDisposable
             return null;
         ThrowForStatus(response);
         return await response.Content.ReadAsStringAsync(timeout.Token);
+    }
+
+    /// <summary>
+    /// A small request (the character summary's login and tickets): GET, or POST with <paramref name="form"/> as
+    /// application/x-www-form-urlencoded, with extra headers. Any status comes back with its body (nothing is thrown
+    /// for it); the body sent is never logged.
+    /// </summary>
+    public async Task<ServerAnswer> RequestAsync(string relative, IReadOnlyDictionary<string, string>? form = null,
+        IReadOnlyDictionary<string, string>? headers = null, CancellationToken token = default)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        using HttpRequestMessage request = new(form is null ? HttpMethod.Get : HttpMethod.Post, new Uri(_base, relative));
+        if (form is not null) request.Content = new FormUrlEncodedContent(form);
+        if (headers is not null)
+            foreach ((string name, string value) in headers)
+                request.Headers.TryAddWithoutValidation(name, value);
+        using HttpResponseMessage response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token);
+        return new ServerAnswer((int)response.StatusCode, await response.Content.ReadAsStringAsync(timeout.Token));
     }
 
     /// <summary>A small file next to the manifest (a preview image...); null when the server has none.</summary>
@@ -223,7 +259,7 @@ public sealed class ServerClient : IDisposable
             if (resumedFrom > 0)
                 throw new ResumedPartMismatchException();
             Logger.Warning($"{file.Path}: checksum mismatch (got {sha}, expected {file.Sha256}); the download was deleted");
-            throw new InvalidDataException($"{file.Path} didn't download correctly (checksum mismatch). Try again.");
+            throw ChecksumMismatch.Create($"{file.Path} didn't download correctly (checksum mismatch). Try again.", file.Sha256, sha);
         }
         File.Move(part, target, overwrite: true);
         TryDelete(partSha);

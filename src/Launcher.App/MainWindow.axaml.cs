@@ -132,6 +132,7 @@ public partial class MainWindow : Window
             _tray?.Dispose();
         };
         FillWindowSettings();
+        ShowCharacterLogin();
         if (_settings.StartPage == "last" && _settings.LastPage is > 0 and <= 6)
             OnTab(TabButton(_settings.LastPage), new RoutedEventArgs());
         _autoUpdateTimer.Tick += async (_, _) => await AutoUpdateAsync();
@@ -1271,7 +1272,8 @@ public partial class MainWindow : Window
         {
             using (client)
             using (new KeepAwake("Launcher update"))
-                exe = await Task.Run(() => SelfCheck.UpdateAsync(client, manifest, report, cts.Token));
+                // manifest.json read again right before the download (a release may have replaced the files since the check)
+                exe = await Task.Run(() => SelfCheck.UpdateAsync(client, manifest, report, cts.Token, freshManifest: t => client.GetManifestAsync(t)));
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
