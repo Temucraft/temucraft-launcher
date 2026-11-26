@@ -151,6 +151,70 @@ Setup on the server (Linux, root):
 stopping the service) opens the port to everyone again. Use an IPv4 address in `SERVER_URL` when the realmlist is IPv4,
 so the launcher and the game come from the same address.
 
+## Character summary: spec, professions, gold and mail on character select
+
+The character select screen (`TemucraftCharSelect.lua` in patch-^) shows each character's spec, professions and gold
+in its card tooltip, and an envelope badge for unread mail. The game's own character list doesn't carry those, so the
+launcher fetches them: before PLAY, and when the player switches between Live and PTR, it asks for
+`<SERVER_URL>char-summary` (with the player's login, at most 8 seconds) and writes the picked version's realm into
+that version's game folder as `Interface\TemucraftCharSummary.lua` (patch-^ ships an empty copy):
+
+```
+TEMUCRAFT_CHAR_SUMMARY = {
+	["Temucraft"] = {
+		["Thrall"] = { spec = "Restoration", professions = { "Mining", "Herbalism" }, money = 162575561, mail = { "Jaina", "Auction House" } },
+	},
+};
+```
+
+The realm key is the name the game shows (the realm the launcher writes into Config.wtf, and the server's realmlist
+name too if that differs). It is quiet: only the log file says what happened. When the server has no `char-summary`
+(404), the login is refused, the answer is broken or the realm is missing from it, the old file stays as it was.
+
+**On the server** (`server/char-summary.py`, a CGI program): it sits in the folder Apache serves, next to
+`play-ticket`, so Apache runs the same IP list and login on it as on every file there, and hands it the checked
+username. It answers only about that user's game account(s): the account with the same name as the launcher login
+(`SAME_NAME=1`), or the ones listed for that login in `char-summary-accounts.txt` (needed when the htpasswd name and
+the game account differ). Per realm (Live realm 1 in `acore_characters`, PTR realm 3 in `acore_ptr_characters`, set in
+`REALMS`) it sends the characters by name: `money`, professions (`character_skills`: the primary ones by skill, then
+First Aid, Cooking, Fishing), the spec (the talent tree with the most points in the active talent group, from
+`character_talent` and `talent-trees.json`) and the senders of unread, delivered mail (a character's name,
+"Auction House", the creature or object for NPC mail, else "Mailbox"; at most 8). No account names, ids, guids or IPs
+are sent. One query per table per realm, all by account id.
+
+Setup (Linux, root):
+
+1. `apt install python3-pymysql && a2enmod cgid`
+2. A MySQL user that may only read what it needs:
+
+   ```
+   CREATE USER 'temucraft_summary'@'localhost' IDENTIFIED BY '<a password>';
+   GRANT SELECT (id, username) ON acore_auth.account TO 'temucraft_summary'@'localhost';
+   GRANT SELECT (id, name) ON acore_auth.realmlist TO 'temucraft_summary'@'localhost';
+   -- for each characters database (acore_characters, acore_ptr_characters):
+   GRANT SELECT ON acore_characters.characters TO 'temucraft_summary'@'localhost';
+   GRANT SELECT ON acore_characters.character_skills TO 'temucraft_summary'@'localhost';
+   GRANT SELECT ON acore_characters.character_talent TO 'temucraft_summary'@'localhost';
+   GRANT SELECT ON acore_characters.mail TO 'temucraft_summary'@'localhost';
+   -- for the world database (NPC and object mail senders):
+   GRANT SELECT (entry, name) ON acore_world.creature_template TO 'temucraft_summary'@'localhost';
+   GRANT SELECT (entry, name) ON acore_world.gameobject_template TO 'temucraft_summary'@'localhost';
+   ```
+
+3. `mkdir -p /etc/temucraft`; copy `server/char-summary.env.example` to `/etc/temucraft/char-summary.env` (the
+   password, the realm list), `server/talent-trees.json` next to it, and `server/char-summary-accounts.txt.example`
+   as `char-summary-accounts.txt` if any login needs it; `chown root:www-data /etc/temucraft/* && chmod 640 /etc/temucraft/*`.
+4. `install -m 755 server/char-summary.py /var/www/wow-files/char-summary` (no extension; `upload.py --delete` leaves it alone).
+5. Add `server/apache-char-summary.conf.example` inside the files folder's `<Directory>` block, then `systemctl reload apache2`.
+6. Check: `sudo -u www-data REMOTE_USER=<a launcher login> python3 /var/www/wow-files/char-summary` prints that
+   player's summary; `curl -u <login> https://<server>/char-summary` (with `-k` for a self-signed certificate) gives the
+   same through Apache, and without `-u` Apache refuses it. `python3 server/char-summary.py --self-test` checks the
+   logic without a database.
+
+When talents are added or moved, run `python3 server/talent-trees.py <folder with the server's Talent.dbc and
+TalentTab.dbc>` and copy the new `talent-trees.json` to `/etc/temucraft/`. The spec names are English (the server's
+DBC names).
+
 ## Shared settings between accounts
 
 On the Game files page, "Keep my settings, key bindings and macros the same on all my accounts on this PC" copies the
@@ -347,7 +411,8 @@ outside URLs), `launcher.env` parsing, update planning, the hash cache, verified
 errors, against a fake server; saving the settings, Config.wtf keeping accented names, addons from a repository's
 sub folder (and the zip fallback), README previews and the log; the PTR (its manifest over Live's, realm names, the
 install from Live with hard links that never writes into Live, the copies from Live with backups) and the server
-settings, `skipGameAgreements` and `ptrCopyLiveSettings` among them. With `LAUNCHER_SAMPLE_MANIFEST=<path to manifest.json>` it also reads a manifest made by
+settings, `skipGameAgreements` and `ptrCopyLiveSettings` among them; the character summary file (Lua escaping, its format, and that
+a failure keeps the old file). With `LAUNCHER_SAMPLE_MANIFEST=<path to manifest.json>` it also reads a manifest made by
 `make-manifest.py`.
 
 ## Layout
@@ -355,7 +420,7 @@ settings, `skipGameAgreements` and `ptrCopyLiveSettings` among them. With `LAUNC
 - `src/Launcher.Core`: manifest, settings, file checks, downloads, game folder, credential store (no UI)
 - `src/Launcher.App`: the window (Avalonia, like Anarres)
 - `tests/Launcher.Core.Tests`: the tests
-- `server/`: `make-manifest.py` and the Apache example
+- `server/`: `make-manifest.py`, `upload.py`, play tickets, the character summary (`char-summary.py`, `talent-trees.py`) and the Apache examples
 
 ## Testing mode (server owner only)
 

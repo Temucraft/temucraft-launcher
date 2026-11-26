@@ -9,6 +9,8 @@ publish/
 *.user
 upload.env
 server/play-ticket.env
+server/char-summary.env
+server/char-summary-accounts.txt
 __pycache__/
 
 # Testing mode for the server owner (see testing.env.example); never commit it

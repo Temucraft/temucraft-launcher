@@ -1,0 +1,15 @@
+# Character summary (char-summary.py): the launcher asks for <SERVER_URL>char-summary before PLAY, for the spec,
+# professions, gold and unread mail on the character select screen. Put this inside the <Directory> block of the folder
+# that serves the launcher's files (server/apache-temucraft.conf.example), so the same IP list and login apply, then:
+#   a2enmod cgid && systemctl reload apache2
+# and copy char-summary.py into that folder as "char-summary" (no extension), executable:
+#   install -m 755 char-summary.py /var/www/wow-files/char-summary
+# It answers only about the logged-in user's own game account(s) (REMOTE_USER, the name Apache checked).
+
+<Files "char-summary">
+    Options +ExecCGI
+    SetHandler cgi-script
+    Header set Cache-Control "no-store"
+</Files>
+# Where its settings are, when not /etc/temucraft/char-summary.env:
+# SetEnv CHAR_SUMMARY_ENV /etc/temucraft/char-summary.env

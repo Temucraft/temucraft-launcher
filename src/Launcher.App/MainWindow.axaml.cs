@@ -2026,6 +2026,7 @@ public partial class MainWindow : Window
             if (Diagnostics.RemoveCompatibilityMode(GameFolder.ExePath(Folder)) is { } compat)
                 Log($"Windows compatibility mode was on for Wow.exe ({compat}); turned it off");
             await RequestPlayTicketAsync();
+            await RefreshCharacterSummaryAsync(Folder);   // the character select's spec, professions, gold and mail
             bool debug = DebugMode.IsOn(Folder);
             // each game version has its own Config.wtf, so each remembers whether the launcher turned its debug settings on
             bool ptrPlay = IsPtr;

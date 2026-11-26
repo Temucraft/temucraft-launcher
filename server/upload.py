@@ -38,7 +38,7 @@ import stat
 import sys
 import time
 
-KEEP_REMOTE = {"manifest.json", ".manifest-cache.json", "make-manifest.py", "play-ticket", "breakingnews.html"}
+KEEP_REMOTE = {"manifest.json", ".manifest-cache.json", "make-manifest.py", "play-ticket", "char-summary", "breakingnews.html"}
 
 # `server --delete` never removes these: the live configs, logs, the client data the server reads, and anything hidden
 SERVER_KEEP_DIRS = {"logs", "log", "data", "etc/backup"}

@@ -77,6 +77,7 @@ List<(string Name, Func<Task> Body)> tests =
     ("PTR: account data, key bindings and addons copied from Live, with backups", PtrCopyFromLive),
     ("Server settings skipGameAgreements and ptrCopyLiveSettings: read, enforced, and what they do", AgreementsAndPtrSettings),
     ("PTR: a cancelled install from Live isn't taken for a game", PtrInstallCancelled),
+    ("Character summary: Lua escaping, the file format, and a failure keeps the old file", CharacterSummaryFile),
 ];
 
 static void Check(bool ok, string what) { if (!ok) throw new Exception(what); }
@@ -443,6 +444,79 @@ static Task CharacterScenesFile()
     }
     finally { try { Directory.Delete(wow, true); } catch (IOException) { } }
     return Task.CompletedTask;
+}
+
+static async Task CharacterSummaryFile()
+{
+    // Lua strings: quotes, backslashes and control characters escaped; UTF-8 names kept as they are
+    Check(CharacterSummary.LuaString("a\"b\\c") == "\"a\\\"b\\\\c\"", "quote and backslash: " + CharacterSummary.LuaString("a\"b\\c"));
+    Check(CharacterSummary.LuaString("x\ny\r\t") == "\"x\\ny\\r\\t\"", "new lines and tabs");
+    Check(CharacterSummary.LuaString("\u00011") == "\"\\0011\"", "control characters as three digits: " + CharacterSummary.LuaString("\u00011"));
+    Check(CharacterSummary.LuaString("Babý ]]") == "\"Babý ]]\"", "accents and brackets as they are");
+
+    string json = """
+        {"generated": 1, "realms": [
+          {"id": 1, "name": "Temucraft", "characters": {
+            "Thrall": {"spec": "Restoration", "professions": ["Mining", "Herbalism"], "money": 162575561, "mail": ["Jaina", "Auction House"]},
+            "Babý": {"money": 0, "professions": [], "mail": []},
+            "Odd\"Name": {"spec": "Fu\\ry", "money": -5, "mail": ["Mr \"X\""], "professions": "not a list"}}},
+          {"id": 3, "name": "[PTR] Falric", "characters": {"Tester": {"money": 10}}}]}
+        """;
+    IReadOnlyList<CharacterSummaryRealm> realms = CharacterSummary.Parse(json);
+    Check(realms.Count == 2 && realms[0].Characters.Count == 3, "two realms, three characters on Live");
+    Check(CharacterSummary.Pick(realms, GameVersions.PtrRealmId, "whatever")?.Name == "[PTR] Falric", "the PTR by its realm id");
+    Check(CharacterSummary.Pick(realms, 7, "temucraft ")?.Id == 1, "else by name");
+    Check(CharacterSummary.Pick(realms, 7, "Other") is null, "a realm the server didn't send");
+    CharacterSummaryEntry odd = realms[0].Characters["Odd\"Name"];
+    Check(odd.Money is null && odd.Professions.Count == 0 && odd.Spec == "Fu\\ry", "bad values are left out");
+
+    string text = CharacterSummary.Text(realms[0], ["Temucraft", "Temucraft", null, "Temucraft (old name)"]);
+    Check(text.Contains("TEMUCRAFT_CHAR_SUMMARY = {\r\n"), "the table: " + text);
+    Check(text.Contains("\t[\"Temucraft\"] = {\r\n") && text.Contains("\t[\"Temucraft (old name)\"] = {\r\n")
+          && text.Split("[\"Temucraft\"]").Length == 2, "each realm key once");
+    Check(text.Contains("\t\t[\"Thrall\"] = { spec = \"Restoration\", professions = { \"Mining\", \"Herbalism\" }, money = 162575561, mail = { \"Jaina\", \"Auction House\" } },\r\n"), "a full character: " + text);
+    Check(text.Contains("\t\t[\"Babý\"] = { money = 0 },\r\n"), "no professions or mail: left out");
+    Check(text.Contains("[\"Odd\\\"Name\"] = { spec = \"Fu\\\\ry\", mail = { \"Mr \\\"X\\\"\" } }"), "escaped names and senders: " + text);
+
+    string wow = TempDir();
+    string file = Path.Combine(wow, "Interface", "TemucraftCharSummary.lua");
+    try
+    {
+        // written for the version's realm, under the launcher's realm name and the server's
+        var first = await CharacterSummary.RefreshAsync(_ => Task.FromResult<string?>(json), wow, GameVersions.LiveRealmId, "Temucraft");
+        Check(first.Outcome == CharacterSummary.Outcome.Written && first.Characters == 3, "written: " + first);
+        string written = File.ReadAllText(file);
+        Check(written.Contains("[\"Thrall\"]") && !written.Contains("Tester") && !File.Exists(file + ".tmp"), "only Live's characters");
+        Check(File.ReadAllBytes(file)[0] == (byte)'-', "no BOM");
+        Check((await CharacterSummary.RefreshAsync(_ => Task.FromResult<string?>(json), wow, GameVersions.LiveRealmId, "Temucraft")).Outcome == CharacterSummary.Outcome.Unchanged, "unchanged: not written again");
+
+        // every failure keeps the old file
+        var failed = await CharacterSummary.RefreshAsync(_ => throw new HttpRequestException("down"), wow, 1, "Temucraft");
+        Check(failed.Outcome == CharacterSummary.Outcome.Failed && failed.Error == "down" && File.ReadAllText(file) == written, "no answer: old file kept");
+        Check((await CharacterSummary.RefreshAsync(_ => Task.FromResult<string?>("{not json"), wow, 1, "Temucraft")).Outcome == CharacterSummary.Outcome.Failed && File.ReadAllText(file) == written, "bad JSON: old file kept");
+        Check((await CharacterSummary.RefreshAsync(_ => Task.FromResult<string?>("""{"x": 1}"""), wow, 1, "Temucraft")).Outcome == CharacterSummary.Outcome.Failed && File.ReadAllText(file) == written, "no realms list: old file kept");
+        Check((await CharacterSummary.RefreshAsync(_ => Task.FromResult<string?>(null), wow, 1, "Temucraft")).Outcome == CharacterSummary.Outcome.NotOnServer && File.ReadAllText(file) == written, "no char-summary on the server: old file kept");
+        Check((await CharacterSummary.RefreshAsync(_ => Task.FromResult<string?>("""{"realms": []}"""), wow, 1, "Temucraft")).Outcome == CharacterSummary.Outcome.NoRealm && File.ReadAllText(file) == written, "realm missing: old file kept");
+        using (CancellationTokenSource cancelled = new())
+        {
+            cancelled.Cancel();
+            Check((await CharacterSummary.RefreshAsync(t => Task.FromCanceled<string?>(t), wow, 1, "Temucraft", cancelled.Token)).Outcome == CharacterSummary.Outcome.Failed && File.ReadAllText(file) == written, "timed out: old file kept");
+        }
+
+        // through the real client: the login goes along; a refused login keeps the old file
+        ServerSettings settings = ServerSettings.Parse(["SERVER_URL=https://files.example.com/wow files/"]);
+        FakeServer server = new(new Dictionary<string, byte[]> { [CharacterSummary.ServerPath] = System.Text.Encoding.UTF8.GetBytes("""{"realms": [{"id": 1, "name": "Temucraft", "characters": {}}]}""") });
+        using (ServerClient client = new(settings, "ryan", "secret", server))
+        {
+            var empty = await CharacterSummary.RefreshAsync(t => client.GetTextAsync(CharacterSummary.ServerPath, t), wow, 1, "Temucraft");
+            Check(empty.Outcome == CharacterSummary.Outcome.Written && server.LastAuth is { Length: > 0 } && server.Requests.Contains("wow%20files/char-summary"), "fetched with the login: " + string.Join(", ", server.Requests));
+            Check(File.ReadAllText(file).Contains("\t[\"Temucraft\"] = {\r\n\t},") && !File.ReadAllText(file).Contains("Thrall"), "no characters any more: an empty realm (old mail badges go)");
+        }
+        string kept = File.ReadAllText(file);
+        using (ServerClient refused = new(settings, "ryan", "wrong", new FakeServer([]) { ForceStatus = HttpStatusCode.Unauthorized }))
+            Check((await CharacterSummary.RefreshAsync(t => refused.GetTextAsync(CharacterSummary.ServerPath, t), wow, 1, "Temucraft")).Outcome == CharacterSummary.Outcome.Failed && File.ReadAllText(file) == kept, "refused login: old file kept");
+    }
+    finally { try { Directory.Delete(wow, true); } catch (IOException) { } }
 }
 
 static Task TestingFilesInAndOut()

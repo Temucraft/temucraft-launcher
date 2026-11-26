@@ -1,0 +1,6 @@
+# Which game accounts a launcher login (a user in the .htpasswd file) sees in the character summary.
+# Copy to /etc/temucraft/char-summary-accounts.txt. One line per launcher login: login = ACCOUNT, ACCOUNT2
+# Only needed when the launcher login and the game account have different names, or for several game accounts;
+# a login listed here gets only these accounts (never the one with its own name, unless it is listed too).
+# ryan = RYAN, RYANALT
+# friendname = FRIENDSACCOUNT
